@@ -1,14 +1,22 @@
-# Estágio 1: Build da aplicação Expo Web
-FROM node:18-alpine AS build
+# Estágio 1: Build
+FROM node:20-alpine AS build
 WORKDIR /app
+
+# Copia arquivos de dependências
 COPY package*.json ./
-RUN npm install
+
+# Instala as dependências ignorando conflitos de peer (comum no Expo)
+RUN npm install --legacy-peer-deps
+
+# Copia o restante do código
 COPY . .
-# Gera a pasta /dist com os arquivos web
+
+# Comando para exportar para Web (gera a pasta web-build)
 RUN npx expo export:web
 
-# Estágio 2: Servidor para entregar a página
+# Estágio 2: Servidor Nginx
 FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
+# O Expo export:web gera por padrão a pasta 'web-build'
+COPY --from=build /app/web-build /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
