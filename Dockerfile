@@ -19,9 +19,10 @@ RUN npx expo export --platform web --non-interactive
 # ... (mantenha o estágio de build igual)
 
 # Estágio 2: Servidor Nginx
-FROM nginx:alpine
+# ... Estágio de build anterior igual ...
 
-# Criamos uma configuração simples para o Nginx não se perder nas rotas do React
+FROM nginx:alpine
+# Configuração para evitar tela branca em rotas internas
 RUN echo 'server { \
     listen 80; \
     location / { \

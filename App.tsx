@@ -44,15 +44,19 @@ export default function App() {
   }
 
   return (
-      // Removi a View com onLayout e usei um condicional simples para estabilizar o Nginx
-      <NavigationContainer>
-        <Stack.Navigator
-            initialRouteName="Login"
-            screenOptions={{ headerShown: false }}
-        >
-          {/* ... suas telas continuam iguais ... */}
-        </Stack.Navigator>
+      <View style={{ flex: 1, backgroundColor: '#FAFAFA' }}>
+        <NavigationContainer>
+          <Stack.Navigator
+              initialRouteName="Login"
+              screenOptions={{ headerShown: false }}
+          >
+            <Stack.Screen name="Login">
+              {(props) => <LoginScreen {...props} onLogin={setUserRole} />}
+            </Stack.Screen>
+            {/* Mantenha o restante das suas screens exatamente como estão */}
+          </Stack.Navigator>
+        </NavigationContainer>
         <StatusBar style="dark" />
-      </NavigationContainer>
+      </View>
   );
 }
