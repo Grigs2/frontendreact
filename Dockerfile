@@ -12,12 +12,16 @@ COPY . .
 
 # Aumentamos a memória do Node e pedimos o log detalhado
 ENV NODE_OPTIONS="--max-old-space-size=4096"
-RUN npx expo export --platform web --non-interactive --clear
-# Se o comando acima falhar, o log agora será muito mais detalhado no GitHub
+# ... (mantenha o início igual)
+
+RUN npx expo export --platform web --non-interactive
 
 # Estágio 2: Servidor Nginx
 FROM nginx:alpine
-# No Expo moderno, a pasta de saída é a 'dist'
+# Tentamos copiar da pasta 'dist', que é o novo padrão do Expo
 COPY --from=build /app/dist /usr/share/nginx/html
+# Se o erro continuar, mude a linha acima para:
+# COPY --from=build /app/web-build /usr/share/nginx/html
+
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
