@@ -1,5 +1,5 @@
 # Estágio 1: Build
-FROM node:20-slim AS build
+FROM node:20-alpine AS build
 WORKDIR /app
 
 # Instala ferramentas essenciais

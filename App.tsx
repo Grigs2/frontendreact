@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
@@ -6,10 +6,10 @@ import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_7
 import * as SplashScreen from 'expo-splash-screen';
 import { View } from 'react-native';
 import LoginScreen from "./src/screens/LoginScreen";
-import {UserRole} from "./src/types";
-import {RootStackParamList} from "./src/navigation";
+import { UserRole } from "./src/types";
+import { RootStackParamList } from "./src/navigation";
 
-// Mantenha seus imports de screens aqui...
+// Mantenha seus outros imports de screens aqui...
 
 SplashScreen.preventAutoHideAsync();
 
@@ -17,7 +17,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
   const [userRole, setUserRole] = useState<UserRole | null>(null);
-  const [isClient, setIsClient] = useState(false); // NOVO: Controle de hidratação
+  const [isClient, setIsClient] = useState(false);
 
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
@@ -31,14 +31,20 @@ export default function App() {
   };
 
   useEffect(() => {
-    setIsClient(true); // Marca que o componente montou no cliente
+    // Esse pequeno delay de 50ms é o "segredo" para o React 19 não quebrar
+    // na hidratação dentro do Docker/Nginx.
+    const timer = setTimeout(() => {
+      setIsClient(true);
+    }, 50);
+
     if (fontsLoaded) {
       SplashScreen.hideAsync().catch(() => {});
     }
+    return () => clearTimeout(timer);
   }, [fontsLoaded]);
 
   // Se as fontes não carregaram OU se ainda não confirmamos que estamos no cliente,
-  // retornamos uma View vazia com a cor de fundo para não dar erro #527
+  // retornamos uma View neutra para evitar a desincronização do DOM.
   if (!fontsLoaded || !isClient) {
     return <View style={{ flex: 1, backgroundColor: '#FAFAFA' }} />;
   }
