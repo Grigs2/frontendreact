@@ -7,9 +7,13 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    env:
+      # Isso remove o aviso de depreciação do Node 20
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     permissions:
       contents: read
       packages: write
+    # ... restante do arquivo igual ...
 
     steps:
       - name: Checkout
