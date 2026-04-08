@@ -1,24 +1,27 @@
 # Estágio 1: Build
-FROM node:20-alpine AS build
+FROM node:20-slim AS build
 WORKDIR /app
 
-# Instala ferramentas de compilação necessárias para o Linux
-RUN apk add --no-cache python3 make g++
+# Instala ferramentas essenciais para compilação no Linux
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 
-# Copia dependências
+# Copia e instala dependências
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
 
 # Copia o código
 COPY . .
 
-# Comando robusto para exportar:
-# CI=true evita que o processo pare esperando resposta do usuário
-RUN CI=true npx expo export --platform web
+# Variáveis de ambiente para o build do Expo
+ENV NODE_ENV=production
+ENV EXPO_USE_METRO=1
 
-# Estágio 2: Nginx
+# Comando de exportação (forçamos o uso do Metro)
+RUN npx expo export --platform web --non-interactive
+
+# Estágio 2: Servidor Nginx
 FROM nginx:alpine
-# No Expo moderno, o comando 'export' gera a pasta 'dist'
+# No Expo 55, o resultado vai para a pasta 'dist'
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

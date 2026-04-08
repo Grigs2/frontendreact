@@ -27,5 +27,7 @@ jobs:
         with:
           context: .
           push: true
-          # Nome do repo em minúsculo!
           tags: ghcr.io/grigs2/frontendreact/frontend:latest
+          # Adiciona o argumento de memória para o Docker
+          build-args: |
+            NODE_OPTIONS=--max-old-space-size=4096
