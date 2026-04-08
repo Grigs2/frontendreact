@@ -2,27 +2,23 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
-# Instala dependências necessárias para o ambiente Linux
+# Instala ferramentas de compilação necessárias para o Linux
 RUN apk add --no-cache python3 make g++
 
-# Copia arquivos de dependência
+# Copia dependências
 COPY package*.json ./
-
-# Instala dependências (usando o legacy para evitar conflitos de versão)
 RUN npm install --legacy-peer-deps
 
-# Copia o restante do código
+# Copia o código
 COPY . .
 
-# Comando para exportar para Web
-# Adicionamos o --clear para evitar lixo de cache no build
-RUN npx expo export:web --clear
+# Comando robusto para exportar:
+# CI=true evita que o processo pare esperando resposta do usuário
+RUN CI=true npx expo export --platform web
 
-# Estágio 2: Servidor Nginx
+# Estágio 2: Nginx
 FROM nginx:alpine
-# O Expo 55/React Native 0.83 gera por padrão a pasta 'dist' ou 'web-build'
-# Vamos garantir que estamos pegando a pasta correta
+# No Expo moderno, o comando 'export' gera a pasta 'dist'
 COPY --from=build /app/dist /usr/share/nginx/html
-# Caso o comando acima falhe, tente trocar /app/dist por /app/web-build
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
