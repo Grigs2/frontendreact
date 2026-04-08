@@ -34,27 +34,27 @@ export default function DriverMainScreen({ navigation }: Props) {
   };
 
   return (
-    <DriverLayout>
-      <StatusBar barStyle="dark-content" />
-      <ScrollView contentContainerStyle={styles.gridContainer}>
-        <Text style={styles.greeting}>Olá, Motorista!</Text>
-        <View style={styles.grid}>
-          {FEATURES.map(({ key, label, icon }) => (
-            <TouchableOpacity
-              key={key}
-              style={styles.featureCard}
-              onPress={() => handleFeaturePress(key)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.iconContainer}>
-                <Feather name={icon} size={32} color="#1976D2" />
-              </View>
-              <Text style={styles.featureLabel}>{label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </ScrollView>
-    </DriverLayout>
+      <DriverLayout>
+        <StatusBar barStyle="dark-content" />
+        <ScrollView contentContainerStyle={styles.gridContainer}>
+          <Text style={styles.greeting}>Olá, Motorista!</Text>
+          <View style={styles.grid}>
+            {FEATURES.map(({ key, label, icon }) => (
+                <TouchableOpacity
+                    key={key}
+                    style={styles.featureCard}
+                    onPress={() => handleFeaturePress(key)}
+                    activeOpacity={0.7}
+                >
+                  <View style={styles.iconContainer}>
+                    <Feather name={icon} size={32} color="#1976D2" />
+                  </View>
+                  <Text style={styles.featureLabel}>{label}</Text>
+                </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </DriverLayout>
   );
 }
 
@@ -62,7 +62,6 @@ const styles = StyleSheet.create({
   greeting: {
     fontFamily: 'Inter_700Bold',
     fontSize: 24,
-    fontWeight: '700',
     color: '#1D1D1F',
     marginBottom: 24,
   },
@@ -91,7 +90,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 0, 0, 0.04)',
     aspectRatio: 1,
     justifyContent: 'center',
-  },
+    cursor: 'pointer',
+  } as any,
   iconContainer: {
     width: 56,
     height: 56,
@@ -104,7 +104,6 @@ const styles = StyleSheet.create({
   featureLabel: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
-    fontWeight: '600',
     color: '#1D1D1F',
     textAlign: 'center',
   },
