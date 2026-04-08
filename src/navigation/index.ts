@@ -1,0 +1,21 @@
+export type RootStackParamList = {
+  Login: undefined;
+  Register: { role: 'driver' | 'guardian' | 'school' };
+  DriverMain: undefined;
+  DriverAttendance: undefined;
+  DriverRoute: undefined;
+  DriverStudents: undefined;
+  DriverProfile: undefined;
+  DriverVehicle: undefined;
+  DriverHistory: undefined;
+  DriverHelp: undefined;
+  GuardianMain: undefined;
+  GuardianTracking: undefined;
+  GuardianDependents: undefined;
+  GuardianDependentForm: { dependentId?: string } | undefined;
+  GuardianPlans: undefined;
+  GuardianProfile: undefined;
+  GuardianHistory: undefined;
+  GuardianHelp: undefined;
+  SchoolMain: undefined;
+};
