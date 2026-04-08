@@ -1,8 +1,8 @@
-name: Build and Push Image
+name: Build and Push Frontend
 
 on:
   push:
-    branches: [ "main" ] # Mude para "master" se for o nome da sua branch
+    branches: [ "main" ]
 
 jobs:
   build-and-push:
@@ -12,21 +12,20 @@ jobs:
       packages: write
 
     steps:
-      - name: Checkout do código
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Login no GitHub Container Registry
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }} # O GitHub gera isso sozinho!
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build e Push da Imagem
+      - name: Build and Push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          # IMPORTANTE: Mude o nome abaixo para cada repositório
-          # Ex: no front, use ".../frontend:latest"
-          tags: ghcr.io/grigs2/frontendreact/backend:latest
+          # Nome do repo em minúsculo!
+          tags: ghcr.io/grigs2/frontendreact/frontend:latest
