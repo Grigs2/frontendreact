@@ -16,12 +16,21 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 RUN npx expo export --platform web --non-interactive
 
+# ... (mantenha o estágio de build igual)
+
 # Estágio 2: Servidor Nginx
 FROM nginx:alpine
-# Tentamos copiar da pasta 'dist', que é o novo padrão do Expo
-COPY --from=build /app/dist /usr/share/nginx/html
-# Se o erro continuar, mude a linha acima para:
-# COPY --from=build /app/web-build /usr/share/nginx/html
 
+# Criamos uma configuração simples para o Nginx não se perder nas rotas do React
+RUN echo 'server { \
+    listen 80; \
+    location / { \
+        root /usr/share/nginx/html; \
+        index index.html index.htm; \
+        try_files $uri $uri/ /index.html; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
+
+COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
