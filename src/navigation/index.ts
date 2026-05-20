@@ -1,0 +1,32 @@
+import { DependenteParadaDTO } from '../types';
+
+export type RootStackParamList = {
+  Login: undefined;
+  Register: { role: 'driver' | 'guardian' | 'school' };
+  DriverMain: undefined;
+  DriverAttendance: { viagemDiaId: number };
+  DriverAttendanceDetail: { tripId: number; stopId: number; stopDescription: string; students: DependenteParadaDTO[] };
+  DriverTrips: undefined;
+  DriverTripDetails: { viagemId: number };
+  DriverAvailableDependents: { viagemId: number };
+  DriverStudents: undefined;
+  DriverProfile: undefined;
+  DriverVehicle: undefined;
+  DriverHistory: undefined;
+  DriverHelp: undefined;
+  DriverInvites: undefined;
+  DriverSearchStudents: undefined;
+  GuardianMain: undefined;
+  GuardianTracking: undefined;
+  GuardianInvites: undefined;
+  GuardianDependents: undefined;
+  GuardianDependentForm: { dependentId?: number } | undefined;
+  GuardianPlans: undefined;
+  GuardianProfile: undefined;
+  GuardianHistory: undefined;
+  GuardianHelp: undefined;
+  GuardianSearchDriver: undefined;
+  GuardianMonitoring: { dependenteId: number };
+  NoticeBoard: undefined;
+  SchoolMain: undefined;
+};
