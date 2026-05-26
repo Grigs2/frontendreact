@@ -23,7 +23,8 @@ import GuardianDependentsScreen from './src/screens/GuardianDependentsScreen';
 import GuardianDependentFormScreen from './src/screens/GuardianDependentFormScreen';
 import GuardianSearchDriverScreen from './src/screens/GuardianSearchDriverScreen';
 import GuardianMonitoringScreen from './src/screens/GuardianMonitoringScreen';
-import NoticeBoardScreen from './src/screens/NoticeBoardScreen';
+import NotificationListScreen from './src/screens/NotificationListScreen';
+import NotificationCreateScreen from './src/screens/NotificationCreateScreen';
 import GuardianLayout from './src/components/GuardianLayout';
 import ProfileScreen from './src/screens/ProfileScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
@@ -101,7 +102,8 @@ export default function App() {
               <Stack.Screen name="GuardianInvites" component={GuardianInvitesScreen} />
               <Stack.Screen name="GuardianSearchDriver" component={GuardianSearchDriverScreen} />
               <Stack.Screen name="GuardianMonitoring" component={GuardianMonitoringScreen} />
-              <Stack.Screen name="NoticeBoard" component={NoticeBoardScreen} />
+              <Stack.Screen name="NotificationList" component={NotificationListScreen} />
+              <Stack.Screen name="NotificationCreate" component={NotificationCreateScreen} />
               <Stack.Screen name="GuardianDependents" component={GuardianDependentsScreen} />
               <Stack.Screen name="GuardianDependentForm" component={GuardianDependentFormScreen} />
               <Stack.Screen name="GuardianPlans" component={GuardianPlansScreen} />

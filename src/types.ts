@@ -58,12 +58,26 @@ export interface EscolaDTO {
   usuarioDTO: UsuarioDTO;
 }
 
+export interface UsuarioResumoDTO {
+  id: number;
+  nome: string;
+  tipoPerfil: string;
+  telefone: string;
+}
+
 export interface NotificacaoDTO {
-  id?: number;
+  id: number;
   titulo: string;
   mensagem: string;
-  data?: string;
+  dataCriacao: string;
   visto: boolean;
+  remetente: UsuarioResumoDTO;
+}
+
+export interface NotificacaoCreateDTO {
+  titulo: string;
+  mensagem: string;
+  visto: false;
   remetenteId: number;
   destinatarioId: number;
 }

@@ -27,6 +27,7 @@ export type RootStackParamList = {
   GuardianHelp: undefined;
   GuardianSearchDriver: undefined;
   GuardianMonitoring: { dependenteId: number };
-  NoticeBoard: undefined;
+  NotificationList: undefined;
+  NotificationCreate: undefined;
   SchoolMain: undefined;
 };

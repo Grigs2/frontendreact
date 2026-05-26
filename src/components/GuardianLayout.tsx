@@ -25,6 +25,7 @@ const MENU_ITEMS: { key: string; label: string; icon: FeatherIconName }[] = [
   { key: 'GuardianTracking', label: 'Monitoramento', icon: 'navigation' },
   { key: 'GuardianInvites', label: 'Convites', icon: 'mail' },
   { key: 'GuardianDependents', label: 'Dependentes', icon: 'users' },
+  { key: 'NotificationList', label: 'Notificações', icon: 'bell' },
   { key: 'GuardianPlans', label: 'Planos', icon: 'credit-card' },
   { key: 'GuardianProfile', label: 'Meu Cadastro', icon: 'user' },
   { key: 'Sair', label: 'Sair', icon: 'log-out' },

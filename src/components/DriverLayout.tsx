@@ -24,7 +24,7 @@ const MENU_ITEMS: { key: string; label: string; icon: FeatherIconName }[] = [
   { key: 'DriverMain', label: 'Home', icon: 'home' },
   { key: 'DriverAttendance', label: 'Chamada', icon: 'clipboard' },
   { key: 'DriverTrips', label: 'Roteiro', icon: 'map-pin' },
-  { key: 'NoticeBoard', label: 'Avisos', icon: 'bell' },
+  { key: 'NotificationList', label: 'Notificações', icon: 'bell' },
   { key: 'DriverProfile', label: 'Meu Cadastro', icon: 'user' },
   { key: 'DriverVehicle', label: 'Meu Veículo', icon: 'truck' },
   { key: 'DriverHistory', label: 'Histórico', icon: 'clock' },

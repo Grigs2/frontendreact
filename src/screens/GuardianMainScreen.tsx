@@ -15,12 +15,13 @@ import { useAppContext } from '../context/AppContext';
 
 type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
 
-type GuardianScreenKey = 'GuardianTracking' | 'GuardianDependents' | 'GuardianPlans' | 'GuardianProfile' | 'GuardianInvites';
+type GuardianScreenKey = 'GuardianTracking' | 'GuardianDependents' | 'GuardianPlans' | 'GuardianProfile' | 'GuardianInvites' | 'NotificationList';
 
 const FEATURES: { key: GuardianScreenKey; label: string; icon: FeatherIconName }[] = [
   { key: 'GuardianTracking', label: 'Monitoramento', icon: 'navigation' },
   { key: 'GuardianInvites', label: 'Convites', icon: 'mail' },
   { key: 'GuardianDependents', label: 'Dependentes', icon: 'users' },
+  { key: 'NotificationList', label: 'Notificações', icon: 'bell' },
   { key: 'GuardianPlans', label: 'Planos', icon: 'credit-card' },
   { key: 'GuardianProfile', label: 'Meu Cadastro', icon: 'user' },
 ];

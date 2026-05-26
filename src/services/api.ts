@@ -54,4 +54,6 @@ export const API_ENDPOINTS = {
   
   enviarNotificacao: '/Notificacao/Enviar',
   listarNotificacoes: (idUsuario: number) => `/Notificacao/Listar/${idUsuario}`,
+  visualizarNotificacao: (idNotificacao: number) => `/Notificacao/VisualizarNotificacao/${idNotificacao}`,
+  listarUsuariosNotificacao: '/Notificacao/ListarUsuarios',
 };

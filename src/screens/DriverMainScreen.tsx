@@ -44,9 +44,9 @@ export default function DriverMainScreen() {
                 <Feather name="truck" size={24} color="#1976D2" />
                 <Text style={styles.cardLabel}>Meu Veículo</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('NoticeBoard')}>
+              <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('NotificationList')}>
                 <Feather name="bell" size={24} color="#1976D2" />
-                <Text style={styles.cardLabel}>Avisos</Text>
+                <Text style={styles.cardLabel}>Notificações</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('DriverProfile')}>
                 <Feather name="user" size={24} color="#1976D2" />
