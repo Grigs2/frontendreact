@@ -9,6 +9,43 @@ export interface UsuarioDTO {
   endereco: string;
   telefone: string;
   tipoPerfil: 'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA';
+  /** Obrigatório (true) em novos cadastros no backend com JWT */
+  aceitouTermos?: boolean | null;
+}
+
+export type StatusValidacaoEndereco = 'VALIDADO' | 'PENDENTE';
+
+/** Endereço estruturado (motorista e escola). O CEP é validado no ViaCEP pelo backend. */
+export interface EnderecoOperacionalDTO {
+  id?: number;
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento?: string | null;
+  bairro: string;
+  cidade: string;
+  uf: string;
+  statusValidacao?: StatusValidacaoEndereco | null;
+}
+
+export type TipoPerfil = 'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA' | 'ADMIN';
+
+export interface PerfilAutenticadoDTO {
+  id: number;
+  usuarioId: number;
+  nome: string;
+  tipoPerfil: TipoPerfil;
+}
+
+export interface AutenticacaoResponseDTO {
+  tokenType: string;
+  accessToken: string;
+  /** segundos */
+  accessTokenExpiresIn: number;
+  refreshToken: string;
+  /** segundos */
+  refreshTokenExpiresIn: number;
+  perfil: PerfilAutenticadoDTO;
 }
 
 export interface VeiculoDTO {
@@ -17,6 +54,7 @@ export interface VeiculoDTO {
   placa: string;
   ano: number;
   capacidade: number;
+  cor?: string | null;
 }
 
 export interface MotoristaDTO {
@@ -27,6 +65,7 @@ export interface MotoristaDTO {
   cnh: string;
   usuarioDTO: UsuarioDTO;
   veiculoDTO?: VeiculoDTO | null;
+  enderecoOperacionalDTO?: EnderecoOperacionalDTO | null;
 }
 
 export interface DependenteDTO {
@@ -54,16 +93,32 @@ export interface ResponsavelDTO {
 export interface EscolaDTO {
   id?: number;
   nome: string;
+  cnpj?: string | null;
   admResponsavel: string;
   usuarioDTO: UsuarioDTO;
+  enderecoOperacionalDTO?: EnderecoOperacionalDTO | null;
+}
+
+export interface UsuarioResumoDTO {
+  id: number;
+  nome: string;
+  tipoPerfil: string;
+  telefone: string;
 }
 
 export interface NotificacaoDTO {
-  id?: number;
+  id: number;
   titulo: string;
   mensagem: string;
-  data?: string;
+  dataCriacao: string;
   visto: boolean;
+  remetente: UsuarioResumoDTO;
+}
+
+export interface NotificacaoCreateDTO {
+  titulo: string;
+  mensagem: string;
+  visto: false;
   remetenteId: number;
   destinatarioId: number;
 }

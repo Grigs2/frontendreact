@@ -41,7 +41,7 @@ export default function DriverMainScreen() {
           <View style={styles.grid}>
             <ShortcutCard label="Histórico" icon="clock" onPress={() => navigation.navigate('DriverHistory')} />
             <ShortcutCard label="Meu Veículo" icon="truck" onPress={() => navigation.navigate('DriverVehicle')} />
-            <ShortcutCard label="Avisos" icon="bell" onPress={() => navigation.navigate('NoticeBoard')} />
+            <ShortcutCard label="Notificações" icon="bell" onPress={() => navigation.navigate('NotificationList')} />
             <ShortcutCard label="Meu Perfil" icon="user" onPress={() => navigation.navigate('DriverProfile')} />
           </View>
         </ScrollView>

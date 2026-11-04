@@ -4,7 +4,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import SchoolLayout from '../components/SchoolLayout';
-import { Card, Chip } from '../components/ui';
+import { Card, Chip, ShortcutCard } from '../components/ui';
 import { colors, layout, maxFontSizeMultiplier, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SchoolMain'>;
@@ -29,6 +29,15 @@ export default function SchoolMainScreen({ navigation }: Props) {
             As funcionalidades para o perfil Escola estão sendo implementadas e estarão disponíveis em breve.
           </Text>
         </Card>
+
+        <View style={styles.grid}>
+          <ShortcutCard
+            label="Notificações"
+            caption="Ver avisos recebidos"
+            icon="bell"
+            onPress={() => navigation.navigate('NotificationList')}
+          />
+        </View>
 
         <Card style={styles.details}>
           <Text style={styles.detailTitle} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
@@ -59,6 +68,7 @@ const styles = StyleSheet.create({
   status: { ...typography.bodyLg, color: colors.slate500 },
   infoCard: { gap: spacing.sm },
   infoText: { ...typography.body, color: colors.ink },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: layout.gridGap, marginTop: spacing.xl },
   details: { marginTop: spacing.xl },
   detailTitle: { ...typography.heading, color: colors.ink },
   detailLabel: { ...typography.caption, color: colors.slate500 },

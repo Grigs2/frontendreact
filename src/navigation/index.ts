@@ -1,8 +1,14 @@
+import { createNavigationContainerRef } from '@react-navigation/native';
 import { DependenteParadaDTO } from '../types';
+
+export type RegisterRole = 'driver' | 'guardian' | 'school';
 
 export type RootStackParamList = {
   Login: undefined;
-  Register: { role: 'driver' | 'guardian' | 'school' };
+  Register: { role?: RegisterRole } | undefined;
+  ForgotPassword: { email?: string } | undefined;
+  ForgotPasswordCode: { email: string };
+  ResetPassword: { token: string };
   DriverMain: undefined;
   DriverAttendance: { viagemDiaId: number };
   DriverAttendanceDetail: { tripId: number; stopId: number; stopDescription: string; students: DependenteParadaDTO[] };
@@ -27,6 +33,18 @@ export type RootStackParamList = {
   GuardianHelp: undefined;
   GuardianSearchDriver: undefined;
   GuardianMonitoring: { dependenteId: number };
-  NoticeBoard: undefined;
+  NotificationList: undefined;
+  NotificationCreate: undefined;
   SchoolMain: undefined;
+  SchoolProfile: undefined;
 };
+
+/** Referência global usada fora de telas (ex.: sessão expirada → volta para o Login). */
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
+
+/** Tela inicial de cada perfil após o login. */
+export const HOME_BY_ROLE = {
+  MOTORISTA: 'DriverMain',
+  RESPONSAVEL: 'GuardianMain',
+  ESCOLA: 'SchoolMain',
+} as const;

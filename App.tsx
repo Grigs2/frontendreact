@@ -23,12 +23,17 @@ import GuardianDependentsScreen from './src/screens/GuardianDependentsScreen';
 import GuardianDependentFormScreen from './src/screens/GuardianDependentFormScreen';
 import GuardianSearchDriverScreen from './src/screens/GuardianSearchDriverScreen';
 import GuardianMonitoringScreen from './src/screens/GuardianMonitoringScreen';
-import NoticeBoardScreen from './src/screens/NoticeBoardScreen';
+import NotificationListScreen from './src/screens/NotificationListScreen';
+import NotificationCreateScreen from './src/screens/NotificationCreateScreen';
 import GuardianLayout from './src/components/GuardianLayout';
 import ProfileScreen from './src/screens/ProfileScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import { UserRole } from './src/types';
-import { RootStackParamList } from './src/navigation';
+import { RootStackParamList, navigationRef } from './src/navigation';
+import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
+import ForgotPasswordCodeScreen from './src/screens/ForgotPasswordCodeScreen';
+import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
+import SessionExpiryHandler from './src/components/SessionExpiryHandler';
 import { colors } from './src/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -74,12 +79,15 @@ export default function App() {
   return (
       <AppProvider>
         <View style={{ flex: 1, backgroundColor: colors.background }}>
-          <NavigationContainer>
+          <NavigationContainer ref={navigationRef}>
             <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
               <Stack.Screen name="Login">
                 {(props) => <LoginScreen {...props} onLogin={(role: UserRole) => setUserRole(role)} />}
               </Stack.Screen>
               <Stack.Screen name="Register" component={RegisterScreen} />
+              <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+              <Stack.Screen name="ForgotPasswordCode" component={ForgotPasswordCodeScreen} />
+              <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
               <Stack.Screen name="DriverMain" component={DriverMainScreen} />
               <Stack.Screen name="DriverAttendance" component={DriverAttendanceScreen} />
               <Stack.Screen name="DriverTrips" component={DriverTripsScreen} />
@@ -100,7 +108,8 @@ export default function App() {
               <Stack.Screen name="GuardianInvites" component={GuardianInvitesScreen} />
               <Stack.Screen name="GuardianSearchDriver" component={GuardianSearchDriverScreen} />
               <Stack.Screen name="GuardianMonitoring" component={GuardianMonitoringScreen} />
-              <Stack.Screen name="NoticeBoard" component={NoticeBoardScreen} />
+              <Stack.Screen name="NotificationList" component={NotificationListScreen} />
+              <Stack.Screen name="NotificationCreate" component={NotificationCreateScreen} />
               <Stack.Screen name="GuardianDependents" component={GuardianDependentsScreen} />
               <Stack.Screen name="GuardianDependentForm" component={GuardianDependentFormScreen} />
               <Stack.Screen name="GuardianPlans" component={GuardianPlansScreen} />
@@ -110,8 +119,10 @@ export default function App() {
                 {() => <GuardianLayout><PlaceholderScreen /></GuardianLayout>}
               </Stack.Screen>
               <Stack.Screen name="SchoolMain" component={SchoolMainScreen} />
+              <Stack.Screen name="SchoolProfile" component={ProfileScreen} />
             </Stack.Navigator>
           </NavigationContainer>
+          <SessionExpiryHandler />
           <Toast />
           <StatusBar style="dark" />
         </View>

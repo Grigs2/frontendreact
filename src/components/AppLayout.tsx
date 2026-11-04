@@ -14,6 +14,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Logo from './Logo';
 import { RootStackParamList } from '../navigation';
+import { useAppContext } from '../context/AppContext';
+import { authService } from '../services/authService';
 import { borders, colors, elevation, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -30,7 +32,7 @@ export const MENU_ITEMS: Record<LayoutRole, MenuItem[]> = {
     { key: 'DriverMain', label: 'Início', icon: 'home' },
     { key: 'DriverAttendance', label: 'Chamada', icon: 'clipboard' },
     { key: 'DriverTrips', label: 'Roteiro', icon: 'map-pin' },
-    { key: 'NoticeBoard', label: 'Avisos', icon: 'bell' },
+    { key: 'NotificationList', label: 'Notificações', icon: 'bell' },
     { key: 'DriverProfile', label: 'Meu Cadastro', icon: 'user' },
     { key: 'DriverVehicle', label: 'Meu Veículo', icon: 'truck' },
     { key: 'DriverHistory', label: 'Histórico', icon: 'clock' },
@@ -41,12 +43,15 @@ export const MENU_ITEMS: Record<LayoutRole, MenuItem[]> = {
     { key: 'GuardianTracking', label: 'Monitoramento', icon: 'navigation' },
     { key: 'GuardianInvites', label: 'Convites', icon: 'mail' },
     { key: 'GuardianDependents', label: 'Dependentes', icon: 'users' },
+    { key: 'NotificationList', label: 'Notificações', icon: 'bell' },
     { key: 'GuardianPlans', label: 'Planos', icon: 'credit-card' },
     { key: 'GuardianProfile', label: 'Meu Cadastro', icon: 'user' },
     { key: 'Sair', label: 'Sair', icon: 'log-out' },
   ],
   school: [
     { key: 'SchoolMain', label: 'Início', icon: 'home' },
+    { key: 'NotificationList', label: 'Notificações', icon: 'bell' },
+    { key: 'SchoolProfile', label: 'Meu Cadastro', icon: 'user' },
     { key: 'Sair', label: 'Sair', icon: 'log-out' },
   ],
 };
@@ -59,6 +64,7 @@ interface AppLayoutProps {
 export default function AppLayout({ role, children }: AppLayoutProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
+  const { setCurrentUser } = useAppContext();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
@@ -81,6 +87,9 @@ export default function AppLayout({ role, children }: AppLayoutProps) {
   const handleMenuPress = (key: string) => {
     closeDrawer();
     if (key === 'Sair') {
+      // Revoga a sessão no backend (sem bloquear a saída se a rede falhar) e limpa o usuário.
+      authService.sair();
+      setCurrentUser(null, null);
       navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
       return;
     }

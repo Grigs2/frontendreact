@@ -1,22 +1,96 @@
-import axios from 'axios';
-
-// Troque pelo IP da sua máquina na rede local (não use localhost no celular físico!)
-const BASE_URL = 'http://localhost:8080/TioDaPerua/api';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { BASE_URL, REQUEST_TIMEOUT_MS } from './config';
+import { authSession } from './authSession';
 
 export const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000,
+  timeout: REQUEST_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
+// Rotas públicas do backend (SecurityConfig): não recebem Bearer nem disparam renovação de sessão.
+const PUBLIC_ROUTES = [
+  '/Autenticacao/Entrar',
+  '/Autenticacao/Renovar',
+  '/Autenticacao/SolicitarRedefinicaoSenha',
+  '/Autenticacao/RedefinirSenha',
+  '/Motorista/Cadastrar',
+  '/Responsavel/Cadastrar',
+  '/Escola/Cadastrar',
+];
+
+const isPublic = (url?: string) => !!url && PUBLIC_ROUTES.some((route) => url.startsWith(route));
+
+// Mensagem do SecurityJsonExceptionHandler do backend quando o token é ausente/inválido/expirado.
+// Outros 401 (ex.: "senha atual incorreta" em AlterarInfos/AlterarSenha) são regra de negócio e não renovam a sessão.
+const TOKEN_REJECTED_MESSAGE = 'Credenciais ausentes, inválidas ou expiradas';
+
+const isTokenRejection = (error: AxiosError) => {
+  const message = (error.response?.data as any)?.message;
+  return !message || message === TOKEN_REJECTED_MESSAGE;
+};
+
+api.interceptors.request.use(async (config) => {
+  if (isPublic(config.url)) return config;
+  // Renovação proativa: evita um 401 previsível quando o access token (15 min) já venceu.
+  if (authSession.isAccessTokenExpiring()) {
+    try {
+      await authSession.refresh();
+    } catch {
+      // segue com o token atual; o tratamento de 401 abaixo decide se a sessão expirou
+    }
+  }
+  const token = authSession.getAccessToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// 401 de token em rota protegida: renova a sessão uma vez e repete a requisição.
+// Se a renovação for recusada, a sessão expirou e o app volta para o login.
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const original = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
+    if (
+      error.response?.status !== 401 ||
+      !original ||
+      original._retry ||
+      isPublic(original.url) ||
+      !isTokenRejection(error)
+    ) {
+      throw error;
+    }
+    original._retry = true;
+    try {
+      const session = await authSession.refresh();
+      original.headers.Authorization = `Bearer ${session.accessToken}`;
+      return api(original);
+    } catch (refreshError: any) {
+      if (refreshError?.response || !(await authSession.getRefreshToken())) {
+        authSession.notifySessionExpired();
+      }
+      throw error;
+    }
+  },
+);
+
 // API Endpoint Map (Legacy or utility)
 export const API_ENDPOINTS = {
-  autenticarMotorista: '/Motorista/Autenticar',
-  autenticarResponsavel: '/Responsavel/Autenticar',
-  autenticarEscola: '/Escola/Autenticar',
-  
+  entrar: '/Autenticacao/Entrar',
+  sair: '/Autenticacao/Sair',
+  alterarSenha: '/Autenticacao/AlterarSenha',
+  solicitarRedefinicaoSenha: '/Autenticacao/SolicitarRedefinicaoSenha',
+  redefinirSenha: '/Autenticacao/RedefinirSenha',
+
+  perfilMotorista: '/Motorista/Perfil',
+  perfilResponsavel: '/Responsavel/Perfil',
+  perfilEscola: '/Escola/Perfil',
+
+
   cadastrarMotorista: '/Motorista/Cadastrar',
   cadastrarResponsavel: '/Responsavel/Cadastrar',
   cadastrarEscola: '/Escola/Cadastrar',
@@ -54,4 +128,6 @@ export const API_ENDPOINTS = {
   
   enviarNotificacao: '/Notificacao/Enviar',
   listarNotificacoes: (idUsuario: number) => `/Notificacao/Listar/${idUsuario}`,
+  visualizarNotificacao: (idNotificacao: number) => `/Notificacao/VisualizarNotificacao/${idNotificacao}`,
+  listarUsuariosNotificacao: '/Notificacao/ListarUsuarios',
 };

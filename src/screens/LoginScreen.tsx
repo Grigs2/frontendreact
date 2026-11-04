@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, Pressable,
   StyleSheet, KeyboardAvoidingView, Platform,
@@ -7,68 +7,95 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import Logo from '../components/Logo';
 import { useAppContext } from '../context/AppContext';
-import { authService } from '../services/authService';
-import { Button, TextField } from '../components/ui';
-import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
+import { authService, PerfilNaoSuportadoError, SessaoCarregada } from '../services/authService';
+import { HOME_BY_ROLE } from '../navigation';
+import { Button, StateView, TextField } from '../components/ui';
+import { getApiErrorMessage, getApiStatus } from '../utils/apiError';
+import { validateEmail } from '../utils/validators';
+import { colors, layout, maxFontSizeMultiplier, spacing, typography } from '../theme';
+
+/** Token de redefinição recebido pelo link do e-mail (PASSWORD_RESET_URL?token=...), apenas no web. */
+const readResetTokenFromUrl = () => {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
+  try {
+    return new URLSearchParams(window.location.search).get('token');
+  } catch {
+    return null;
+  }
+};
 
 export default function LoginScreen({ onLogin }: any) {
   const navigation = useNavigation<any>();
   const { setCurrentUser, showToast } = useAppContext();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedRole, setSelectedRole] = useState<'driver' | 'guardian' | 'school'>('driver');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [restoring, setRestoring] = useState(true);
+  const [errors, setErrors] = useState<{ email?: string | null; password?: string | null }>({});
 
-  const handleLogin = async () => {
-    console.log('[LoginScreen] Botão pressionado');
-    if (!email.trim() || !password.trim()) {
-      showToast('Preencha e-mail e senha.', 'warning');
+  const enterApp = ({ user, role }: SessaoCarregada) => {
+    setCurrentUser(user, role);
+    onLogin?.(role);
+    navigation.reset({ index: 0, routes: [{ name: HOME_BY_ROLE[role] }] });
+  };
+
+  // Ao abrir: link de redefinição de senha (web) ou sessão salva (refresh token).
+  useEffect(() => {
+    const token = readResetTokenFromUrl();
+    if (token) {
+      setRestoring(false);
+      if (typeof window !== 'undefined') window.history.replaceState(null, '', window.location.pathname);
+      navigation.navigate('ResetPassword', { token });
       return;
     }
+    let active = true;
+    authService
+      .restaurarSessao()
+      .then((session) => {
+        if (active && session) enterApp(session);
+      })
+      .finally(() => {
+        if (active) setRestoring(false);
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleLogin = async () => {
+    const nextErrors = {
+      email: validateEmail(email),
+      password: password ? null : 'Informe a senha.',
+    };
+    setErrors(nextErrors);
+    if (nextErrors.email || nextErrors.password) return;
 
     setLoading(true);
-    console.log('[LoginScreen] Submit iniciado para:', email, 'Perfil:', selectedRole);
-
     try {
-      let userData: any = null;
-      let roleKey: 'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA' = 'MOTORISTA';
-
-      console.log('[LoginScreen] Chamando authService...');
-      if (selectedRole === 'driver') {
-        userData = await authService.loginMotorista(email.trim(), password.trim());
-        roleKey = 'MOTORISTA';
-      } else if (selectedRole === 'guardian') {
-        userData = await authService.loginResponsavel(email.trim(), password.trim());
-        roleKey = 'RESPONSAVEL';
-      } else if (selectedRole === 'school') {
-        userData = await authService.loginEscola(email.trim(), password.trim());
-        roleKey = 'ESCOLA';
-      }
-
-      if (userData) {
-        console.log('[LoginScreen] Login bem-sucedido:', userData);
-        setCurrentUser(userData, roleKey);
-        onLogin(selectedRole);
-
-        const routeMap: any = {
-          driver: 'DriverMain',
-          guardian: 'GuardianMain',
-          school: 'SchoolMain',
-        };
-        console.log('[LoginScreen] Navegando para:', routeMap[selectedRole]);
-        navigation.navigate(routeMap[selectedRole]);
-      } else {
-        console.warn('[LoginScreen] Sem dados de usuário retornados');
-        showToast('Credenciais inválidas ou erro no servidor.', 'error');
-      }
+      const session = await authService.entrar(email.trim(), password);
+      enterApp(session);
     } catch (error: any) {
-      console.error('[LoginScreen] Erro no login:', error);
-      showToast(error.response?.data?.mensagem || 'Falha na conexão com o servidor.', 'error');
+      if (error instanceof PerfilNaoSuportadoError) {
+        showToast(error.message, 'error');
+      } else if (getApiStatus(error) === 401) {
+        showToast('E-mail ou senha inválidos.', 'error');
+      } else {
+        showToast(getApiErrorMessage(error, 'Não foi possível entrar. Tente novamente.'), 'error');
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  if (restoring) {
+    return (
+      <View style={styles.screen}>
+        <StateView kind="loading" title="Carregando..." style={styles.restoring} />
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -91,66 +118,63 @@ export default function LoginScreen({ onLogin }: any) {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.fieldLabel} maxFontSizeMultiplier={maxFontSizeMultiplier}>Entrar como</Text>
-            <View style={styles.segmentedControl} accessibilityRole="tablist">
-              {['driver', 'guardian', 'school'].map((role) => {
-                const label = role === 'driver' ? 'Motorista' : role === 'guardian' ? 'Responsável' : 'Escola';
-                const active = selectedRole === role;
-                return (
-                  <Pressable
-                    key={role}
-                    accessibilityRole="tab"
-                    accessibilityLabel={label}
-                    accessibilityState={{ selected: active }}
-                    style={({ pressed }) => [
-                      styles.segmentButton,
-                      active && styles.segmentButtonActive,
-                      pressed && !active && styles.segmentButtonPressed,
-                    ]}
-                    onPress={() => setSelectedRole(role as any)}
-                  >
-                    <Text
-                      style={[styles.segmentText, active && styles.segmentTextActive]}
-                      numberOfLines={1}
-                      maxFontSizeMultiplier={maxFontSizeMultiplier}
-                    >
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
             <TextField
               label="E-mail"
               value={email}
-              onChangeText={setEmail}
-              placeholder="ex: teste@teste.com"
+              onChangeText={(text) => {
+                setEmail(text);
+                if (errors.email) setErrors((e) => ({ ...e, email: null }));
+              }}
+              placeholder="nome@dominio.com"
               keyboardType="email-address"
               autoCapitalize="none"
+              autoComplete="email"
+              textContentType="emailAddress"
               leftIcon="mail"
               editable={!loading}
+              error={errors.email || undefined}
             />
 
             <TextField
               label="Senha"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(text) => {
+                setPassword(text);
+                if (errors.password) setErrors((e) => ({ ...e, password: null }));
+              }}
               placeholder="Sua senha"
               secureTextEntry={!showPassword}
+              autoComplete="password"
+              textContentType="password"
               leftIcon="lock"
               rightIcon={showPassword ? 'eye-off' : 'eye'}
               rightIconLabel={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
               onRightIconPress={() => setShowPassword(!showPassword)}
+              onSubmitEditing={handleLogin}
+              returnKeyType="go"
               editable={!loading}
+              error={errors.password || undefined}
             />
+
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Esqueci minha senha"
+              onPress={() => navigation.navigate('ForgotPassword', { email: email.trim() || undefined })}
+              disabled={loading}
+              style={styles.forgot}
+              hitSlop={8}
+            >
+              <Text style={styles.forgotText} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                Esqueci minha senha
+              </Text>
+            </Pressable>
 
             <View style={styles.actions}>
               <Button label="Entrar" onPress={handleLogin} loading={loading} fullWidth />
               <Button
-                label="Cadastrar"
+                label="Criar conta"
                 variant="secondary"
-                onPress={() => navigation.navigate('Register', { role: selectedRole })}
+                onPress={() => navigation.navigate('Register')}
                 disabled={loading}
                 fullWidth
               />
@@ -164,6 +188,7 @@ export default function LoginScreen({ onLogin }: any) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
+  restoring: { flex: 1 },
   scrollContent: { flexGrow: 1, justifyContent: 'center', padding: layout.screenMargin },
   wrapper: { width: '100%', maxWidth: 440, alignSelf: 'center' },
   brandContainer: { alignItems: 'center', marginBottom: spacing.xxl, gap: spacing.sm },
@@ -177,25 +202,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.lg,
   },
-  fieldLabel: { ...typography.captionBold, color: colors.slate700, marginBottom: -spacing.sm },
-  segmentedControl: {
-    flexDirection: 'row',
-    backgroundColor: colors.background,
-    borderRadius: radius.button,
-    padding: spacing.xs,
-    gap: spacing.xs,
-  },
-  segmentButton: {
-    flex: 1,
-    minHeight: layout.minTouch,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  segmentButtonActive: { backgroundColor: colors.primary },
-  segmentButtonPressed: { backgroundColor: colors.pressedNeutral },
-  segmentText: { ...typography.caption, color: colors.slate700 },
-  segmentTextActive: { ...typography.captionBold, color: colors.onPrimary },
-  actions: { gap: layout.buttonGap, marginTop: spacing.sm },
+  forgot: { alignSelf: 'flex-end', minHeight: 32, justifyContent: 'center', marginTop: -spacing.sm },
+  forgotText: { ...typography.label, color: colors.ink, textDecorationLine: 'underline' },
+  actions: { gap: layout.buttonGap },
 });

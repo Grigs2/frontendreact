@@ -34,7 +34,7 @@ export default function NoticeBoardScreen() {
   };
 
   const sortedNotifications = [...notifications].sort((a, b) =>
-    new Date(b.data || 0).getTime() - new Date(a.data || 0).getTime()
+    new Date(b.dataCriacao || 0).getTime() - new Date(a.dataCriacao || 0).getTime()
   );
 
   const content = (
@@ -65,7 +65,7 @@ export default function NoticeBoardScreen() {
             </View>
             <Text style={styles.contentTxt}>{item.mensagem}</Text>
             <Text style={styles.dateText}>
-              {item.data ? new Date(item.data).toLocaleString() : 'N/A'}
+              {item.dataCriacao ? new Date(item.dataCriacao).toLocaleString() : 'N/A'}
             </Text>
           </View>
         )}

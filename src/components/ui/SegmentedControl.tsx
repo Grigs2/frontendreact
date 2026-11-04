@@ -68,6 +68,7 @@ const styles = StyleSheet.create({
   text: {
     ...typography.caption,
     color: colors.slate700,
+    textAlign: 'center',
   },
   textActive: {
     ...typography.captionBold,

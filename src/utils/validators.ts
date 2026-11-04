@@ -1,0 +1,180 @@
+import { onlyDigits } from './masks';
+
+// Validadores de formulário. Cada função devolve a mensagem de erro (string) ou null quando o valor é válido,
+// para ser usada diretamente na prop `error` do TextField.
+
+const allSameDigits = (digits: string) => /^(\d)\1+$/.test(digits);
+
+/** Algoritmo oficial dos dígitos verificadores do CPF. */
+export const isValidCPF = (value: string) => {
+  const cpf = onlyDigits(value);
+  if (cpf.length !== 11 || allSameDigits(cpf)) return false;
+  const calc = (len: number) => {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += Number(cpf[i]) * (len + 1 - i);
+    const rest = (sum * 10) % 11;
+    return rest === 10 ? 0 : rest;
+  };
+  return calc(9) === Number(cpf[9]) && calc(10) === Number(cpf[10]);
+};
+
+/** Algoritmo oficial dos dígitos verificadores do CNPJ. */
+export const isValidCNPJ = (value: string) => {
+  const cnpj = onlyDigits(value);
+  if (cnpj.length !== 14 || allSameDigits(cnpj)) return false;
+  const calc = (len: number) => {
+    const weights = len === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const sum = weights.reduce((acc, w, i) => acc + Number(cnpj[i]) * w, 0);
+    const rest = sum % 11;
+    return rest < 2 ? 0 : 11 - rest;
+  };
+  return calc(12) === Number(cnpj[12]) && calc(13) === Number(cnpj[13]);
+};
+
+// RFC 5322 simplificado: parte local sem espaços, domínio com TLD de 2+ letras, sem pontos duplicados.
+const EMAIL_REGEX =
+  /^(?!.*\.\.)[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}$/;
+
+export const isValidEmail = (value: string) => {
+  const email = (value || '').trim();
+  return email.length <= 254 && EMAIL_REGEX.test(email) && !email.startsWith('.') && !email.split('@')[0].endsWith('.');
+};
+
+/** DDDs válidos no Brasil (Anatel). */
+const VALID_DDDS = new Set([
+  11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 27, 28, 31, 32, 33, 34, 35, 37, 38,
+  41, 42, 43, 44, 45, 46, 47, 48, 49, 51, 53, 54, 55, 61, 62, 63, 64, 65, 66, 67, 68, 69,
+  71, 73, 74, 75, 77, 79, 81, 82, 83, 84, 85, 86, 87, 88, 89, 91, 92, 93, 94, 95, 96, 97, 98, 99,
+]);
+
+/** Data DD/MM/AAAA real (rejeita 31/02 etc.). Retorna o Date ou null. */
+export const parseBrDate = (value: string): Date | null => {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value || '');
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return date;
+};
+
+export const ageOn = (birth: Date, today = new Date()) => {
+  let age = today.getFullYear() - birth.getFullYear();
+  const beforeBirthday =
+    today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate());
+  if (beforeBirthday) age--;
+  return age;
+};
+
+// ---------------------------------------------------------------------------------------------
+// Validações por campo (mensagens exibidas ao usuário)
+// ---------------------------------------------------------------------------------------------
+
+export const validateRequired = (value: string, label: string) =>
+  (value || '').trim() ? null : `Informe ${label}.`;
+
+export const validateEmail = (value: string) => {
+  if (!(value || '').trim()) return 'Informe o e-mail.';
+  return isValidEmail(value) ? null : 'E-mail inválido. Ex.: nome@dominio.com';
+};
+
+export const validateCPF = (value: string) => {
+  if (!onlyDigits(value)) return 'Informe o CPF.';
+  if (onlyDigits(value).length < 11) return 'CPF incompleto.';
+  return isValidCPF(value) ? null : 'CPF inválido. Confira os números.';
+};
+
+export const validateCNPJ = (value: string) => {
+  if (!onlyDigits(value)) return 'Informe o CNPJ.';
+  if (onlyDigits(value).length < 14) return 'CNPJ incompleto.';
+  return isValidCNPJ(value) ? null : 'CNPJ inválido. Confira os números.';
+};
+
+/** CNH: 11 dígitos (regra do backend para documentos). */
+export const validateCNH = (value: string) => {
+  const cnh = onlyDigits(value);
+  if (!cnh) return 'Informe o número da CNH.';
+  if (cnh.length !== 11) return 'A CNH deve ter 11 dígitos.';
+  if (allSameDigits(cnh)) return 'Número de CNH inválido.';
+  return null;
+};
+
+export const validatePhone = (value: string) => {
+  const phone = onlyDigits(value);
+  if (!phone) return 'Informe o telefone.';
+  if (phone.length !== 10 && phone.length !== 11) return 'Telefone incompleto. Use DDD + número.';
+  if (!VALID_DDDS.has(Number(phone.slice(0, 2)))) return 'DDD inválido.';
+  if (phone.length === 11 && phone[2] !== '9') return 'Celular deve começar com 9 após o DDD.';
+  if (phone.length === 10 && !/[2-5]/.test(phone[2])) return 'Telefone fixo inválido.';
+  return null;
+};
+
+export const validateCEP = (value: string) => {
+  const cep = onlyDigits(value);
+  if (!cep) return 'Informe o CEP.';
+  return cep.length === 8 ? null : 'CEP deve ter 8 dígitos.';
+};
+
+export const validateBirthDate = (value: string, minAge = 18) => {
+  if (!value) return 'Informe a data de nascimento.';
+  if (value.length < 10) return 'Data incompleta. Use DD/MM/AAAA.';
+  const date = parseBrDate(value);
+  if (!date) return 'Data inválida.';
+  if (date > new Date()) return 'A data não pode estar no futuro.';
+  if (date.getFullYear() < 1900) return 'Data inválida.';
+  if (minAge > 0 && ageOn(date) < minAge) return `É preciso ter ${minAge} anos ou mais.`;
+  return null;
+};
+
+export const validateUF = (value: string) =>
+  /^[A-Za-z]{2}$/.test((value || '').trim()) ? null : 'UF deve ter 2 letras.';
+
+// ---------------------------------------------------------------------------------------------
+// Senha
+// ---------------------------------------------------------------------------------------------
+
+/** O backend exige no mínimo 12 caracteres e no máximo 72 bytes (UTF-8). */
+export const PASSWORD_MIN_LENGTH = 12;
+const PASSWORD_MAX_BYTES = 72;
+
+const utf8Length = (value: string) => {
+  let bytes = 0;
+  for (const ch of value) {
+    const code = ch.codePointAt(0) ?? 0;
+    bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+  }
+  return bytes;
+};
+
+export interface PasswordRule {
+  key: 'length' | 'upper' | 'number' | 'special';
+  label: string;
+  ok: boolean;
+}
+
+export const passwordRules = (value: string): PasswordRule[] => [
+  { key: 'length', label: `Pelo menos ${PASSWORD_MIN_LENGTH} caracteres`, ok: value.length >= PASSWORD_MIN_LENGTH },
+  { key: 'upper', label: 'Uma letra maiúscula', ok: /[A-ZÀ-Ý]/.test(value) },
+  { key: 'number', label: 'Um número', ok: /\d/.test(value) },
+  { key: 'special', label: 'Um caractere especial (ex.: ! @ # $)', ok: /[^A-Za-z0-9À-ÿ\s]/.test(value) },
+];
+
+/** 0 (vazia) a 4 (forte). */
+export const passwordStrength = (value: string) => {
+  if (!value) return 0;
+  const passed = passwordRules(value).filter((r) => r.ok).length;
+  return Math.max(1, passed);
+};
+
+export const validatePassword = (value: string) => {
+  if (!value) return 'Informe a senha.';
+  if (utf8Length(value) > PASSWORD_MAX_BYTES) return 'Senha longa demais.';
+  const failed = passwordRules(value).filter((r) => !r.ok);
+  return failed.length ? 'A senha não atende a todos os critérios.' : null;
+};
+
+export const validatePasswordConfirmation = (password: string, confirmation: string) => {
+  if (!confirmation) return 'Confirme a senha.';
+  return password === confirmation ? null : 'As senhas não coincidem.';
+};
