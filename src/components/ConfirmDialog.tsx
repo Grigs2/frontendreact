@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { Button } from './ui';
+import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
 interface Props {
   visible: boolean;
@@ -14,38 +16,36 @@ interface Props {
   destructive?: boolean;
 }
 
-export default function ConfirmDialog({ 
-  visible, 
-  title, 
-  message, 
-  confirmLabel = 'Confirmar', 
-  cancelLabel = 'Cancelar', 
-  onConfirm, 
-  onCancel, 
+export default function ConfirmDialog({
+  visible,
+  title,
+  message,
+  confirmLabel = 'Confirmar',
+  cancelLabel = 'Cancelar',
+  onConfirm,
+  onCancel,
   loading,
-  destructive = true 
+  destructive = true
 }: Props) {
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={() => !loading && onCancel()}>
       <View style={styles.overlay}>
-        <View style={styles.content}>
+        <View style={styles.content} accessibilityViewIsModal>
           <View style={[styles.iconContainer, destructive ? styles.iconDestructive : styles.iconInfo]}>
-            <Feather name={destructive ? 'alert-triangle' : 'help-circle'} size={32} color={destructive ? '#FF3B30' : '#1976D2'} />
+            <Feather name={destructive ? 'alert-triangle' : 'help-circle'} size={layout.icon} color={destructive ? colors.danger : colors.ink} />
           </View>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.message}>{message}</Text>
-          
+          <Text style={styles.title} maxFontSizeMultiplier={maxFontSizeMultiplier}>{title}</Text>
+          <Text style={styles.message} maxFontSizeMultiplier={maxFontSizeMultiplier}>{message}</Text>
+
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onCancel} disabled={loading}>
-              <Text style={styles.cancelBtnText}>{cancelLabel}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.confirmBtn, destructive ? styles.confirmDestructive : styles.confirmInfo]} 
-              onPress={onConfirm} 
-              disabled={loading}
-            >
-              {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.confirmBtnText}>{confirmLabel}</Text>}
-            </TouchableOpacity>
+            <Button
+              label={confirmLabel}
+              variant={destructive ? 'destructive' : 'primary'}
+              onPress={onConfirm}
+              loading={loading}
+              fullWidth
+            />
+            <Button label={cancelLabel} variant="tertiary" onPress={onCancel} disabled={loading} fullWidth />
           </View>
         </View>
       </View>
@@ -54,18 +54,12 @@ export default function ConfirmDialog({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  content: { backgroundColor: '#FFF', borderRadius: 28, padding: 24, width: '100%', maxWidth: 400, alignItems: 'center' },
-  iconContainer: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  iconDestructive: { backgroundColor: '#FFEBEE' },
-  iconInfo: { backgroundColor: '#E3F2FD' },
-  title: { fontSize: 20, fontFamily: 'Inter_700Bold', color: '#1D1D1F', textAlign: 'center', marginBottom: 12 },
-  message: { fontSize: 15, color: '#86868B', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
-  actions: { flexDirection: 'row', gap: 12, width: '100%' },
-  cancelBtn: { flex: 1, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  cancelBtnText: { color: '#86868B', fontFamily: 'Inter_600SemiBold' },
-  confirmBtn: { flex: 2, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  confirmDestructive: { backgroundColor: '#FF3B30' },
-  confirmInfo: { backgroundColor: '#1976D2' },
-  confirmBtnText: { color: '#FFF', fontFamily: 'Inter_700Bold' }
+  overlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', alignItems: 'center', padding: layout.screenMargin },
+  content: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, width: '100%', maxWidth: 400, alignItems: 'center' },
+  iconContainer: { width: layout.iconSlot, height: layout.iconSlot, borderRadius: radius.pill, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.lg },
+  iconDestructive: { backgroundColor: colors.dangerTint },
+  iconInfo: { backgroundColor: colors.primaryTint },
+  title: { ...typography.heading, color: colors.ink, textAlign: 'center', marginBottom: spacing.sm },
+  message: { ...typography.body, color: colors.slate700, textAlign: 'center', marginBottom: spacing.xl },
+  actions: { gap: layout.buttonGap, width: '100%' },
 });

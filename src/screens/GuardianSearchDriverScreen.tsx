@@ -2,16 +2,15 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
   FlatList,
-  TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import GuardianLayout from '../components/GuardianLayout';
 import { RootStackParamList } from '../navigation';
+import { Button, Chip, ScreenHeader, StateView, TextField } from '../components/ui';
+import { borders, colors, layout, radius, spacing, typography } from '../theme';
 
 interface Driver {
   id: number;
@@ -41,7 +40,7 @@ export default function GuardianSearchDriverScreen({ navigation }: Props) {
     setLoading(true);
     // Simulação de delay para realismo
     setTimeout(() => {
-      const filtered = MOTORISTAS_MOCK.filter(d => 
+      const filtered = MOTORISTAS_MOCK.filter(d =>
         d.nome.toLowerCase().includes(search.toLowerCase()) ||
         d.veiculo.toLowerCase().includes(search.toLowerCase())
       );
@@ -64,34 +63,27 @@ export default function GuardianSearchDriverScreen({ navigation }: Props) {
       <View style={styles.card}>
         <View style={styles.cardInfo}>
           <View style={styles.avatarContainer}>
-            <Feather name="user" size={24} color="#1976D2" />
+            <Feather name="user" size={24} color={colors.ink} />
           </View>
           <View style={styles.textContainer}>
             <Text style={styles.driverName}>{item.nome}</Text>
             <Text style={styles.vehicleInfo}>{item.veiculo} • {item.placa}</Text>
           </View>
         </View>
-        
-        <TouchableOpacity 
-          style={[
-            styles.requestButton, 
-            isRequested && styles.requestedButton
-          ]}
-          onPress={() => handleRequestLink(item.id)}
-          disabled={isRequested}
-        >
-          <Text style={[
-            styles.requestButtonText,
-            isRequested && styles.requestedButtonText
-          ]}>
-            {isRequested ? 'Solicitado' : 'Solicitar Vínculo'}
-          </Text>
-          <Feather 
-            name={isRequested ? "check-circle" : "plus-circle"} 
-            size={18} 
-            color={isRequested ? "#4CAF50" : "#FFFFFF"} 
+
+        {isRequested ? (
+          <Chip label="Solicitado" tone="success" icon="check-circle" style={styles.requested} />
+        ) : (
+          <Button
+            label="Solicitar Vínculo"
+            icon="plus-circle"
+            iconPosition="right"
+            size="md"
+            accessibilityLabel={`Solicitar vínculo com ${item.nome}`}
+            onPress={() => handleRequestLink(item.id)}
+            fullWidth
           />
-        </TouchableOpacity>
+        )}
       </View>
     );
   };
@@ -99,23 +91,24 @@ export default function GuardianSearchDriverScreen({ navigation }: Props) {
   return (
     <GuardianLayout>
       <View style={styles.container}>
-        <Text style={styles.title}>Buscar Motorista</Text>
-        
+        <ScreenHeader title="Buscar Motorista" />
+
         <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
+          <TextField
             placeholder="Digite o nome ou modelo da van..."
+            accessibilityLabel="Buscar motorista"
+            leftIcon="search"
             value={search}
             onChangeText={setSearch}
             onSubmitEditing={handleSearch}
+            returnKeyType="search"
+            containerStyle={styles.searchInput}
           />
-          <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
-            <Feather name="search" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
+          <Button size="icon" icon="search" accessibilityLabel="Buscar" onPress={handleSearch} />
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color="#1976D2" style={styles.loader} />
+          <StateView kind="loading" title="Buscando motoristas..." />
         ) : (
           <FlatList
             data={drivers}
@@ -123,7 +116,7 @@ export default function GuardianSearchDriverScreen({ navigation }: Props) {
             renderItem={renderDriverCard}
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
-              <Text style={styles.emptyText}>Nenhum motorista encontrado.</Text>
+              <StateView kind="empty" icon="search" title="Nenhum motorista encontrado." />
             }
           />
         )}
@@ -133,114 +126,15 @@ export default function GuardianSearchDriverScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-  },
-  title: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 22,
-    color: '#1D1D1F',
-    marginBottom: 20,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    marginBottom: 20,
-  },
-  searchInput: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    fontFamily: 'Inter_400Regular',
-    fontSize: 16,
-  },
-  searchButton: {
-    backgroundColor: '#1976D2',
-    borderRadius: 12,
-    width: 48,
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 10,
-  },
-  loader: {
-    marginTop: 40,
-  },
-  listContent: {
-    paddingBottom: 20,
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
-  },
-  cardInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  avatarContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E3F2FD',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  textContainer: {
-    flex: 1,
-  },
-  driverName: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 18,
-    color: '#1D1D1F',
-  },
-  vehicleInfo: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    color: '#666666',
-    marginTop: 2,
-  },
-  requestButton: {
-    backgroundColor: '#1976D2',
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-  },
-  requestedButton: {
-    backgroundColor: '#E8F5E9',
-    borderWidth: 1,
-    borderColor: '#4CAF50',
-  },
-  requestButtonText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    color: '#FFFFFF',
-    marginRight: 8,
-  },
-  requestedButtonText: {
-    color: '#4CAF50',
-  },
-  emptyText: {
-    textAlign: 'center',
-    fontFamily: 'Inter_400Regular',
-    fontSize: 16,
-    color: '#888888',
-    marginTop: 40,
-  },
+  container: { flex: 1, padding: layout.screenMargin, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  searchContainer: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.xl },
+  searchInput: { flex: 1 },
+  listContent: { paddingBottom: spacing.xl },
+  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: layout.cardPadding, marginBottom: spacing.lg, borderWidth: borders.hairline, borderColor: colors.border, gap: spacing.md },
+  cardInfo: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  avatarContainer: { width: layout.iconSlot, height: layout.iconSlot, borderRadius: radius.pill, backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center' },
+  textContainer: { flex: 1, gap: spacing.xs },
+  driverName: { ...typography.heading, color: colors.ink },
+  vehicleInfo: { ...typography.caption, color: colors.slate700 },
+  requested: { flex: 1, justifyContent: 'center', minHeight: layout.buttonMd },
 });

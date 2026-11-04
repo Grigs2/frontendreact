@@ -2,13 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import DriverLayout from '../components/DriverLayout';
@@ -16,6 +13,8 @@ import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { motoristaService } from '../services/motoristaService';
 import { MotoristaDTO } from '../types';
+import { Button, ScreenHeader, TextField } from '../components/ui';
+import { borders, colors, layout, spacing } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DriverVehicle'>;
 
@@ -64,66 +63,43 @@ export default function DriverVehicleScreen({ navigation }: Props) {
       <DriverLayout>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-            <Text style={styles.title}>Meu Veículo</Text>
-            <Text style={styles.subtitle}>Informe os dados do seu veículo</Text>
+            <ScreenHeader title="Meu Veículo" subtitle="Informe os dados do seu veículo" />
             <View style={styles.card}>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Modelo</Text>
-                <TextInput 
-                  style={styles.input} 
-                  value={modelo} 
-                  onChangeText={setModelo} 
-                  placeholder="Ex: Mercedes-Benz Sprinter"
-                  editable={!loading}
-                />
+              <TextField
+                label="Modelo"
+                value={modelo}
+                onChangeText={setModelo}
+                placeholder="Ex: Mercedes-Benz Sprinter"
+                editable={!loading}
+              />
+              <TextField
+                label="Placa"
+                value={placa}
+                onChangeText={setPlaca}
+                placeholder="ABC-1234"
+                autoCapitalize="characters"
+                editable={!loading}
+              />
+              <TextField
+                label="Ano"
+                value={ano}
+                onChangeText={setAno}
+                keyboardType="numeric"
+                placeholder="2022"
+                editable={!loading}
+              />
+              <TextField
+                label="Capacidade"
+                value={capacidade}
+                onChangeText={setCapacidade}
+                keyboardType="numeric"
+                placeholder="20"
+                editable={!loading}
+              />
+              <View style={styles.actions}>
+                <Button label="Salvar" onPress={handleSave} loading={loading} fullWidth />
+                <Button label="Cancelar" variant="tertiary" onPress={() => navigation.goBack()} disabled={loading} fullWidth />
               </View>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Placa</Text>
-                <TextInput 
-                  style={styles.input} 
-                  value={placa} 
-                  onChangeText={setPlaca} 
-                  placeholder="ABC-1234"
-                  autoCapitalize="characters"
-                  editable={!loading}
-                />
-              </View>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Ano</Text>
-                <TextInput 
-                  style={styles.input} 
-                  value={ano} 
-                  onChangeText={setAno} 
-                  keyboardType="numeric" 
-                  placeholder="2022"
-                  editable={!loading}
-                />
-              </View>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Capacidade</Text>
-                <TextInput 
-                  style={styles.input} 
-                  value={capacidade} 
-                  onChangeText={setCapacidade} 
-                  keyboardType="numeric" 
-                  placeholder="20"
-                  editable={!loading}
-                />
-              </View>
-              <TouchableOpacity 
-                style={[styles.saveButton, loading && { opacity: 0.7 }]} 
-                onPress={handleSave}
-                disabled={loading}
-              >
-                {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveButtonText}>Salvar</Text>}
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.cancelButton} 
-                onPress={() => navigation.goBack()}
-                disabled={loading}
-              >
-                <Text style={styles.cancelButtonText}>Cancelar</Text>
-              </TouchableOpacity>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -132,15 +108,7 @@ export default function DriverVehicleScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  scrollContent: { padding: 20, paddingTop: 24, paddingBottom: 40 },
-  title: { fontFamily: 'Inter_700Bold', fontSize: 24, color: '#1D1D1F', marginBottom: 4 },
-  subtitle: { fontFamily: 'Inter_400Regular', fontSize: 16, color: '#86868B', marginBottom: 24 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 32, elevation: 4 },
-  fieldGroup: { marginBottom: 24 },
-  label: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#1D1D1F', marginBottom: 12 },
-  input: { fontFamily: 'Inter_400Regular', fontSize: 17, height: 52, borderRadius: 12, backgroundColor: '#F5F5F7', paddingHorizontal: 16 },
-  saveButton: { height: 52, borderRadius: 12, backgroundColor: '#1976D2', alignItems: 'center', justifyContent: 'center' },
-  saveButtonText: { fontFamily: 'Inter_600SemiBold', fontSize: 17, color: '#FFFFFF' },
-  cancelButton: { height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 12, borderWidth: 2, borderColor: '#E53935' },
-  cancelButtonText: { fontFamily: 'Inter_600SemiBold', fontSize: 17, color: '#E53935' },
+  scrollContent: { padding: layout.screenMargin, paddingBottom: spacing.xxl, width: '100%', maxWidth: 600, alignSelf: 'center' },
+  card: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, gap: spacing.lg, borderWidth: borders.hairline, borderColor: colors.border },
+  actions: { gap: layout.buttonGap, marginTop: spacing.sm },
 });

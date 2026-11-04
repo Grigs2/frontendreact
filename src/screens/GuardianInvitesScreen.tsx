@@ -10,17 +10,19 @@ import { viagemService } from '../services/viagemService';
 import { ResponsavelDTO, SolicitacaoDTO } from '../types';
 
 import ConfirmDialog from '../components/ConfirmDialog';
+import { Button, ScreenHeader, SegmentedControl, StateView } from '../components/ui';
+import { borders, colors, layout, radius, spacing, typography } from '../theme';
 
 export default function GuardianInvitesScreen() {
   const isFocused = useIsFocused();
   const { currentUser, pendingSolicitations, updateSolicitations, showToast } = useAppContext();
-  
+
   const [activeTab, setActiveTab] = useState<'TRIP' | 'DRIVER'>('TRIP');
   const [loading, setLoading] = useState(false);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
   const [showConfirmUnlink, setShowConfirmUnlink] = useState(false);
   const [selectedSolId, setSelectedSolId] = useState<number | null>(null);
-  
+
   const tripCache = useRef<Record<number, string>>({});
 
   const guardian = currentUser as ResponsavelDTO;
@@ -117,27 +119,19 @@ export default function GuardianInvitesScreen() {
   return (
     <GuardianLayout>
       <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Convites & Associações</Text>
-          <Text style={styles.subtitle}>Gerencie profissionais e viagens</Text>
-        </View>
+        <ScreenHeader title="Convites & Associações" subtitle="Gerencie profissionais e viagens" />
 
-        <View style={styles.tabs}>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'TRIP' && styles.tabActive]}
-            onPress={() => setActiveTab('TRIP')}
-          >
-            <Text style={[styles.tabText, activeTab === 'TRIP' && styles.tabTextActive]}>Convites</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'DRIVER' && styles.tabActive]}
-            onPress={() => setActiveTab('DRIVER')}
-          >
-            <Text style={[styles.tabText, activeTab === 'DRIVER' && styles.tabTextActive]}>Vínculos Ativos</Text>
-          </TouchableOpacity>
-        </View>
+        <SegmentedControl
+          options={[
+            { value: 'TRIP', label: 'Convites' },
+            { value: 'DRIVER', label: 'Vínculos Ativos' },
+          ]}
+          value={activeTab}
+          onChange={setActiveTab}
+          style={styles.tabs}
+        />
 
-        {loading && <ActivityIndicator color="#1976D2" style={{ marginBottom: 20 }} />}
+        {loading && <StateView kind="loading" style={styles.loading} />}
 
         {activeTab === 'TRIP' ? (
           <FlatList
@@ -150,14 +144,14 @@ export default function GuardianInvitesScreen() {
                 <View style={styles.card}>
                   <View style={styles.cardHeader}>
                     <View style={styles.tripIcon}>
-                      <Feather name="truck" size={20} color="#1976D2" />
+                      <Feather name="truck" size={24} color={colors.ink} />
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text style={styles.driverName}>{item.motoristaNome || `Motorista Viagem #${item.viagemId}`}</Text>
                       <View style={styles.periodRow}>
-                        <Feather name="clock" size={12} color="#86868B" />
+                        <Feather name="clock" size={14} color={colors.slate500} />
                         {loadingPeriods && !item.periodo ? (
-                          <ActivityIndicator size="small" color="#1976D2" style={{ marginLeft: 4 }} />
+                          <ActivityIndicator size="small" color={colors.ink} style={{ marginLeft: 4 }} />
                         ) : (
                           <Text style={styles.periodText}>{item.periodo?.replace('_', ' ') || 'Carregando...'}</Text>
                         )}
@@ -168,25 +162,26 @@ export default function GuardianInvitesScreen() {
                     Solicitou transportar <Text style={styles.bold}>{item.dependenteNome || student?.nome || 'Dependente #' + item.dependenteId}</Text>.
                   </Text>
                   <View style={styles.actions}>
-                    <TouchableOpacity 
-                      style={[styles.btn, styles.btnDeny]} 
+                    <Button
+                      label="Recusar"
+                      variant="secondary"
+                      size="md"
                       onPress={() => handleTripResponse(item.id!, false)}
                       disabled={loading}
-                    >
-                      <Text style={styles.btnTextDeny}>Recusar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.btn, styles.btnApprove]} 
+                      style={styles.btn}
+                    />
+                    <Button
+                      label="Aceitar"
+                      size="md"
                       onPress={() => handleTripResponse(item.id!, true)}
                       disabled={loading}
-                    >
-                      <Text style={styles.btnTextApprove}>Aceitar</Text>
-                    </TouchableOpacity>
+                      style={styles.btn}
+                    />
                   </View>
                 </View>
               );
             }}
-            ListEmptyComponent={!loading ? <Text style={styles.emptyText}>Nenhum convite pendente.</Text> : null}
+            ListEmptyComponent={!loading ? <StateView kind="empty" icon="mail" title="Nenhum convite pendente." /> : null}
           />
         ) : (
           <FlatList
@@ -205,41 +200,42 @@ export default function GuardianInvitesScreen() {
                     </View>
                     <StatusBadge status={item.status || 'ATIVA'} variant={getStatusVariant(item.status || 'ATIVA')} />
                   </View>
-                  
+
                   <View style={styles.detailsList}>
                     <View style={styles.detailRow}>
-                      <Feather name="user" size={14} color="#86868B" />
+                      <Feather name="user" size={14} color={colors.slate500} />
                       <Text style={styles.detailText}>Aluno: <Text style={styles.bold}>{item.dependenteNome || student?.nome || 'Dependente #' + item.dependenteId}</Text></Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Feather name="book-open" size={14} color="#86868B" />
+                      <Feather name="book-open" size={14} color={colors.slate500} />
                       <Text style={styles.detailText}>Escola: <Text style={styles.bold}>{item.escolaNome || student?.escola?.nome || 'Não informada'}</Text></Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Feather name="clock" size={14} color="#86868B" />
+                      <Feather name="clock" size={14} color={colors.slate500} />
                       <Text style={styles.detailText}>Período: <Text style={styles.bold}>{item.periodo?.replace('_', ' ') || 'Não informado'}</Text></Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Feather name="calendar" size={14} color="#86868B" />
+                      <Feather name="calendar" size={14} color={colors.slate500} />
                       <Text style={styles.detailText}>Início: <Text style={styles.bold}>{new Date(item.dataInicio).toLocaleDateString()}</Text></Text>
                     </View>
                   </View>
 
-                  <TouchableOpacity 
-                    style={styles.btnUnlink} 
+                  <Button
+                    label="Encerrar Vínculo"
+                    icon="user-x"
+                    variant="destructive"
+                    size="md"
                     onPress={() => {
                       setSelectedSolId(item.id!);
                       setShowConfirmUnlink(true);
                     }}
                     disabled={loading}
-                  >
-                    <Feather name="user-x" size={16} color="#FF3B30" />
-                    <Text style={styles.btnUnlinkText}>Encerrar Vínculo</Text>
-                  </TouchableOpacity>
+                    fullWidth
+                  />
                 </View>
               );
             }}
-            ListEmptyComponent={!loading ? <Text style={styles.emptyText}>Você não possui vínculos ativos.</Text> : null}
+            ListEmptyComponent={!loading ? <StateView kind="empty" icon="link" title="Você não possui vínculos ativos." /> : null}
           />
         )}
 
@@ -263,37 +259,24 @@ export default function GuardianInvitesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  header: { marginBottom: 24, marginTop: 10 },
-  title: { fontSize: 24, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  subtitle: { fontSize: 14, color: '#86868B', marginTop: 4 },
-  tabs: { flexDirection: 'row', backgroundColor: '#F2F2F7', borderRadius: 12, padding: 4, marginBottom: 24 },
-  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
-  tabActive: { backgroundColor: '#FFF', elevation: 2 },
-  tabText: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#86868B' },
-  tabTextActive: { color: '#1976D2' },
-  list: { paddingBottom: 20 },
-  card: { backgroundColor: '#FFF', borderRadius: 20, padding: 20, marginBottom: 16, elevation: 3, borderWidth: 1, borderColor: '#F2F2F7' },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  tripIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#E3F2FD', alignItems: 'center', justifyContent: 'center' },
-  driverName: { fontSize: 16, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  periodRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 },
-  periodText: { fontSize: 12, color: '#86868B', fontFamily: 'Inter_600SemiBold' },
-  driverPhone: { fontSize: 12, color: '#86868B', marginTop: 2 },
-  inviteText: { fontSize: 14, color: '#3A3A3C', lineHeight: 20, marginBottom: 20 },
-  detailsList: { gap: 8, marginBottom: 20, backgroundColor: '#F9F9FB', padding: 12, borderRadius: 12 },
-  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  detailText: { fontSize: 13, color: '#48484A' },
-  bold: { fontFamily: 'Inter_700Bold' },
-  actions: { flexDirection: 'row', gap: 12 },
-  btn: { flex: 1, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  btnApprove: { backgroundColor: '#34C759' },
-  btnDeny: { borderWidth: 1, borderColor: '#FF3B30' },
-  btnTextApprove: { color: '#FFF', fontFamily: 'Inter_700Bold', fontSize: 13 },
-  btnTextDeny: { color: '#FF3B30', fontFamily: 'Inter_700Bold', fontSize: 13 },
-  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#E3F2FD', alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#1976D2', fontFamily: 'Inter_700Bold', fontSize: 18 },
-  btnUnlink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#F2F2F7', marginTop: 4 },
-  btnUnlinkText: { color: '#FF3B30', fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  emptyText: { textAlign: 'center', marginTop: 40, color: '#86868B' }
+  container: { flex: 1, padding: layout.screenMargin, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  tabs: { marginBottom: spacing.xl },
+  loading: { paddingVertical: spacing.md },
+  list: { paddingBottom: spacing.xl },
+  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: layout.cardPadding, marginBottom: spacing.lg, borderWidth: borders.hairline, borderColor: colors.border },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
+  tripIcon: { width: layout.iconSlot, height: layout.iconSlot, borderRadius: radius.pill, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
+  driverName: { ...typography.heading, color: colors.ink },
+  periodRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs, gap: spacing.xs },
+  periodText: { ...typography.captionBold, color: colors.slate500 },
+  driverPhone: { ...typography.caption, color: colors.slate500, marginTop: spacing.xs },
+  inviteText: { ...typography.body, color: colors.slate700, marginBottom: spacing.lg },
+  detailsList: { gap: spacing.sm, marginBottom: spacing.lg, backgroundColor: colors.background, padding: spacing.md, borderRadius: radius.md },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  detailText: { ...typography.caption, color: colors.slate700, flexShrink: 1 },
+  bold: { fontFamily: typography.label.fontFamily, color: colors.ink },
+  actions: { flexDirection: 'row', gap: layout.buttonGap },
+  btn: { flex: 1 },
+  avatar: { width: layout.iconSlot, height: layout.iconSlot, borderRadius: radius.pill, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { ...typography.heading, color: colors.ink },
 });

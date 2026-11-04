@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import { useFonts, Inter_400Regular, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
 import { View, Platform } from 'react-native';
 
@@ -29,6 +29,7 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import { UserRole } from './src/types';
 import { RootStackParamList } from './src/navigation';
+import { colors } from './src/theme';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -52,8 +53,6 @@ export default function App() {
 
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
     Inter_700Bold,
   });
 
@@ -69,12 +68,12 @@ export default function App() {
   }, [fontsLoaded]);
 
   if (!fontsLoaded || !isClient) {
-    return <View style={{ flex: 1, backgroundColor: '#FAFAFA' }} />;
+    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   }
 
   return (
       <AppProvider>
-        <View style={{ flex: 1, backgroundColor: '#FAFAFA' }}>
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
           <NavigationContainer>
             <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
               <Stack.Screen name="Login">

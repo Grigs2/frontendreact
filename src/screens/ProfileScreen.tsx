@@ -2,13 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -21,12 +18,14 @@ import { motoristaService } from '../services/motoristaService';
 import { responsavelService } from '../services/responsavelService';
 import { escolaService } from '../services/escolaService';
 import PasswordConfirmationModal from '../components/PasswordConfirmationModal';
+import { Button, TextField } from '../components/ui';
+import { borders, colors, layout, radius, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DriverProfile' | 'GuardianProfile'>;
 
 export default function ProfileScreen({ navigation }: Props) {
   const { currentUser, userRole, setCurrentUser, showToast } = useAppContext();
-  
+
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
@@ -108,87 +107,64 @@ export default function ProfileScreen({ navigation }: Props) {
   };
 
   const content = (
-    <KeyboardAvoidingView 
-      style={{ flex: 1 }} 
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.header}>
           <View style={styles.avatarCircle}>
-            <Feather name="user" size={40} color="#1976D2" />
+            <Feather name="user" size={40} color={colors.ink} />
           </View>
-          <Text style={styles.title}>Meu Cadastro</Text>
+          <Text style={styles.title} accessibilityRole="header">Meu Cadastro</Text>
           <Text style={styles.subtitle}>Gerencie suas informações pessoais</Text>
         </View>
 
         <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Nome Completo</Text>
-            <View style={styles.inputWrapper}>
-              <Feather name="user" size={18} color="#86868B" style={styles.inputIcon} />
-              <TextInput 
-                style={styles.input} 
-                value={nome} 
-                onChangeText={setNome} 
-                placeholder="Seu nome"
-                editable={!loading}
-              />
-            </View>
-          </View>
+          <TextField
+            label="Nome Completo"
+            leftIcon="user"
+            value={nome}
+            onChangeText={setNome}
+            placeholder="Seu nome"
+            editable={!loading}
+          />
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>E-mail (Não editável)</Text>
-            <View style={[styles.inputWrapper, styles.disabledInput]}>
-              <Feather name="mail" size={18} color="#86868B" style={styles.inputIcon} />
-              <TextInput 
-                style={styles.input} 
-                value={email} 
-                editable={false}
-              />
-            </View>
-          </View>
+          <TextField
+            label="E-mail (Não editável)"
+            leftIcon="mail"
+            value={email}
+            editable={false}
+          />
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Telefone / WhatsApp</Text>
-            <View style={styles.inputWrapper}>
-              <Feather name="phone" size={18} color="#86868B" style={styles.inputIcon} />
-              <TextInput 
-                style={styles.input} 
-                value={telefone} 
-                onChangeText={setTelefone} 
-                keyboardType="phone-pad"
-                placeholder="(00) 00000-0000"
-                editable={!loading}
-              />
-            </View>
-          </View>
+          <TextField
+            label="Telefone / WhatsApp"
+            leftIcon="phone"
+            value={telefone}
+            onChangeText={setTelefone}
+            keyboardType="phone-pad"
+            placeholder="(00) 00000-0000"
+            editable={!loading}
+          />
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Endereço</Text>
-            <View style={styles.inputWrapper}>
-              <Feather name="map-pin" size={18} color="#86868B" style={styles.inputIcon} />
-              <TextInput 
-                style={styles.input} 
-                value={endereco} 
-                onChangeText={setEndereco} 
-                placeholder="Rua, número, bairro..."
-                editable={!loading}
-              />
-            </View>
-          </View>
+          <TextField
+            label="Endereço"
+            leftIcon="map-pin"
+            value={endereco}
+            onChangeText={setEndereco}
+            placeholder="Rua, número, bairro..."
+            editable={!loading}
+          />
 
-          <TouchableOpacity 
-            style={[styles.saveButton, loading && { opacity: 0.7 }]} 
+          <Button
+            label="Salvar Alterações"
+            icon="check"
+            iconPosition="right"
             onPress={handlePreSave}
-            disabled={loading}
-          >
-            {loading ? <ActivityIndicator color="#FFF" /> : (
-              <>
-                <Text style={styles.saveButtonText}>Salvar Alterações</Text>
-                <Feather name="check" size={20} color="#FFF" />
-              </>
-            )}
-          </TouchableOpacity>
+            loading={loading}
+            fullWidth
+            style={styles.saveButton}
+          />
         </View>
       </ScrollView>
 
@@ -207,18 +183,11 @@ export default function ProfileScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, paddingBottom: 40 },
-  header: { alignItems: 'center', marginBottom: 32, marginTop: 10 },
-  avatarCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E3F2FD', justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#BBDEFB' },
-  title: { fontFamily: 'Inter_700Bold', fontSize: 24, color: '#1D1D1F' },
-  subtitle: { fontFamily: 'Inter_400Regular', fontSize: 14, color: '#86868B', marginTop: 4 },
-  form: { backgroundColor: '#FFF', borderRadius: 24, padding: 24, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12 },
-  inputGroup: { marginBottom: 20 },
-  label: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#1D1D1F', marginBottom: 8, marginLeft: 4 },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F7', borderRadius: 12, paddingHorizontal: 16, height: 52, borderWidth: 1, borderColor: '#E0E0E0' },
-  disabledInput: { backgroundColor: '#E9E9EB', borderColor: '#D1D1D6' },
-  inputIcon: { marginRight: 12 },
-  input: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 16, color: '#1D1D1F' },
-  saveButton: { backgroundColor: '#1976D2', height: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 12 },
-  saveButtonText: { color: '#FFF', fontFamily: 'Inter_700Bold', fontSize: 16, marginRight: 8 },
+  container: { padding: layout.screenMargin, paddingBottom: spacing.xxl, width: '100%', maxWidth: 600, alignSelf: 'center' },
+  header: { alignItems: 'center', marginBottom: spacing.xl, marginTop: spacing.sm },
+  avatarCircle: { width: 80, height: 80, borderRadius: radius.pill, backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.lg },
+  title: { ...typography.title, color: colors.ink },
+  subtitle: { ...typography.body, color: colors.slate500, marginTop: spacing.xs, textAlign: 'center' },
+  form: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, gap: spacing.lg, borderWidth: borders.hairline, borderColor: colors.border },
+  saveButton: { marginTop: spacing.sm },
 });

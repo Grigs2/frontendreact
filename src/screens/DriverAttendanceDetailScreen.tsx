@@ -5,12 +5,15 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAppContext } from '../context/AppContext';
 import { viagemService } from '../services/viagemService';
 import { DependenteParadaDTO } from '../types';
+import StatusBadge from '../components/StatusBadge';
+import { Button } from '../components/ui';
+import { borders, colors, layout, radius, spacing, typography } from '../theme';
 
 export default function DriverAttendanceDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { setCurrentStops, showToast } = useAppContext();
-  
+
   const { tripId, stopId, students, stopDescription } = route.params;
   const [submittingIds, setSubmittingIds] = useState<Record<number, boolean>>({});
   const [selectedStudent, setSelectedStudent] = useState<DependenteParadaDTO | null>(null);
@@ -36,12 +39,12 @@ export default function DriverAttendanceDetailScreen() {
     <View style={styles.container}>
       {/* Exclusive Call Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}><Feather name="arrow-left" size={24} color="#1D1D1F" /></TouchableOpacity>
+        <Button variant="tertiary" size="icon" icon="arrow-left" accessibilityLabel="Voltar" onPress={() => navigation.goBack()} style={styles.backBtn} />
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Controle de Chamada</Text>
           <Text style={styles.subtitle}>{stopDescription} (Parada {stopId})</Text>
         </View>
-        {isGlobalLoading && <ActivityIndicator size="small" color="#1976D2" />}
+        {isGlobalLoading && <ActivityIndicator size="small" color={colors.ink} />}
       </View>
 
       <FlatList
@@ -53,57 +56,67 @@ export default function DriverAttendanceDetailScreen() {
           const isSubmitting = !!submittingIds[item.id];
           return (
             <View style={styles.card}>
-              <TouchableOpacity onPress={() => setSelectedStudent(item)} style={styles.studentInfo}>
+              <TouchableOpacity
+                onPress={() => setSelectedStudent(item)}
+                style={styles.studentInfo}
+                accessibilityRole="button"
+                accessibilityLabel={`Ver detalhes de ${item.nomeDependente}`}
+              >
                 <Text style={styles.studentName}>{item.nomeDependente}</Text>
-                <View style={[styles.badge, { backgroundColor: status === 'EMBARCADO' ? '#E8F5E9' : status === 'DESEMBARCADO' ? '#E3F2FD' : '#F5F5F7' }]}>
-                  {isSubmitting ? (
-                    <ActivityIndicator size="small" color="#1976D2" />
-                  ) : (
-                    <Text style={[styles.badgeText, { color: status === 'EMBARCADO' ? '#2E7D32' : status === 'DESEMBARCADO' ? '#1976D2' : '#666' }]}>
-                      {status}
-                    </Text>
-                  )}
-                </View>
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color={colors.ink} />
+                ) : (
+                  <StatusBadge
+                    status={status}
+                    variant={status === 'EMBARCADO' ? 'success' : status === 'DESEMBARCADO' ? 'info' : status === 'FALTOU' ? 'error' : 'default'}
+                  />
+                )}
               </TouchableOpacity>
 
               <View style={styles.actionRow}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.bigBtn, styles.btnEmbarque, status === 'EMBARCADO' && styles.btnActive]}
                   onPress={() => handleAction(item.id, 'EMBARCADO')}
                   disabled={isSubmitting}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: status === 'EMBARCADO', disabled: isSubmitting }}
                 >
-                  <Feather name="log-in" size={24} color="#FFF" />
+                  <Feather name="log-in" size={24} color={colors.surface} />
                   <Text style={styles.btnLabel}>Confirmar Embarque</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.bigBtn, styles.btnDesembarque, status === 'DESEMBARCADO' && styles.btnActive]}
                   onPress={() => handleAction(item.id, 'DESEMBARCADO')}
                   disabled={isSubmitting}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: status === 'DESEMBARCADO', disabled: isSubmitting }}
                 >
-                  <Feather name="log-out" size={24} color="#FFF" />
+                  <Feather name="log-out" size={24} color={colors.surface} />
                   <Text style={styles.btnLabel}>Confirmar Desembarque</Text>
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity 
-                style={styles.btnFaltou} 
+              <Button
+                label="Marcar como Falta"
+                icon="x-circle"
+                variant="tertiary"
                 onPress={() => handleAction(item.id, 'FALTOU')}
                 disabled={isSubmitting}
-              >
-                <Text style={styles.faltouText}>Marcar como Falta</Text>
-              </TouchableOpacity>
+                fullWidth
+                style={styles.btnFaltou}
+              />
             </View>
           );
         }}
       />
 
-      <Modal visible={!!selectedStudent} transparent animationType="slide">
+      <Modal visible={!!selectedStudent} transparent animationType="slide" onRequestClose={() => setSelectedStudent(null)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Informações do Aluno</Text>
-              <TouchableOpacity onPress={() => setSelectedStudent(null)}><Feather name="x" size={24} color="#666" /></TouchableOpacity>
+              <Button variant="tertiary" size="icon" icon="x" accessibilityLabel="Fechar" onPress={() => setSelectedStudent(null)} />
             </View>
             {selectedStudent && (
               <ScrollView>
@@ -121,9 +134,7 @@ export default function DriverAttendanceDetailScreen() {
                 </View>
               </ScrollView>
             )}
-            <TouchableOpacity style={styles.closeModalBtn} onPress={() => setSelectedStudent(null)}>
-              <Text style={styles.closeModalBtnText}>Fechar Detalhes</Text>
-            </TouchableOpacity>
+            <Button label="Fechar Detalhes" variant="secondary" onPress={() => setSelectedStudent(null)} fullWidth style={styles.closeModalBtn} />
           </View>
         </View>
       </Modal>
@@ -132,31 +143,28 @@ export default function DriverAttendanceDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 16, padding: 20, paddingTop: 50, backgroundColor: '#FFF' },
-  title: { fontSize: 18, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  subtitle: { fontSize: 13, color: '#86868B' },
-  list: { padding: 16 },
-  card: { backgroundColor: '#FFF', borderRadius: 24, padding: 20, marginBottom: 20, elevation: 3 },
-  studentInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: '#F2F2F7' },
-  studentName: { fontSize: 20, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  badgeText: { fontSize: 11, fontFamily: 'Inter_700Bold', textTransform: 'uppercase' },
-  actionRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-  bigBtn: { flex: 1, height: 100, borderRadius: 20, alignItems: 'center', justifyContent: 'center', padding: 10 },
-  btnEmbarque: { backgroundColor: '#34C759' },
-  btnDesembarque: { backgroundColor: '#1976D2' },
-  btnActive: { borderWidth: 4, borderColor: '#000' },
-  btnLabel: { color: '#FFF', fontSize: 12, fontFamily: 'Inter_700Bold', textAlign: 'center', marginTop: 8 },
-  btnFaltou: { padding: 12, alignItems: 'center' },
-  faltouText: { color: '#FF3B30', fontFamily: 'Inter_600SemiBold', fontSize: 13 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, maxHeight: '80%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  modalTitle: { fontSize: 22, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  detailItem: { marginBottom: 20 },
-  detailLabel: { fontSize: 13, color: '#86868B', marginBottom: 4 },
-  detailValue: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#1D1D1F' },
-  closeModalBtn: { backgroundColor: '#F2F2F7', padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 20 },
-  closeModalBtnText: { fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
+  container: { flex: 1, backgroundColor: colors.background },
+  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: layout.screenMargin, paddingBottom: spacing.md, paddingTop: 48, backgroundColor: colors.surface, borderBottomWidth: borders.hairline, borderBottomColor: colors.border },
+  backBtn: { marginLeft: -spacing.md },
+  title: { ...typography.title, color: colors.ink },
+  subtitle: { ...typography.caption, color: colors.slate500 },
+  list: { padding: layout.screenMargin, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: layout.cardPadding, marginBottom: spacing.lg, borderWidth: borders.hairline, borderColor: colors.border },
+  studentInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg, paddingBottom: spacing.md, borderBottomWidth: borders.hairline, borderBottomColor: colors.border, minHeight: layout.minTouch },
+  studentName: { ...typography.heading, color: colors.ink, flexShrink: 1 },
+  actionRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.sm },
+  bigBtn: { flex: 1, minHeight: 96, borderRadius: radius.card, alignItems: 'center', justifyContent: 'center', padding: spacing.md, gap: spacing.sm, borderWidth: borders.alert, borderColor: 'transparent' },
+  btnEmbarque: { backgroundColor: colors.success },
+  btnDesembarque: { backgroundColor: colors.info },
+  btnActive: { borderColor: colors.ink },
+  btnLabel: { ...typography.label, color: colors.surface, textAlign: 'center' },
+  btnFaltou: { borderColor: colors.danger },
+  modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.xl, maxHeight: '80%', width: '100%', maxWidth: 600, alignSelf: 'center' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
+  modalTitle: { ...typography.title, color: colors.ink, flexShrink: 1 },
+  detailItem: { marginBottom: spacing.lg, gap: spacing.xs },
+  detailLabel: { ...typography.caption, color: colors.slate500 },
+  detailValue: { ...typography.bodyLg, color: colors.ink },
+  closeModalBtn: { marginTop: spacing.lg },
 });

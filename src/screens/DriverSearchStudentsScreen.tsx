@@ -6,6 +6,8 @@ import { useAppContext } from '../context/AppContext';
 import DriverLayout from '../components/DriverLayout';
 import { viagemService } from '../services/viagemService';
 import { ViagemDTO, DependenteDTO, MotoristaDTO } from '../types';
+import { Button, ScreenHeader, StateView } from '../components/ui';
+import { borders, colors, layout, radius, spacing, typography } from '../theme';
 
 const PERIODS = ['MANHA_IDA', 'MANHA_VOLTA', 'TARDE_IDA', 'TARDE_VOLTA', 'NOITE_IDA', 'NOITE_VOLTA'];
 
@@ -24,13 +26,13 @@ export default function DriverSearchStudentsScreen() {
     setSelectedPeriod(period);
     setShowPeriodDropdown(false);
     setLoading(true);
-    
+
     try {
       if (!driver?.id) return;
       // 1. Create or Get fixed Trip for this period
       const trip = await viagemService.criar(driver.id, period);
       setActiveTrip(trip);
-      
+
       // 2. Load available students for this trip
       const students = await viagemService.listarDependentesDisponiveis(trip.id!);
       setAvailableStudents(students);
@@ -48,7 +50,7 @@ export default function DriverSearchStudentsScreen() {
     try {
       await viagemService.solicitarDependente(activeTrip.id, studentId);
       showToast('Convite de viagem enviado ao responsável!', 'success');
-      
+
       // Refresh students
       const students = await viagemService.listarDependentesDisponiveis(activeTrip.id);
       setAvailableStudents(students);
@@ -62,24 +64,27 @@ export default function DriverSearchStudentsScreen() {
   return (
     <DriverLayout>
       <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}><Feather name="arrow-left" size={24} color="#1D1D1F" /></TouchableOpacity>
-          <Text style={styles.title}>Gerenciar Rota</Text>
-        </View>
+        <ScreenHeader title="Gerenciar Rota" onBack={() => navigation.goBack()} />
 
         <View style={styles.stepBox}>
-          <Text style={styles.stepLabel}>1. SELECIONE O PERÍODO</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => setShowPeriodDropdown(true)} disabled={loading}>
-            <Text style={[styles.dropdownValue, !selectedPeriod && { color: '#86868B' }]}>
+          <Text style={styles.stepLabel}>1. Selecione o período</Text>
+          <TouchableOpacity
+            style={styles.dropdown}
+            onPress={() => setShowPeriodDropdown(true)}
+            disabled={loading}
+            accessibilityRole="button"
+            accessibilityLabel="Selecionar período"
+          >
+            <Text style={[styles.dropdownValue, !selectedPeriod && { color: colors.slate500 }]}>
               {selectedPeriod ? `Rota: ${selectedPeriod.replace('_', ' ')}` : 'Clique para selecionar o período...'}
             </Text>
-            {loading ? <ActivityIndicator size="small" color="#1976D2" /> : <Feather name="chevron-down" size={20} color="#1976D2" />}
+            {loading ? <ActivityIndicator size="small" color={colors.ink} /> : <Feather name="chevron-down" size={20} color={colors.ink} />}
           </TouchableOpacity>
         </View>
 
         {selectedPeriod && (
           <>
-            <Text style={styles.stepLabel}>2. ALUNOS DISPONÍVEIS</Text>
+            <Text style={styles.stepLabel}>2. Alunos disponíveis</Text>
             <FlatList
               data={availableStudents}
               keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
@@ -91,37 +96,38 @@ export default function DriverSearchStudentsScreen() {
                     <Text style={styles.studentAddr}>{item.endereco}</Text>
                     <Text style={styles.schoolName}>{item.escola?.nome || 'Escola não vinculada'}</Text>
                   </View>
-                  <TouchableOpacity 
-                    style={styles.solicitBtn} 
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    icon="user-plus"
+                    accessibilityLabel={`Enviar convite para ${item.nome}`}
                     onPress={() => handleRequest(item.id!)}
                     disabled={loading}
-                  >
-                    <Feather name="user-plus" size={18} color="#FFF" />
-                  </TouchableOpacity>
+                  />
                 </View>
               )}
-              ListEmptyComponent={!loading ? <Text style={styles.emptyText}>Nenhum novo aluno para solicitar neste período.</Text> : null}
+              ListEmptyComponent={!loading ? <StateView kind="empty" icon="users" title="Nenhum novo aluno para solicitar neste período." /> : null}
             />
 
             <View style={styles.footer}>
-              <TouchableOpacity 
-                style={styles.saveBtn}
+              <Button
+                label="Ir para roteiro do dia"
+                icon="map"
+                iconPosition="right"
                 onPress={() => navigation.navigate('DriverRoute')}
-              >
-                <Text style={styles.saveBtnText}>IR PARA ROTEIRO DO DIA</Text>
-                <Feather name="map" size={20} color="#FFF" />
-              </TouchableOpacity>
+                fullWidth
+              />
             </View>
           </>
         )}
 
-        <Modal visible={showPeriodDropdown} transparent animationType="fade">
+        <Modal visible={showPeriodDropdown} transparent animationType="fade" onRequestClose={() => setShowPeriodDropdown(false)}>
           <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowPeriodDropdown(false)}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Escolha o Período</Text>
               <ScrollView>
                 {PERIODS.map(p => (
-                  <TouchableOpacity key={p} style={styles.option} onPress={() => handleSelectPeriod(p)}>
+                  <TouchableOpacity key={p} style={styles.option} onPress={() => handleSelectPeriod(p)} accessibilityRole="button">
                     <Text style={styles.optionText}>{p.replace('_', ' ')}</Text>
                   </TouchableOpacity>
                 ))}
@@ -135,27 +141,21 @@ export default function DriverSearchStudentsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 30, marginTop: 10 },
-  title: { fontSize: 22, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  stepBox: { marginBottom: 24 },
-  stepLabel: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#86868B', marginBottom: 10, letterSpacing: 1 },
-  dropdown: { height: 56, backgroundColor: '#FFF', borderRadius: 16, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', elevation: 3 },
-  dropdownValue: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#1976D2' },
+  container: { flex: 1, padding: layout.screenMargin, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  stepBox: { marginBottom: spacing.xl },
+  stepLabel: { ...typography.captionBold, color: colors.slate700, marginBottom: spacing.sm },
+  dropdown: { minHeight: layout.buttonLg, backgroundColor: colors.surface, borderRadius: radius.input, borderWidth: borders.hairline, borderColor: colors.border, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  dropdownValue: { ...typography.body, color: colors.ink, flexShrink: 1 },
   list: { paddingBottom: 120 },
-  studentCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 4, borderLeftColor: '#1976D2', elevation: 2 },
-  studentInfo: { flex: 1 },
-  studentName: { fontSize: 16, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  studentAddr: { fontSize: 12, color: '#86868B', marginTop: 2 },
-  schoolName: { fontSize: 11, color: '#1976D2', marginTop: 4, fontFamily: 'Inter_600SemiBold' },
-  solicitBtn: { backgroundColor: '#1976D2', width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { textAlign: 'center', color: '#86868B', marginTop: 20, fontSize: 13 },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, backgroundColor: '#FAFAFA' },
-  saveBtn: { backgroundColor: '#1976D2', height: 60, borderRadius: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, elevation: 4 },
-  saveBtnText: { color: '#FFF', fontSize: 13, fontFamily: 'Inter_700Bold' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 40 },
-  modalContent: { backgroundColor: '#FFF', borderRadius: 24, padding: 20, maxHeight: '80%' },
-  modalTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', color: '#1D1D1F', textAlign: 'center', marginBottom: 20 },
-  option: { paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: '#F2F2F7', alignItems: 'center' },
-  optionText: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#1D1D1F' }
+  studentCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: layout.cardPadding, marginBottom: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderWidth: borders.hairline, borderColor: colors.border },
+  studentInfo: { flex: 1, gap: spacing.xs },
+  studentName: { ...typography.heading, color: colors.ink },
+  studentAddr: { ...typography.caption, color: colors.slate500 },
+  schoolName: { ...typography.body, color: colors.ink },
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: layout.screenMargin, backgroundColor: colors.background, borderTopWidth: borders.hairline, borderTopColor: colors.border },
+  modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', padding: spacing.xl },
+  modalContent: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, maxHeight: '80%', width: '100%', maxWidth: 480, alignSelf: 'center' },
+  modalTitle: { ...typography.heading, color: colors.ink, textAlign: 'center', marginBottom: spacing.lg },
+  option: { minHeight: layout.buttonLg, justifyContent: 'center', borderBottomWidth: borders.hairline, borderBottomColor: colors.border, alignItems: 'center' },
+  optionText: { ...typography.label, color: colors.ink },
 });

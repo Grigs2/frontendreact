@@ -6,6 +6,7 @@ import { useAppContext } from '../context/AppContext';
 import DriverLayout from '../components/DriverLayout';
 import { viagemService } from '../services/viagemService';
 import { ViagemDTO, MotoristaDTO, ViagemDiaDTO, ParadaViagemDTO } from '../types';
+import { colors, fonts } from '../theme';
 
 const PERIODS = ['MANHA_IDA', 'MANHA_VOLTA', 'TARDE_IDA', 'TARDE_VOLTA', 'NOITE_IDA', 'NOITE_VOLTA'];
 
@@ -94,7 +95,7 @@ export default function DriverRouteViewScreen() {
     <DriverLayout>
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}><Feather name="arrow-left" size={24} color="#1D1D1F" /></TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.goBack()}><Feather name="arrow-left" size={24} color={colors.ink} /></TouchableOpacity>
           <Text style={styles.title}>Roteiro do Dia</Text>
         </View>
 
@@ -109,19 +110,19 @@ export default function DriverRouteViewScreen() {
               {selectedPeriod ? selectedPeriod : 'Selecione o período...'}
             </Text>
           </View>
-          {loading ? <ActivityIndicator size="small" color="#1976D2" /> : <Feather name="chevron-down" size={20} color="#1976D2" />}
+          {loading ? <ActivityIndicator size="small" color={colors.ink} /> : <Feather name="chevron-down" size={20} color={colors.ink} />}
         </TouchableOpacity>
 
         {activeViagemDia && (
           <View style={styles.statusControls}>
             {activeViagemDia.status === 'PLANEJADA' ? (
               <TouchableOpacity style={[styles.statusBtn, styles.startBtn]} onPress={handleStart} disabled={loading}>
-                <Feather name="play" size={18} color="#FFF" />
+                <Feather name="play" size={18} color={colors.surface} />
                 <Text style={styles.statusBtnText}>Iniciar Viagem</Text>
               </TouchableOpacity>
             ) : activeViagemDia.status === 'EM_ANDAMENTO' ? (
               <TouchableOpacity style={[styles.statusBtn, styles.finishBtn]} onPress={handleFinish} disabled={loading}>
-                <Feather name="square" size={18} color="#FFF" />
+                <Feather name="square" size={18} color={colors.surface} />
                 <Text style={styles.statusBtnText}>Finalizar Rota</Text>
               </TouchableOpacity>
             ) : (
@@ -133,7 +134,7 @@ export default function DriverRouteViewScreen() {
         )}
 
         <ScrollView contentContainerStyle={styles.timelineContainer}>
-          {loading && currentStops.length === 0 && <ActivityIndicator size="large" color="#1976D2" style={{ marginTop: 40 }} />}
+          {loading && currentStops.length === 0 && <ActivityIndicator size="large" color={colors.ink} style={{ marginTop: 40 }} />}
           
           {selectedPeriod && !loading && currentStops.length === 0 && (
             <View style={styles.empty}>
@@ -145,7 +146,7 @@ export default function DriverRouteViewScreen() {
             <View key={index} style={styles.stopRow}>
               <View style={styles.indicator}>
                 <View style={[styles.dot, stop.tipoParada === 'MOTORISTA' ? styles.dotDriver : styles.dotStudent]}>
-                  {stop.tipoParada === 'MOTORISTA' ? <Feather name="home" size={12} color="#FFF" /> : <Text style={styles.dotNum}>{stop.ordem}</Text>}
+                  {stop.tipoParada === 'MOTORISTA' ? <Feather name="home" size={14} color={colors.surface} /> : <Text style={styles.dotNum}>{stop.ordem}</Text>}
                 </View>
                 {index < currentStops.length - 1 && <View style={styles.line} />}
               </View>
@@ -160,8 +161,8 @@ export default function DriverRouteViewScreen() {
                       {stop.listaDependentes.map(dep => (
                         <View key={dep.id} style={styles.studentItem}>
                           <Text style={styles.studentName}>{dep.nomeDependente}</Text>
-                          <View style={[styles.miniBadge, { backgroundColor: dep.statusEmbarque === 'ESPERANDO' ? '#F2F2F7' : '#E8F5E9' }]}>
-                             <Text style={[styles.miniBadgeText, { color: dep.statusEmbarque === 'ESPERANDO' ? '#86868B' : '#34C759' }]}>
+                          <View style={[styles.miniBadge, { backgroundColor: dep.statusEmbarque === 'ESPERANDO' ? colors.pressedNeutral : colors.successTint }]}>
+                             <Text style={[styles.miniBadgeText, { color: dep.statusEmbarque === 'ESPERANDO' ? colors.slate700 : colors.success }]}>
                                {dep.statusEmbarque}
                              </Text>
                           </View>
@@ -181,7 +182,7 @@ export default function DriverRouteViewScreen() {
                       description: stop.nomeLocal
                     })}
                   >
-                    <Feather name="clipboard" size={16} color="#FFF" />
+                    <Feather name="clipboard" size={16} color={colors.onPrimary} />
                     <Text style={styles.chamadaBtnText}>Chamada</Text>
                   </TouchableOpacity>
                 )}
@@ -220,50 +221,49 @@ export default function DriverRouteViewScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 20, marginTop: 10 },
-  title: { fontSize: 22, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
+  title: { fontSize: 22, fontFamily: fonts.bold, color: colors.ink },
   dropdown: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
-    backgroundColor: '#FFF', 
+    backgroundColor: colors.surface, 
     padding: 16, 
     borderRadius: 16, 
-    elevation: 2, 
     marginBottom: 20 
   },
-  dropdownLabel: { fontSize: 11, color: '#86868B', textTransform: 'uppercase', fontFamily: 'Inter_600SemiBold' },
-  dropdownValue: { fontSize: 15, fontFamily: 'Inter_700Bold', color: '#1976D2', marginTop: 2 },
+  dropdownLabel: { fontSize: 14, color: colors.slate500, textTransform: 'uppercase', fontFamily: fonts.bold },
+  dropdownValue: { fontSize: 15, fontFamily: fonts.bold, color: colors.ink, marginTop: 2 },
   statusControls: { marginBottom: 30, flexDirection: 'row' },
-  statusBtn: { flex: 1, height: 50, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, elevation: 3 },
-  startBtn: { backgroundColor: '#34C759' },
-  finishBtn: { backgroundColor: '#FF3B30' },
-  statusBtnText: { color: '#FFF', fontSize: 14, fontFamily: 'Inter_700Bold' },
-  completedBadge: { flex: 1, backgroundColor: '#F2F2F7', padding: 14, borderRadius: 12, alignItems: 'center' },
-  completedText: { color: '#86868B', fontSize: 13, fontFamily: 'Inter_700Bold' },
+  statusBtn: { flex: 1, height: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,},
+  startBtn: { backgroundColor: colors.success },
+  finishBtn: { backgroundColor: colors.danger },
+  statusBtnText: { color: colors.surface, fontSize: 14, fontFamily: fonts.bold },
+  completedBadge: { flex: 1, backgroundColor: colors.background, padding: 14, borderRadius: 12, alignItems: 'center' },
+  completedText: { color: colors.slate500, fontSize: 14, fontFamily: fonts.bold },
   timelineContainer: { paddingLeft: 10, paddingBottom: 40 },
   stopRow: { flexDirection: 'row', minHeight: 80 },
   indicator: { alignItems: 'center', width: 40, marginRight: 16 },
   dot: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', zIndex: 2 },
-  dotDriver: { backgroundColor: '#8E8E93' },
-  dotStudent: { backgroundColor: '#1976D2' },
-  dotNum: { color: '#FFF', fontSize: 14, fontFamily: 'Inter_700Bold' },
-  line: { width: 3, flex: 1, backgroundColor: '#E5E5EA', marginTop: -2, marginBottom: -2 },
+  dotDriver: { backgroundColor: colors.slate500 },
+  dotStudent: { backgroundColor: colors.primary },
+  dotNum: { color: colors.onPrimary, fontSize: 14, fontFamily: fonts.bold },
+  line: { width: 3, flex: 1, backgroundColor: colors.pressedNeutral, marginTop: -2, marginBottom: -2 },
   details: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', paddingBottom: 30 },
   detailsContent: { flex: 1 },
-  stopLocal: { fontSize: 16, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  stopAddr: { fontSize: 12, color: '#86868B', marginTop: 4 },
+  stopLocal: { fontSize: 16, fontFamily: fonts.bold, color: colors.ink },
+  stopAddr: { fontFamily: fonts.regular, fontSize: 14, color: colors.slate500, marginTop: 4 },
   studentList: { marginTop: 8 },
   studentItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  studentName: { fontSize: 14, color: '#1D1D1F' },
+  studentName: { fontFamily: fonts.regular, fontSize: 14, color: colors.ink },
   miniBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  miniBadgeText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
-  chamadaBtn: { backgroundColor: '#1976D2', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 10 },
-  chamadaBtnText: { color: '#FFF', fontSize: 12, fontFamily: 'Inter_700Bold' },
+  miniBadgeText: { fontSize: 14, fontFamily: fonts.bold },
+  chamadaBtn: { backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 10 },
+  chamadaBtnText: { color: colors.onPrimary, fontSize: 14, fontFamily: fonts.bold },
   empty: { marginTop: 40, alignItems: 'center' },
-  emptyText: { color: '#86868B', fontSize: 14 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 40 },
-  modalContent: { backgroundColor: '#FFF', borderRadius: 24, padding: 24, maxHeight: '80%' },
-  modalTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginBottom: 20, textAlign: 'center' },
-  option: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F2F2F7' },
-  optionText: { fontSize: 16, textAlign: 'center', color: '#1D1D1F' }
+  emptyText: { fontFamily: fonts.regular, color: colors.slate500, fontSize: 14 },
+  modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', padding: 40 },
+  modalContent: { backgroundColor: colors.surface, borderRadius: 24, padding: 24, maxHeight: '80%' },
+  modalTitle: { fontSize: 18, fontFamily: fonts.bold, marginBottom: 20, textAlign: 'center' },
+  option: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  optionText: { fontFamily: fonts.regular, fontSize: 16, textAlign: 'center', color: colors.ink }
 });

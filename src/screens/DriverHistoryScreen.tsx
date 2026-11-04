@@ -7,6 +7,8 @@ import { viagemService } from '../services/viagemService';
 import { ViagemDiaDTO, DependenteParadaDTO } from '../types';
 import DriverLayout from '../components/DriverLayout';
 import StatusBadge from '../components/StatusBadge';
+import { ScreenHeader, StateView } from '../components/ui';
+import { borders, colors, layout, radius, spacing, typography } from '../theme';
 
 export default function DriverHistoryScreen() {
   const { currentUser } = useAppContext();
@@ -36,7 +38,7 @@ export default function DriverHistoryScreen() {
     setLoading(true);
     try {
       const data = await viagemService.historico(currentUser.id);
-      
+
       // Fetch passengers for each trip in parallel
       const enrichedTrips = await Promise.all(
         data.map(async (trip) => {
@@ -47,7 +49,7 @@ export default function DriverHistoryScreen() {
           return trip;
         })
       );
-      
+
       setTrips(enrichedTrips);
     } catch (error) {
       console.error('Error loading history:', error);
@@ -77,7 +79,7 @@ export default function DriverHistoryScreen() {
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.iconContainer}>
-          <Feather name="calendar" size={24} color="#86868B" />
+          <Feather name="calendar" size={24} color={colors.ink} />
         </View>
         <View style={{ flex: 1 }}>
           <View style={styles.row}>
@@ -87,12 +89,12 @@ export default function DriverHistoryScreen() {
           <View style={styles.details}>
             {item.periodo && (
               <View style={styles.detailItem}>
-                <Feather name="clock" size={14} color="#86868B" />
+                <Feather name="clock" size={14} color={colors.slate500} />
                 <Text style={styles.detailText}>{item.periodo.replace('_', ' ')}</Text>
               </View>
             )}
             <View style={styles.detailItem}>
-              <Feather name="users" size={14} color="#86868B" />
+              <Feather name="users" size={14} color={colors.slate500} />
               <Text style={styles.detailText}>
                 {item.passengers?.length || item.quantidadePassageiros || 0} passageiros
               </Text>
@@ -103,7 +105,7 @@ export default function DriverHistoryScreen() {
 
       {item.passengers && item.passengers.length > 0 && (
         <View style={styles.passengerSection}>
-          <Text style={styles.passengerTitle}>Lista de Passageiros:</Text>
+          <Text style={styles.passengerTitle}>Lista de passageiros</Text>
           {item.passengers.map((p) => (
             <View key={p.id} style={styles.passengerRow}>
               <Text style={styles.passengerName}>{p.nomeDependente}</Text>
@@ -116,7 +118,7 @@ export default function DriverHistoryScreen() {
       {(item.horarioInicio || item.horarioFim) && (
         <View style={styles.timeRow}>
           <Text style={styles.timeText}>
-            {item.horarioInicio ? new Date(item.horarioInicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--'} 
+            {item.horarioInicio ? new Date(item.horarioInicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
             {' '}-{' '}
             {item.horarioFim ? new Date(item.horarioFim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
           </Text>
@@ -128,12 +130,10 @@ export default function DriverHistoryScreen() {
   return (
     <DriverLayout>
       <View style={styles.container}>
-        <Text style={styles.title}>Histórico de Viagens</Text>
-        
+        <ScreenHeader title="Histórico de Viagens" />
+
         {loading && trips.length === 0 ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color="#1976D2" />
-          </View>
+          <StateView kind="loading" title="Carregando histórico..." style={styles.center} />
         ) : (
           <FlatList
             data={trips}
@@ -141,10 +141,7 @@ export default function DriverHistoryScreen() {
             renderItem={renderItem}
             contentContainerStyle={styles.list}
             ListEmptyComponent={
-              <View style={styles.empty}>
-                <Feather name="clock" size={48} color="#D1D1D6" />
-                <Text style={styles.emptyText}>Nenhuma viagem no histórico.</Text>
-              </View>
+              <StateView kind="empty" icon="clock" title="Nenhuma viagem no histórico." />
             }
             refreshing={loading}
             onRefresh={loadHistory}
@@ -156,50 +153,42 @@ export default function DriverHistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#FAFAFA' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 24, fontFamily: 'Inter_700Bold', color: '#1D1D1F', marginBottom: 24 },
-  list: { paddingBottom: 20 },
-  card: { 
-    backgroundColor: '#FFF', 
-    padding: 16, 
-    borderRadius: 20, 
-    marginBottom: 16,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    borderWidth: 1,
-    borderColor: '#F2F2F7'
+  container: { flex: 1, padding: layout.screenMargin, backgroundColor: colors.background, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  center: { flex: 1 },
+  list: { paddingBottom: spacing.xl },
+  card: {
+    backgroundColor: colors.surface,
+    padding: layout.cardPadding,
+    borderRadius: radius.card,
+    marginBottom: spacing.lg,
+    borderWidth: borders.hairline,
+    borderColor: colors.border,
   },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  iconContainer: { 
-    width: 48, 
-    height: 48, 
-    borderRadius: 14, 
-    backgroundColor: '#F2F2F7', 
-    alignItems: 'center', 
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginBottom: spacing.md },
+  iconContainer: {
+    width: layout.iconSlot,
+    height: layout.iconSlot,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16
   },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  date: { fontSize: 16, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  details: { flexDirection: 'row', gap: 16 },
-  detailItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  detailText: { fontSize: 13, color: '#86868B', fontFamily: 'Inter_500Medium' },
-  passengerSection: { 
-    borderTopWidth: 1, 
-    borderTopColor: '#F2F2F7', 
-    paddingTop: 12, 
-    marginTop: 8,
-    marginBottom: 8
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
+  date: { ...typography.heading, color: colors.ink },
+  details: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg },
+  detailItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  detailText: { ...typography.caption, color: colors.slate500 },
+  passengerSection: {
+    borderTopWidth: borders.hairline,
+    borderTopColor: colors.border,
+    paddingTop: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
   },
-  passengerTitle: { fontSize: 12, fontFamily: 'Inter_700Bold', color: '#86868B', marginBottom: 8, textTransform: 'uppercase' },
-  passengerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  passengerName: { fontSize: 14, color: '#1D1D1F', fontFamily: 'Inter_500Medium' },
-  timeRow: { borderTopWidth: 1, borderTopColor: '#F2F2F7', paddingTop: 8, marginTop: 4 },
-  timeText: { fontSize: 12, color: '#AEAEB2', fontFamily: 'Inter_600SemiBold' },
-  empty: { marginTop: 60, alignItems: 'center' },
-  emptyText: { marginTop: 16, color: '#86868B', fontSize: 16, textAlign: 'center' }
+  passengerTitle: { ...typography.captionBold, color: colors.slate700 },
+  passengerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
+  passengerName: { ...typography.body, color: colors.ink, flexShrink: 1 },
+  timeRow: { borderTopWidth: borders.hairline, borderTopColor: colors.border, paddingTop: spacing.sm, marginTop: spacing.xs },
+  timeText: { ...typography.captionBold, color: colors.slate700 },
 });

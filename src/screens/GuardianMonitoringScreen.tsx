@@ -8,6 +8,8 @@ import { responsavelService } from '../services/responsavelService';
 import { viagemService } from '../services/viagemService';
 import { ResponsavelDTO, MotoristaViagemDTO, ViagemDiaDTO, ViagemDTO, MonitoramentoDTO, MonitoramentoItemDTO } from '../types';
 import StatusBadge from '../components/StatusBadge';
+import { Chip, ScreenHeader, StateView } from '../components/ui';
+import { borders, colors, layout, radius, spacing, typography } from '../theme';
 
 export default function GuardianMonitoringScreen() {
   const isFocused = useIsFocused();
@@ -15,18 +17,18 @@ export default function GuardianMonitoringScreen() {
   const route = useRoute<any>();
   const { currentUser, showToast } = useAppContext();
   const guardian = currentUser as ResponsavelDTO;
-  
+
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [monitorData, setMonitorData] = useState<MonitoramentoDTO | null>(null);
-  
+
   const [currentTripDetails, setCurrentTripDetails] = useState<{
     driver?: MotoristaViagemDTO;
     trip?: ViagemDTO;
     tripDay?: ViagemDiaDTO;
     item?: MonitoramentoItemDTO;
   } | null>(null);
-  
+
   const [historyDetails, setHistoryDetails] = useState<any[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(route.params?.dependenteId || guardian?.dependentes?.[0]?.id || null);
 
@@ -41,9 +43,9 @@ export default function GuardianMonitoringScreen() {
       const info = await viagemService.consultarMotorista(viagemDiaId);
       driverCache.current[viagemDiaId] = info;
       return info;
-    } catch (e) { 
+    } catch (e) {
       console.warn(`Erro ao buscar motorista para viagemDia ${viagemDiaId}:`, e);
-      return null; 
+      return null;
     }
   };
 
@@ -53,9 +55,9 @@ export default function GuardianMonitoringScreen() {
       const info = await viagemService.visualizar(viagemId);
       tripCache.current[viagemId] = info;
       return info;
-    } catch (e) { 
+    } catch (e) {
       console.warn(`Erro ao buscar detalhes da viagem ${viagemId}:`, e);
-      return null; 
+      return null;
     }
   };
 
@@ -65,15 +67,15 @@ export default function GuardianMonitoringScreen() {
       const info = await viagemService.visualizarViagemDia(viagemDiaId);
       tripDayCache.current[viagemDiaId] = info;
       return info;
-    } catch (e) { 
+    } catch (e) {
       console.warn(`Erro ao buscar detalhes do dia da viagem ${viagemDiaId}:`, e);
-      return null; 
+      return null;
     }
   };
 
   const enrichItem = async (item: MonitoramentoItemDTO) => {
     const vDiaId = item.viagemDiaId;
-    
+
     // 1. Parallel fetch for TripDay and Driver
     const [tripDay, driver] = await Promise.all([
       fetchTripDayInfo(vDiaId),
@@ -83,7 +85,7 @@ export default function GuardianMonitoringScreen() {
     // 2. Discover ViagemId
     // Priority: tripDay response > item from Monitorar > fallback
     const vId = tripDay?.viagemId || (tripDay as any)?.viagem?.id || item.viagemId;
-    
+
     let trip = null;
     if (vId) {
       trip = await fetchTripInfo(vId);
@@ -111,9 +113,9 @@ export default function GuardianMonitoringScreen() {
       console.log(`[Diagnostic] Iniciando monitoramento para dependente: ${selectedStudentId}`);
       const data = await responsavelService.monitorar(selectedStudentId);
       console.log('[Diagnostic] Resposta /Responsavel/Monitorar:', JSON.stringify(data, null, 2));
-      
+
       setMonitorData(data);
-      
+
       // 1. Enrich Current Trip
       if (data?.statusAtual?.viagemDiaId) {
         const enriched = await enrichItem(data.statusAtual);
@@ -133,14 +135,14 @@ export default function GuardianMonitoringScreen() {
         const detailedHistory = await Promise.all(
           historyItems.map(item => enrichItem(item))
         );
-        
+
         // Sort newest to oldest based on data
         const sorted = detailedHistory.sort((a, b) => {
           const dateA = new Date(a.dataExibicao || '').getTime();
           const dateB = new Date(b.dataExibicao || '').getTime();
           return dateB - dateA;
         });
-        
+
         setHistoryDetails(sorted);
       } else {
         setHistoryDetails([]);
@@ -191,22 +193,18 @@ export default function GuardianMonitoringScreen() {
   return (
     <GuardianLayout>
       <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Feather name="arrow-left" size={24} color="#1D1D1F" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Monitoramento</Text>
-          <View style={{ width: 24 }} />
-        </View>
+        <ScreenHeader title="Monitoramento" onBack={() => navigation.goBack()} style={styles.header} />
 
         {guardian?.dependentes && guardian.dependentes.length > 0 && (
           <View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.studentTabs} contentContainerStyle={{ paddingRight: 40 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.studentTabs} contentContainerStyle={styles.studentTabsContent}>
               {guardian.dependentes.map(dep => (
-                <TouchableOpacity 
-                  key={dep.id} 
+                <TouchableOpacity
+                  key={dep.id}
                   style={[styles.studentTab, selectedStudentId === dep.id && styles.studentTabActive]}
                   onPress={() => setSelectedStudentId(dep.id!)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: selectedStudentId === dep.id }}
                 >
                   <Text style={[styles.studentTabText, selectedStudentId === dep.id && styles.studentTabTextActive]}>
                     {dep.nome}
@@ -218,34 +216,33 @@ export default function GuardianMonitoringScreen() {
         )}
 
         {loading && !refreshing ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color="#1976D2" />
-            <Text style={styles.loadingText}>Carregando monitoramento...</Text>
-          </View>
+          <StateView kind="loading" title="Carregando monitoramento..." style={styles.center} />
         ) : (
-          <ScrollView 
-            contentContainerStyle={styles.scrollContent} 
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadMonitoring(true)} />}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadMonitoring(true)} colors={[colors.ink]} tintColor={colors.ink} />}
           >
             <Text style={styles.sectionTitle}>Viagem Atual</Text>
-            
+
             {!monitorData?.statusAtual ? (
-              <View style={styles.noCurrentTrip}>
-                <Feather name="calendar" size={32} color="#86868B" />
-                <Text style={styles.noCurrentTripText}>Nenhuma viagem em andamento para {selectedStudent?.nome || 'este dependente'}.</Text>
-              </View>
+              <StateView
+                kind="empty"
+                icon="calendar"
+                message={`Nenhuma viagem em andamento para ${selectedStudent?.nome || 'este dependente'}.`}
+                style={styles.noCurrentTrip}
+              />
             ) : (
               <View style={styles.currentTripCard}>
                 <View style={styles.cardHeader}>
-                  <View style={styles.periodBadge}>
-                    <Text style={styles.periodText}>
-                      {currentTripDetails?.trip?.periodo?.replace('_', ' ') || monitorData.statusAtual.periodoViagem?.replace('_', ' ') || 'Período N/A'}
-                    </Text>
-                  </View>
-                  <StatusBadge 
-                    status={monitorData.statusAtual.status} 
-                    variant={monitorData.statusAtual.status === 'ESPERANDO' ? 'default' : monitorData.statusAtual.status === 'FALTOU' ? 'error' : 'success'} 
+                  <Chip
+                    label={currentTripDetails?.trip?.periodo?.replace('_', ' ') || monitorData.statusAtual.periodoViagem?.replace('_', ' ') || 'Período N/A'}
+                    tone="info"
+                    icon="clock"
+                  />
+                  <StatusBadge
+                    status={monitorData.statusAtual.status}
+                    variant={monitorData.statusAtual.status === 'ESPERANDO' ? 'default' : monitorData.statusAtual.status === 'FALTOU' ? 'error' : 'success'}
                   />
                 </View>
 
@@ -254,7 +251,7 @@ export default function GuardianMonitoringScreen() {
                   {currentTripDetails?.driver ? (
                     <View style={styles.driverRow}>
                       <View style={styles.driverAvatar}>
-                        <Feather name="user" size={20} color="#1976D2" />
+                        <Feather name="user" size={24} color={colors.ink} />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.driverName}>{currentTripDetails.driver.nomeMotorista}</Text>
@@ -304,12 +301,10 @@ export default function GuardianMonitoringScreen() {
                 {historyDetails.map((item, index) => (
                   <View key={index} style={styles.historyCard}>
                     <View style={styles.historyTop}>
-                      <View style={styles.historyPeriod}>
-                        <Text style={styles.historyPeriodText}>{item.periodo?.replace('_', ' ')}</Text>
-                      </View>
+                      <Chip label={item.periodo?.replace('_', ' ') || 'Período N/A'} tone="neutral" size="sm" />
                       <Text style={styles.historyDate}>{formatDate(item.dataExibicao)}</Text>
                     </View>
-                    
+
                     <View style={styles.historyMain}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.label}>Motorista</Text>
@@ -322,10 +317,10 @@ export default function GuardianMonitoringScreen() {
                     </View>
 
                     <View style={styles.historyFooter}>
-                      <StatusBadge 
-                        status={item.status} 
-                        size="small" 
-                        variant={item.status === 'EMBARCADO' ? 'success' : item.status === 'FALTOU' ? 'error' : 'default'} 
+                      <StatusBadge
+                        status={item.status}
+                        size="small"
+                        variant={item.status === 'EMBARCADO' ? 'success' : item.status === 'FALTOU' ? 'error' : 'default'}
                       />
                     </View>
                   </View>
@@ -334,10 +329,7 @@ export default function GuardianMonitoringScreen() {
             )}
 
             {!loading && historyDetails.length === 0 && !monitorData?.statusAtual && (
-              <View style={styles.empty}>
-                <Feather name="info" size={48} color="#C7C7CC" />
-                <Text style={styles.emptyText}>Nenhuma atividade registrada para este dependente.</Text>
-              </View>
+              <StateView kind="empty" icon="info" title="Nenhuma atividade registrada para este dependente." />
             )}
           </ScrollView>
         )}
@@ -347,49 +339,41 @@ export default function GuardianMonitoringScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  loadingText: { marginTop: 12, color: '#86868B', fontFamily: 'Inter_500Medium' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 20, marginBottom: 16 },
-  title: { fontFamily: 'Inter_700Bold', fontSize: 24, color: '#1D1D1F' },
-  studentTabs: { paddingHorizontal: 20, marginBottom: 10, maxHeight: 40 },
-  studentTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#FFF', marginRight: 10, borderWidth: 1, borderColor: '#E5E5EA' },
-  studentTabActive: { backgroundColor: '#1976D2', borderColor: '#1976D2' },
-  studentTabText: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#86868B' },
-  studentTabTextActive: { color: '#FFF' },
-  scrollContent: { padding: 20, paddingBottom: 40 },
-  sectionTitle: { fontFamily: 'Inter_700Bold', fontSize: 18, color: '#1D1D1F', marginBottom: 16 },
-  currentTripCard: { backgroundColor: '#FFF', borderRadius: 24, padding: 20, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, borderWidth: 1, borderColor: '#F2F2F7' },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  periodBadge: { backgroundColor: '#E3F2FD', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  periodText: { color: '#1976D2', fontSize: 11, fontFamily: 'Inter_700Bold', textTransform: 'uppercase' },
-  driverSection: { marginBottom: 20 },
-  label: { fontSize: 12, color: '#86868B', fontFamily: 'Inter_500Medium', marginBottom: 6 },
-  driverRow: { flexDirection: 'row', alignItems: 'center' },
-  driverAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F2F2F7', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  driverName: { fontSize: 16, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  driverContact: { fontSize: 13, color: '#1976D2', fontFamily: 'Inter_500Medium' },
-  vehicleText: { fontSize: 12, color: '#86868B', marginTop: 2 },
-  tripMeta: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+  container: { flex: 1, backgroundColor: colors.background, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  center: { flex: 1 },
+  header: { paddingHorizontal: layout.screenMargin, paddingTop: layout.screenMargin, marginBottom: spacing.md },
+  studentTabs: { flexGrow: 0, marginBottom: spacing.sm },
+  studentTabsContent: { paddingHorizontal: layout.screenMargin, gap: spacing.sm },
+  studentTab: { minHeight: 40, justifyContent: 'center', paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: borders.hairline, borderColor: colors.border },
+  studentTabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  studentTabText: { ...typography.captionBold, color: colors.slate700 },
+  studentTabTextActive: { color: colors.onPrimary },
+  scrollContent: { padding: layout.screenMargin, paddingBottom: spacing.xxl },
+  sectionTitle: { ...typography.heading, color: colors.ink, marginBottom: spacing.md },
+  currentTripCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: layout.cardPadding, borderWidth: borders.hairline, borderColor: colors.border },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },
+  driverSection: { marginBottom: spacing.lg },
+  label: { ...typography.caption, color: colors.slate500, marginBottom: spacing.xs },
+  driverRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  driverAvatar: { width: layout.iconSlot, height: layout.iconSlot, borderRadius: radius.pill, backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center' },
+  driverName: { ...typography.heading, color: colors.ink },
+  driverContact: { ...typography.body, color: colors.ink },
+  vehicleText: { ...typography.caption, color: colors.slate500, marginTop: spacing.xs },
+  tripMeta: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md, marginBottom: spacing.lg },
   metaItem: { flex: 1 },
-  metaValue: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#1D1D1F' },
-  divider: { height: 1, backgroundColor: '#F2F2F7', marginVertical: 16 },
+  metaValue: { ...typography.label, color: colors.ink },
+  divider: { height: borders.hairline, backgroundColor: colors.border, marginVertical: spacing.lg },
   statusRow: { flexDirection: 'row', alignItems: 'center' },
   statusBox: { flex: 1, alignItems: 'center' },
-  verticalDivider: { width: 1, height: 30, backgroundColor: '#F2F2F7' },
-  timeValue: { fontSize: 20, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  noCurrentTrip: { backgroundColor: '#F2F2F7', borderRadius: 24, padding: 32, alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed', borderWidth: 2, borderColor: '#D1D1D6' },
-  noCurrentTripText: { marginTop: 12, fontSize: 14, color: '#86868B', textAlign: 'center', fontFamily: 'Inter_500Medium' },
-  historyCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F2F2F7' },
-  historyTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  historyPeriod: { backgroundColor: '#F2F2F7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 },
-  historyPeriodText: { fontSize: 10, fontFamily: 'Inter_700Bold', color: '#86868B', textTransform: 'uppercase' },
-  historyDate: { fontSize: 12, color: '#1D1D1F', fontFamily: 'Inter_600SemiBold' },
-  historyMain: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  historyDriver: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#1D1D1F' },
-  historyTime: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#1D1D1F' },
+  verticalDivider: { width: borders.hairline, height: 40, backgroundColor: colors.border },
+  timeValue: { ...typography.title, color: colors.ink },
+  noCurrentTrip: { backgroundColor: colors.surface, borderRadius: radius.card, borderStyle: 'dashed', borderWidth: borders.alert, borderColor: colors.border },
+  historyCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: layout.cardPadding, marginBottom: spacing.md, borderWidth: borders.hairline, borderColor: colors.border },
+  historyTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
+  historyDate: { ...typography.label, color: colors.ink },
+  historyMain: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md, marginBottom: spacing.md },
+  historyDriver: { ...typography.body, color: colors.ink },
+  historyTime: { ...typography.label, color: colors.ink },
   historyFooter: { alignItems: 'flex-start' },
-  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 40 },
-  emptyText: { fontFamily: 'Inter_400Regular', fontSize: 15, color: '#86868B', textAlign: 'center', marginTop: 12 },
-  emptyTextSmall: { fontSize: 13, color: '#86868B', fontFamily: 'Inter_400Regular', fontStyle: 'italic' },
+  emptyTextSmall: { ...typography.caption, color: colors.slate500, fontStyle: 'italic' },
 });

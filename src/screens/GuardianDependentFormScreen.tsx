@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Modal, FlatList, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, FlatList } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -9,6 +9,8 @@ import { responsavelService } from '../services/responsavelService';
 import { dependenteService } from '../services/dependenteService';
 import { EscolaDTO, ResponsavelDTO, DependenteDTO } from '../types';
 import PasswordConfirmationModal from '../components/PasswordConfirmationModal';
+import { Button, ScreenHeader, StateView, TextField } from '../components/ui';
+import { borders, colors, layout, radius, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GuardianDependentForm'>;
 
@@ -16,14 +18,14 @@ export default function GuardianDependentFormScreen({ route, navigation }: Props
   const { dependentId } = route.params || {};
   const { currentUser, setCurrentUser, showToast } = useAppContext();
   const guardian = currentUser as ResponsavelDTO;
-  
+
   const [nome, setNome] = useState('');
   const [cpf, setCpf] = useState('');
   const [dataNascimento, setDataNascimento] = useState('');
   const [endereco, setEndereco] = useState('');
   const [idEscola, setIdEscola] = useState<number | null>(null);
   const [periodo, setPeriodo] = useState<any>('MANHA');
-  
+
   const [schools, setSchools] = useState<EscolaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [showSchoolModal, setShowSchoolModal] = useState(false);
@@ -117,55 +119,70 @@ export default function GuardianDependentFormScreen({ route, navigation }: Props
   const selectedSchoolName = schools.find(s => s.id === idEscola)?.nome || 'Selecionar Escola...';
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}><Feather name="arrow-left" size={24} color="#1D1D1F" /></TouchableOpacity>
-        <Text style={styles.title}>{dependentId ? 'Editar Dependente' : 'Novo Dependente'}</Text>
-      </View>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScreenHeader title={dependentId ? 'Editar Dependente' : 'Novo Dependente'} onBack={() => navigation.goBack()} />
 
       <View style={styles.form}>
-        <Text style={styles.label}>Nome Completo:</Text>
-        <TextInput style={styles.input} value={nome} onChangeText={setNome} placeholder="Ex: Enzo Silva" editable={!loading} />
+        <TextField label="Nome Completo" value={nome} onChangeText={setNome} placeholder="Ex: Enzo Silva" editable={!loading} />
 
         <View style={styles.row}>
-          <View style={{ flex: 1, marginRight: 12 }}>
-            <Text style={styles.label}>CPF:</Text>
-            <TextInput style={styles.input} value={cpf} onChangeText={setCpf} placeholder="000.000.000-00" keyboardType="numeric" editable={!loading} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Nascimento:</Text>
-            <TextInput style={styles.input} value={dataNascimento} onChangeText={setDataNascimento} placeholder="YYYY-MM-DD" editable={!loading} />
+          <TextField
+            label="CPF"
+            value={cpf}
+            onChangeText={setCpf}
+            placeholder="000.000.000-00"
+            keyboardType="numeric"
+            editable={!loading}
+            containerStyle={styles.rowItem}
+          />
+          <TextField
+            label="Nascimento"
+            value={dataNascimento}
+            onChangeText={setDataNascimento}
+            placeholder="YYYY-MM-DD"
+            editable={!loading}
+            containerStyle={styles.rowItem}
+          />
+        </View>
+
+        <TextField label="Endereço de Embarque" value={endereco} onChangeText={setEndereco} placeholder="Rua, Número, Bairro" editable={!loading} />
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Escola de Destino (Obrigatório)</Text>
+          <TouchableOpacity
+            style={styles.dropdown}
+            onPress={() => setShowSchoolModal(true)}
+            disabled={loading}
+            accessibilityRole="button"
+            accessibilityLabel={`Escola de destino: ${selectedSchoolName}`}
+          >
+            <Text style={[styles.dropdownValue, !idEscola && styles.dropdownPlaceholder]}>{selectedSchoolName}</Text>
+            <Feather name="chevron-down" size={20} color={colors.ink} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Período de Aula</Text>
+          <View style={styles.radioRow} accessibilityRole="radiogroup">
+            {['MANHA', 'TARDE', 'NOITE'].map(p => (
+              <TouchableOpacity
+                key={p}
+                style={[styles.radio, periodo === p && styles.radioActive]}
+                onPress={() => setPeriodo(p as any)}
+                disabled={loading}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: periodo === p }}
+              >
+                <Text style={[styles.radioText, periodo === p && styles.radioTextActive]}>{p}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
-        <Text style={styles.label}>Endereço de Embarque:</Text>
-        <TextInput style={styles.input} value={endereco} onChangeText={setEndereco} placeholder="Rua, Número, Bairro" editable={!loading} />
-
-        <Text style={styles.label}>Escola de Destino (Obrigatório):</Text>
-        <TouchableOpacity style={styles.dropdown} onPress={() => setShowSchoolModal(true)} disabled={loading}>
-          <Text style={styles.dropdownValue}>{selectedSchoolName}</Text>
-          <Feather name="chevron-down" size={20} color="#1976D2" />
-        </TouchableOpacity>
-
-        <Text style={styles.label}>Período de Aula:</Text>
-        <View style={styles.radioRow}>
-          {['MANHA', 'TARDE', 'NOITE'].map(p => (
-            <TouchableOpacity key={p} style={[styles.radio, periodo === p && styles.radioActive]} onPress={() => setPeriodo(p as any)} disabled={loading}>
-              <Text style={[styles.radioText, periodo === p && styles.radioTextActive]}>{p}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <TouchableOpacity 
-          style={[styles.saveBtn, loading && { opacity: 0.7 }]} 
-          onPress={handlePreSave}
-          disabled={loading}
-        >
-          {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>Salvar Alterações</Text>}
-        </TouchableOpacity>
+        <Button label="Salvar Alterações" onPress={handlePreSave} loading={loading} fullWidth style={styles.saveBtn} />
       </View>
 
-      <Modal visible={showSchoolModal} transparent animationType="slide">
+      <Modal visible={showSchoolModal} transparent animationType="slide" onRequestClose={() => setShowSchoolModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Lista de Escolas</Text>
@@ -173,19 +190,19 @@ export default function GuardianDependentFormScreen({ route, navigation }: Props
               data={schools}
               keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
               renderItem={({ item }) => (
-                <TouchableOpacity 
-                  style={styles.schoolItem} 
+                <TouchableOpacity
+                  style={[styles.schoolItem, idEscola === item.id && styles.schoolItemActive]}
                   onPress={() => { setIdEscola(item.id!); setShowSchoolModal(false); }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: idEscola === item.id }}
                 >
                   <Text style={styles.schoolName}>{item.nome}</Text>
                   <Text style={styles.schoolAddr}>{item.usuarioDTO?.endereco || ''}</Text>
                 </TouchableOpacity>
               )}
-              ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 20 }}>Nenhuma escola cadastrada.</Text>}
+              ListEmptyComponent={<StateView kind="empty" icon="book" title="Nenhuma escola cadastrada." />}
             />
-            <TouchableOpacity style={styles.closeBtn} onPress={() => setShowSchoolModal(false)}>
-              <Text style={styles.closeBtnText}>Cancelar</Text>
-            </TouchableOpacity>
+            <Button label="Cancelar" variant="tertiary" onPress={() => setShowSchoolModal(false)} fullWidth style={styles.closeBtn} />
           </View>
         </View>
       </Modal>
@@ -201,28 +218,28 @@ export default function GuardianDependentFormScreen({ route, navigation }: Props
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFF' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 16, padding: 20, paddingTop: 50 },
-  title: { fontSize: 20, fontFamily: 'Inter_700Bold' },
-  form: { padding: 20 },
-  label: { fontSize: 13, color: '#86868B', marginBottom: 8, marginTop: 16 },
-  input: { height: 52, backgroundColor: '#F5F5F7', borderRadius: 12, paddingHorizontal: 16, fontSize: 15 },
-  row: { flexDirection: 'row' },
-  radioRow: { flexDirection: 'row', gap: 10 },
-  radio: { flex: 1, height: 44, backgroundColor: '#F5F5F7', borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  radioActive: { backgroundColor: '#1976D2' },
-  radioText: { color: '#666', fontFamily: 'Inter_600SemiBold' },
-  radioTextActive: { color: '#FFF' },
-  dropdown: { height: 52, backgroundColor: '#F5F5F7', borderRadius: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dropdownValue: { fontSize: 15, color: '#1D1D1F' },
-  saveBtn: { backgroundColor: '#1976D2', height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 40 },
-  saveBtnText: { color: '#FFF', fontSize: 16, fontFamily: 'Inter_700Bold' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#FFF', borderRadius: 24, padding: 24, maxHeight: '70%' },
-  modalTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginBottom: 20 },
-  schoolItem: { paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F2F2F7' },
-  schoolName: { fontSize: 15, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  schoolAddr: { fontSize: 12, color: '#86868B', marginTop: 2 },
-  closeBtn: { marginTop: 20, alignItems: 'center' },
-  closeBtnText: { color: '#FF3B30', fontFamily: 'Inter_600SemiBold' },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: layout.screenMargin, paddingTop: 48, paddingBottom: spacing.xxl, width: '100%', maxWidth: 600, alignSelf: 'center' },
+  form: { gap: spacing.lg },
+  fieldGroup: { gap: spacing.sm },
+  label: { ...typography.captionBold, color: colors.slate700 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  rowItem: { flexGrow: 1, flexBasis: 140 },
+  radioRow: { flexDirection: 'row', gap: spacing.sm },
+  radio: { flex: 1, minHeight: layout.minTouch, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: borders.hairline, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  radioActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  radioText: { ...typography.label, color: colors.slate700 },
+  radioTextActive: { color: colors.onPrimary },
+  dropdown: { minHeight: layout.buttonLg, backgroundColor: colors.surface, borderRadius: radius.input, borderWidth: borders.hairline, borderColor: colors.border, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  dropdownValue: { ...typography.body, color: colors.ink, flexShrink: 1 },
+  dropdownPlaceholder: { color: colors.slate500 },
+  saveBtn: { marginTop: spacing.lg },
+  modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', padding: layout.screenMargin },
+  modalContent: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, maxHeight: '70%', width: '100%', maxWidth: 480, alignSelf: 'center' },
+  modalTitle: { ...typography.heading, color: colors.ink, marginBottom: spacing.lg },
+  schoolItem: { minHeight: layout.buttonLg, justifyContent: 'center', paddingVertical: spacing.md, paddingHorizontal: spacing.sm, borderBottomWidth: borders.hairline, borderBottomColor: colors.border },
+  schoolItemActive: { backgroundColor: colors.primaryTint },
+  schoolName: { ...typography.label, color: colors.ink },
+  schoolAddr: { ...typography.caption, color: colors.slate500, marginTop: spacing.xs },
+  closeBtn: { marginTop: spacing.lg },
 });

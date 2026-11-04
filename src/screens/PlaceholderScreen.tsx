@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import { colors } from '../theme';
 
 export default function PlaceholderScreen() {
   return <View style={styles.container} />;
@@ -8,6 +9,6 @@ export default function PlaceholderScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: colors.background,
   },
 });

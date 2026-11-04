@@ -9,6 +9,8 @@ import DriverLayout from '../components/DriverLayout';
 import StatusBadge from '../components/StatusBadge';
 import { viagemService } from '../services/viagemService';
 import { ParadaViagemDTO, ViagemDiaDTO } from '../types';
+import { Button, StateView } from '../components/ui';
+import { borders, colors, layout, radius, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DriverAttendance'>;
 
@@ -108,15 +110,19 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
     <DriverLayout>
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Feather name="arrow-left" size={24} color="#1D1D1F" />
-          </TouchableOpacity>
+          <Button variant="tertiary" size="icon" icon="arrow-left" accessibilityLabel="Voltar" onPress={() => navigation.goBack()} style={styles.backBtn} />
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>Chamada do Dia</Text>
             {activeViagemDia && (
-              <TouchableOpacity onPress={() => setShowStatusModal(true)} style={styles.currentStatusRow} activeOpacity={0.7}>
+              <TouchableOpacity
+                onPress={() => setShowStatusModal(true)}
+                style={styles.currentStatusRow}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Alterar status da viagem"
+              >
                 <StatusBadge status={activeViagemDia.status} variant={getStatusVariant(activeViagemDia.status)} />
-                <Feather name="edit-2" size={14} color="#1976D2" style={{ marginLeft: 8 }} />
+                <Feather name="edit-2" size={14} color={colors.ink} style={{ marginLeft: 8 }} />
               </TouchableOpacity>
             )}
           </View>
@@ -124,17 +130,17 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
 
         <ScrollView 
           contentContainerStyle={styles.timelineContainer}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadStops()} colors={['#1976D2']} tintColor="#1976D2" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadStops()} colors={[colors.ink]} tintColor={colors.ink} />}
         >
           {refreshing && currentStops.length === 0 && (
-            <ActivityIndicator size="large" color="#1976D2" style={{ marginTop: 40 }} />
+            <StateView kind="loading" title="Carregando paradas..." />
           )}
           
           {currentStops.map((stop, index) => (
             <View key={`${stop.ordem}-${index}`} style={styles.stopRow}>
               <View style={styles.indicator}>
                 <View style={[styles.dot, stop.tipoParada === 'MOTORISTA' ? styles.dotDriver : styles.dotStudent]}>
-                  {stop.tipoParada === 'MOTORISTA' ? <Feather name="home" size={12} color="#FFF" /> : <Text style={styles.dotNum}>{stop.ordem}</Text>}
+                  {stop.tipoParada === 'MOTORISTA' ? <Feather name="home" size={14} color={colors.surface} /> : <Text style={styles.dotNum}>{stop.ordem}</Text>}
                 </View>
                 {index < currentStops.length - 1 && <View style={styles.line} />}
               </View>
@@ -154,7 +160,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                             <Text style={styles.responsavelName}>Resp: {dep.nomeResponsavel}</Text>
                           </View>
                           {isSubmitting ? (
-                            <ActivityIndicator size="small" color="#1976D2" />
+                            <ActivityIndicator size="small" color={colors.ink} />
                           ) : (
                             <StatusBadge 
                               status={dep.statusEmbarque} 
@@ -174,8 +180,8 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                               onPress={() => handleUpdateStudentStatus(dep.id, 'EMBARCADO')}
                               disabled={isSubmitting || refreshing}
                             >
-                              <Feather name="log-in" size={16} color={dep.statusEmbarque === 'EMBARCADO' ? '#FFF' : '#34C759'} />
-                              <Text style={[styles.quickBtnText, dep.statusEmbarque === 'EMBARCADO' && styles.textWhite]}>Embarcar</Text>
+                              <Feather name="log-in" size={16} color={dep.statusEmbarque === 'EMBARCADO' ? colors.surface : colors.success} />
+                              <Text style={[styles.quickBtnText, { color: colors.success }, dep.statusEmbarque === 'EMBARCADO' && styles.textWhite]}>Embarcar</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity 
@@ -187,8 +193,8 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                               onPress={() => handleUpdateStudentStatus(dep.id, 'DESEMBARCADO')}
                               disabled={isSubmitting || refreshing}
                             >
-                              <Feather name="log-out" size={16} color={dep.statusEmbarque === 'DESEMBARCADO' ? '#FFF' : '#1976D2'} />
-                              <Text style={[styles.quickBtnText, dep.statusEmbarque === 'DESEMBARCADO' && styles.textWhite]}>Desembarcar</Text>
+                              <Feather name="log-out" size={16} color={dep.statusEmbarque === 'DESEMBARCADO' ? colors.surface : colors.info} />
+                              <Text style={[styles.quickBtnText, { color: colors.info }, dep.statusEmbarque === 'DESEMBARCADO' && styles.textWhite]}>Desembarcar</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity 
@@ -200,8 +206,8 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                               onPress={() => handleUpdateStudentStatus(dep.id, 'FALTOU')}
                               disabled={isSubmitting || refreshing}
                             >
-                              <Feather name="x-circle" size={16} color={dep.statusEmbarque === 'FALTOU' ? '#FFF' : '#FF3B30'} />
-                              <Text style={[styles.quickBtnText, dep.statusEmbarque === 'FALTOU' && styles.textWhite]}>Faltou</Text>
+                              <Feather name="x-circle" size={16} color={dep.statusEmbarque === 'FALTOU' ? colors.surface : colors.danger} />
+                              <Text style={[styles.quickBtnText, { color: colors.danger }, dep.statusEmbarque === 'FALTOU' && styles.textWhite]}>Faltou</Text>
                             </TouchableOpacity>
                           </View>
                         )}
@@ -213,10 +219,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
             </View>
           ))}
           {!refreshing && currentStops.length === 0 && (
-            <View style={styles.emptyContainer}>
-              <Feather name="info" size={40} color="#86868B" />
-              <Text style={styles.emptyText}>Nenhuma parada encontrada para esta viagem.</Text>
-            </View>
+            <StateView kind="empty" icon="map-pin" title="Nenhuma parada encontrada para esta viagem." />
           )}
         </ScrollView>
 
@@ -229,9 +232,14 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Alterar Status da Viagem</Text>
-                <TouchableOpacity onPress={() => setShowStatusModal(false)} disabled={isUpdatingTripStatus}>
-                  <Feather name="x" size={24} color="#86868B" />
-                </TouchableOpacity>
+                <Button
+                  variant="tertiary"
+                  size="icon"
+                  icon="x"
+                  accessibilityLabel="Fechar"
+                  onPress={() => setShowStatusModal(false)}
+                  disabled={isUpdatingTripStatus}
+                />
               </View>
               {TRIP_STATUS_OPTIONS.map((status) => (
                 <TouchableOpacity 
@@ -241,8 +249,8 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                   disabled={isUpdatingTripStatus}
                 >
                   <StatusBadge status={status} variant={getStatusVariant(status)} />
-                  {activeViagemDia?.status === status && !isUpdatingTripStatus && <Feather name="check" size={20} color="#1976D2" />}
-                  {activeViagemDia?.status === status && isUpdatingTripStatus && <ActivityIndicator size="small" color="#1976D2" />}
+                  {activeViagemDia?.status === status && !isUpdatingTripStatus && <Feather name="check" size={20} color={colors.ink} />}
+                  {activeViagemDia?.status === status && isUpdatingTripStatus && <ActivityIndicator size="small" color={colors.ink} />}
                 </TouchableOpacity>
               ))}
             </View>
@@ -254,43 +262,41 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F2F2F7' },
-  backBtn: { marginRight: 16 },
-  title: { fontSize: 20, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  currentStatusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  timelineContainer: { padding: 20, paddingBottom: 40 },
+  container: { flex: 1, backgroundColor: colors.background },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: layout.screenMargin, paddingVertical: spacing.md, backgroundColor: colors.surface, borderBottomWidth: borders.hairline, borderBottomColor: colors.border },
+  backBtn: { marginLeft: -spacing.md, marginRight: spacing.xs },
+  title: { ...typography.title, color: colors.ink },
+  currentStatusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs, minHeight: layout.minTouch, alignSelf: 'flex-start' },
+  timelineContainer: { padding: layout.screenMargin, paddingBottom: spacing.xxl, width: '100%', maxWidth: 800, alignSelf: 'center' },
   stopRow: { flexDirection: 'row', minHeight: 80 },
-  indicator: { alignItems: 'center', width: 40, marginRight: 16 },
-  dot: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', zIndex: 2 },
-  dotDriver: { backgroundColor: '#8E8E93' },
-  dotStudent: { backgroundColor: '#1976D2' },
-  dotNum: { color: '#FFF', fontSize: 14, fontFamily: 'Inter_700Bold' },
-  line: { width: 3, flex: 1, backgroundColor: '#E5E5EA', marginTop: -2, marginBottom: -2 },
-  details: { flex: 1, paddingBottom: 30 },
-  stopLocal: { fontSize: 16, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  stopAddr: { fontSize: 12, color: '#86868B', marginTop: 2, marginBottom: 12 },
+  indicator: { alignItems: 'center', width: 32, marginRight: spacing.md },
+  dot: { width: 32, height: 32, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', zIndex: 2 },
+  dotDriver: { backgroundColor: colors.slate500 },
+  dotStudent: { backgroundColor: colors.primary },
+  dotNum: { ...typography.captionBold, color: colors.onPrimary },
+  line: { width: 2, flex: 1, backgroundColor: colors.border, marginTop: -2, marginBottom: -2 },
+  details: { flex: 1, paddingBottom: spacing.xl },
+  stopLocal: { ...typography.heading, color: colors.ink },
+  stopAddr: { ...typography.caption, color: colors.slate500, marginTop: spacing.xs, marginBottom: spacing.md },
   detailsContent: { flex: 1 },
-  studentCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, borderWidth: 1, borderColor: '#F2F2F7' },
-  studentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  studentName: { fontSize: 15, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  responsavelName: { fontSize: 12, color: '#86868B', marginTop: 2 },
-  quickActions: { flexDirection: 'row', gap: 8, borderTopWidth: 1, borderTopColor: '#F2F2F7', paddingTop: 12 },
-  quickBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 8, gap: 4, borderWidth: 1 },
-  btnEmbarcado: { borderColor: '#E8F5E9', backgroundColor: '#F9FBF9' },
-  btnDesembarcado: { borderColor: '#E3F2FD', backgroundColor: '#F5F9FF' },
-  btnFaltou: { borderColor: '#FFEBEE', backgroundColor: '#FFF9F9' },
-  btnActiveEmbarcado: { backgroundColor: '#34C759', borderColor: '#34C759' },
-  btnActiveDesembarcado: { backgroundColor: '#1976D2', borderColor: '#1976D2' },
-  btnActiveFaltou: { backgroundColor: '#FF3B30', borderColor: '#FF3B30' },
-  quickBtnText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
-  textWhite: { color: '#FFF' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  modalTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  statusOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 20, borderRadius: 16, marginBottom: 8, backgroundColor: '#F5F5F7' },
-  statusOptionActive: { backgroundColor: '#E3F2FD', borderWidth: 1, borderColor: '#1976D2' },
-  emptyContainer: { alignItems: 'center', marginTop: 60 },
-  emptyText: { color: '#86868B', fontSize: 14, marginTop: 12, textAlign: 'center' }
+  studentCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: layout.cardPadding, marginBottom: spacing.md, borderWidth: borders.hairline, borderColor: colors.border },
+  studentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.md },
+  studentName: { ...typography.label, fontSize: 18, lineHeight: 22, color: colors.ink },
+  responsavelName: { ...typography.caption, color: colors.slate500, marginTop: spacing.xs },
+  quickActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, borderTopWidth: borders.hairline, borderTopColor: colors.border, paddingTop: spacing.md },
+  quickBtn: { flexGrow: 1, flexBasis: 96, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: layout.minTouch, paddingHorizontal: spacing.sm, borderRadius: radius.md, gap: spacing.xs, borderWidth: borders.hairline },
+  btnEmbarcado: { borderColor: colors.successTint, backgroundColor: colors.successTint },
+  btnDesembarcado: { borderColor: colors.infoTint, backgroundColor: colors.infoTint },
+  btnFaltou: { borderColor: colors.dangerTint, backgroundColor: colors.dangerTint },
+  btnActiveEmbarcado: { backgroundColor: colors.success, borderColor: colors.success },
+  btnActiveDesembarcado: { backgroundColor: colors.info, borderColor: colors.info },
+  btnActiveFaltou: { backgroundColor: colors.danger, borderColor: colors.danger },
+  quickBtnText: { ...typography.captionBold },
+  textWhite: { color: colors.surface },
+  modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.xl, paddingBottom: spacing.xxl, width: '100%', maxWidth: 600, alignSelf: 'center' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
+  modalTitle: { ...typography.heading, color: colors.ink, flexShrink: 1 },
+  statusOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: layout.buttonLg, paddingHorizontal: spacing.lg, borderRadius: radius.button, marginBottom: spacing.sm, backgroundColor: colors.surface, borderWidth: borders.hairline, borderColor: colors.border },
+  statusOptionActive: { backgroundColor: colors.primaryTint, borderWidth: borders.alert, borderColor: colors.ink },
 });

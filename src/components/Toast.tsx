@@ -4,42 +4,40 @@ import {
   StyleSheet,
   Text,
   View,
-  Dimensions,
   Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAppContext } from '../context/AppContext';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { borders, colors, elevation, layout, maxFontSizeMultiplier, radius, spacing, statusColors, typography } from '../theme';
 
 const TOAST_VARIANTS = {
   success: {
-    backgroundColor: '#E8F5E9',
-    borderColor: '#34C759',
+    backgroundColor: statusColors.success.bg,
+    borderColor: statusColors.success.border,
     icon: 'check-circle' as const,
-    iconColor: '#34C759',
-    textColor: '#1B5E20',
+    iconColor: statusColors.success.text,
+    textColor: colors.ink,
   },
   error: {
-    backgroundColor: '#FFEBEE',
-    borderColor: '#FF3B30',
+    backgroundColor: statusColors.danger.bg,
+    borderColor: statusColors.danger.border,
     icon: 'alert-circle' as const,
-    iconColor: '#FF3B30',
-    textColor: '#B71C1C',
+    iconColor: statusColors.danger.text,
+    textColor: colors.ink,
   },
   warning: {
-    backgroundColor: '#FFF8E1',
-    borderColor: '#FFCC00',
+    backgroundColor: statusColors.warning.bg,
+    borderColor: statusColors.warning.border,
     icon: 'alert-triangle' as const,
-    iconColor: '#FFCC00',
-    textColor: '#7F6000',
+    iconColor: statusColors.warning.text,
+    textColor: colors.ink,
   },
   info: {
-    backgroundColor: '#E3F2FD',
-    borderColor: '#1976D2',
+    backgroundColor: statusColors.info.bg,
+    borderColor: statusColors.info.border,
     icon: 'info' as const,
-    iconColor: '#1976D2',
-    textColor: '#0D47A1',
+    iconColor: statusColors.info.text,
+    textColor: colors.ink,
   },
 };
 
@@ -100,6 +98,8 @@ export default function Toast() {
   return (
     <Animated.View
       pointerEvents="none"
+      accessibilityLiveRegion="polite"
+      accessibilityRole="alert"
       style={[
         styles.container,
         {
@@ -117,8 +117,8 @@ export default function Toast() {
           },
         ]}
       >
-        <Feather name={variant.icon} size={20} color={variant.iconColor} />
-        <Text style={[styles.text, { color: variant.textColor }]}>
+        <Feather name={variant.icon} size={layout.icon} color={variant.iconColor} />
+        <Text style={[styles.text, { color: variant.textColor }]} maxFontSizeMultiplier={maxFontSizeMultiplier}>
           {toast.message}
         </Text>
       </View>
@@ -134,27 +134,24 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     zIndex: 9999,
-    paddingHorizontal: 20,
+    paddingHorizontal: layout.screenMargin,
   },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
+    gap: spacing.md,
+    minHeight: layout.buttonLg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.card,
+    borderWidth: borders.alert,
     maxWidth: Platform.OS === 'web' ? 420 : '100%',
     width: Platform.OS === 'web' ? 'auto' : '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    ...elevation.overlay,
   },
   text: {
-    marginLeft: 12,
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.body,
+    fontFamily: typography.label.fontFamily,
     flexShrink: 1,
   },
 });

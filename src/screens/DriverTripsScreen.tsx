@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Modal, TextInput, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Pressable, Modal, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -8,6 +8,8 @@ import { useAppContext } from '../context/AppContext';
 import { viagemService } from '../services/viagemService';
 import { ViagemDTO } from '../types';
 import DriverLayout from '../components/DriverLayout';
+import { Button, Chip, StateView } from '../components/ui';
+import { borders, colors, layout, radius, spacing, typography } from '../theme';
 
 const PERIODS = ['MANHA_IDA', 'MANHA_VOLTA', 'TARDE_IDA', 'TARDE_VOLTA', 'NOITE_IDA', 'NOITE_VOLTA'];
 
@@ -56,19 +58,21 @@ export default function DriverTripsScreen() {
   };
 
   const renderTripItem = ({ item }: { item: ViagemDTO }) => (
-    <TouchableOpacity 
-      style={styles.tripCard}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Viagem ${item.periodo.replace('_', ' ')}, ${item.ativo ? 'ativa' : 'inativa'}`}
+      style={({ pressed }) => [styles.tripCard, pressed && styles.tripCardPressed]}
       onPress={() => navigation.navigate('DriverTripDetails', { viagemId: item.id! })}
     >
       <View style={styles.tripIcon}>
-        <Feather name="map-pin" size={24} color="#1976D2" />
+        <Feather name="map-pin" size={24} color={colors.ink} />
       </View>
       <View style={styles.tripInfo}>
         <Text style={styles.tripPeriod}>{item.periodo.replace('_', ' ')}</Text>
-        <Text style={styles.tripStatus}>{item.ativo ? 'Ativa' : 'Inativa'}</Text>
+        <Chip label={item.ativo ? 'Ativa' : 'Inativa'} tone={item.ativo ? 'success' : 'neutral'} size="sm" />
       </View>
-      <Feather name="chevron-right" size={24} color="#86868B" />
-    </TouchableOpacity>
+      <Feather name="chevron-right" size={24} color={colors.slate500} />
+    </Pressable>
   );
 
   return (
@@ -76,17 +80,11 @@ export default function DriverTripsScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Minhas Viagens</Text>
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={() => setShowCreateModal(true)}
-          >
-            <Feather name="plus" size={20} color="#FFF" />
-            <Text style={styles.addButtonText}>Nova</Text>
-          </TouchableOpacity>
+          <Button label="Nova" icon="plus" size="md" accessibilityLabel="Nova viagem" onPress={() => setShowCreateModal(true)} />
         </View>
 
         {loading && trips.length === 0 ? (
-          <ActivityIndicator size="large" color="#1976D2" style={{ marginTop: 40 }} />
+          <StateView kind="loading" title="Carregando viagens..." />
         ) : (
           <FlatList
             data={trips}
@@ -94,17 +92,14 @@ export default function DriverTripsScreen() {
             renderItem={renderTripItem}
             contentContainerStyle={styles.list}
             ListEmptyComponent={
-              <View style={styles.empty}>
-                <Feather name="map" size={48} color="#D1D1D6" />
-                <Text style={styles.emptyText}>Nenhuma viagem ativa encontrada.</Text>
-              </View>
+              <StateView kind="empty" icon="map" title="Nenhuma viagem ativa encontrada." message="Crie uma viagem para começar a montar seu roteiro." />
             }
             refreshing={loading}
             onRefresh={loadTrips}
           />
         )}
 
-        <Modal visible={showCreateModal} transparent animationType="slide">
+        <Modal visible={showCreateModal} transparent animationType="slide" onRequestClose={() => setShowCreateModal(false)}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Criar Nova Viagem</Text>
@@ -113,6 +108,8 @@ export default function DriverTripsScreen() {
                 {PERIODS.map(p => (
                   <TouchableOpacity 
                     key={p} 
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: selectedPeriod === p }}
                     style={[styles.periodOption, selectedPeriod === p && styles.periodSelected]}
                     onPress={() => setSelectedPeriod(p)}
                   >
@@ -123,19 +120,8 @@ export default function DriverTripsScreen() {
                 ))}
               </ScrollView>
               <View style={styles.modalActions}>
-                <TouchableOpacity 
-                  style={styles.cancelButton}
-                  onPress={() => setShowCreateModal(false)}
-                >
-                  <Text style={styles.cancelButtonText}>Cancelar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.confirmButton}
-                  onPress={handleCreateTrip}
-                  disabled={loading}
-                >
-                  <Text style={styles.confirmButtonText}>Criar Viagem</Text>
-                </TouchableOpacity>
+                <Button label="Criar Viagem" onPress={handleCreateTrip} disabled={loading} fullWidth />
+                <Button label="Cancelar" variant="tertiary" onPress={() => setShowCreateModal(false)} fullWidth />
               </View>
             </View>
           </View>
@@ -146,59 +132,39 @@ export default function DriverTripsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  title: { fontSize: 24, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  addButton: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#1976D2', 
-    paddingHorizontal: 16, 
-    paddingVertical: 10, 
-    borderRadius: 12,
-    gap: 8
+  container: { flex: 1, padding: layout.screenMargin, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xl, gap: spacing.md },
+  title: { ...typography.title, color: colors.ink, flexShrink: 1 },
+  list: { paddingBottom: spacing.xl, gap: spacing.md },
+  tripCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    backgroundColor: colors.surface,
+    padding: layout.cardPadding,
+    borderRadius: radius.card,
+    borderWidth: borders.hairline,
+    borderColor: colors.border,
   },
-  addButtonText: { color: '#FFF', fontFamily: 'Inter_600SemiBold' },
-  list: { paddingBottom: 20 },
-  tripCard: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#FFF', 
-    padding: 16, 
-    borderRadius: 16, 
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8
-  },
-  tripIcon: { 
-    width: 48, 
-    height: 48, 
-    borderRadius: 12, 
-    backgroundColor: '#F2F2F7', 
-    alignItems: 'center', 
+  tripCardPressed: { backgroundColor: colors.background },
+  tripIcon: {
+    width: layout.iconSlot,
+    height: layout.iconSlot,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16
   },
-  tripInfo: { flex: 1 },
-  tripPeriod: { fontSize: 16, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  tripStatus: { fontSize: 13, color: '#86868B', marginTop: 2 },
-  empty: { marginTop: 60, alignItems: 'center' },
-  emptyText: { marginTop: 16, color: '#86868B', fontSize: 16, textAlign: 'center' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, maxHeight: '80%' },
-  modalTitle: { fontSize: 22, fontFamily: 'Inter_700Bold', color: '#1D1D1F', marginBottom: 20 },
-  modalLabel: { fontSize: 14, color: '#86868B', marginBottom: 12, fontFamily: 'Inter_600SemiBold' },
-  periodList: { maxHeight: 300, marginBottom: 20 },
-  periodOption: { paddingVertical: 16, paddingHorizontal: 20, borderRadius: 12, marginBottom: 8, backgroundColor: '#F2F2F7' },
-  periodSelected: { backgroundColor: '#E3F2FD', borderWidth: 1, borderColor: '#1976D2' },
-  periodText: { fontSize: 16, color: '#1D1D1F', textAlign: 'center' },
-  periodTextSelected: { color: '#1976D2', fontFamily: 'Inter_700Bold' },
-  modalActions: { flexDirection: 'row', gap: 12 },
-  cancelButton: { flex: 1, padding: 16, alignItems: 'center' },
-  cancelButtonText: { color: '#86868B', fontFamily: 'Inter_600SemiBold' },
-  confirmButton: { flex: 2, backgroundColor: '#1976D2', padding: 16, borderRadius: 16, alignItems: 'center' },
-  confirmButtonText: { color: '#FFF', fontFamily: 'Inter_700Bold' }
+  tripInfo: { flex: 1, gap: spacing.sm },
+  tripPeriod: { ...typography.heading, color: colors.ink },
+  modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.xl, maxHeight: '80%', width: '100%', maxWidth: 600, alignSelf: 'center' },
+  modalTitle: { ...typography.title, color: colors.ink, marginBottom: spacing.lg },
+  modalLabel: { ...typography.captionBold, color: colors.slate700, marginBottom: spacing.md },
+  periodList: { maxHeight: 300, marginBottom: spacing.xl },
+  periodOption: { minHeight: layout.buttonLg, justifyContent: 'center', paddingHorizontal: spacing.lg, borderRadius: radius.button, marginBottom: spacing.sm, backgroundColor: colors.surface, borderWidth: borders.hairline, borderColor: colors.border },
+  periodSelected: { backgroundColor: colors.primaryTint, borderWidth: borders.alert, borderColor: colors.ink },
+  periodText: { ...typography.body, color: colors.ink, textAlign: 'center' },
+  periodTextSelected: { ...typography.label, color: colors.ink },
+  modalActions: { gap: layout.buttonGap },
 });

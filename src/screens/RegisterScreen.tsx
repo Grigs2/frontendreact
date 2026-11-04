@@ -2,22 +2,20 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
-import { Feather } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { motoristaService } from '../services/motoristaService';
 import { responsavelService } from '../services/responsavelService';
 import { escolaService } from '../services/escolaService';
 import { useAppContext } from '../context/AppContext';
+import { Button, TextField } from '../components/ui';
+import { colors, layout, maxFontSizeMultiplier, spacing, typography } from '../theme';
 
 const ROLE_LABELS: Record<string, string> = {
   driver: 'Novo Motorista',
@@ -136,67 +134,39 @@ export default function RegisterScreen({ navigation, route }: Props) {
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={styles.wrapper}>
             <View style={styles.header}>
-              <TouchableOpacity
-                  onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Login')}
-              >
-                <Feather name="arrow-left" size={24} color="#1D1D1F" />
-              </TouchableOpacity>
+              <Button
+                variant="tertiary"
+                size="icon"
+                icon="arrow-left"
+                accessibilityLabel="Voltar"
+                onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Login')}
+              />
             </View>
-            <Text style={styles.title}>{ROLE_LABELS[role]}</Text>
-            <Text style={styles.subtitle}>Preencha os dados para criar sua conta</Text>
+            <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>{ROLE_LABELS[role]}</Text>
+            <Text style={styles.subtitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>Preencha os dados para criar sua conta</Text>
             <View style={styles.card}>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Nome Completo</Text>
-                <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Nome" />
-              </View>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>E-mail</Text>
-                <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="seu@email.com" keyboardType="email-address" autoCapitalize="none" />
-              </View>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Senha</Text>
-                <View style={styles.passwordContainer}>
-                  <TextInput style={[styles.input, styles.passwordInput]} value={password} onChangeText={setPassword} secureTextEntry={!showPassword} />
-                  <TouchableOpacity style={styles.eyeButton} onPress={() => setShowPassword(!showPassword)}>
-                    <Feather name={showPassword ? 'eye-off' : 'eye'} size={20} color="#86868B" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>CPF</Text>
-                <TextInput style={styles.input} value={cpf} onChangeText={setCpf} placeholder="000.000.000-00" />
-              </View>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Data de Nascimento</Text>
-                <TextInput style={styles.input} value={birthDate} onChangeText={setBirthDate} placeholder="YYYY-MM-DD" />
-              </View>
+              <TextField label="Nome Completo" value={name} onChangeText={setName} placeholder="Nome" />
+              <TextField label="E-mail" value={email} onChangeText={setEmail} placeholder="seu@email.com" keyboardType="email-address" autoCapitalize="none" />
+              <TextField
+                label="Senha"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                rightIcon={showPassword ? 'eye-off' : 'eye'}
+                rightIconLabel={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                onRightIconPress={() => setShowPassword(!showPassword)}
+              />
+              <TextField label="CPF" value={cpf} onChangeText={setCpf} placeholder="000.000.000-00" />
+              <TextField label="Data de Nascimento" value={birthDate} onChangeText={setBirthDate} placeholder="YYYY-MM-DD" />
               {role === 'driver' && (
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>CNH</Text>
-                  <TextInput style={styles.input} value={cnh} onChangeText={setCnh} placeholder="Número da CNH" />
-                </View>
+                <TextField label="CNH" value={cnh} onChangeText={setCnh} placeholder="Número da CNH" />
               )}
               {role === 'school' && (
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Administrador Responsável</Text>
-                  <TextInput style={styles.input} value={admResponsavel} onChangeText={setAdmResponsavel} placeholder="Nome do Responsável" />
-                </View>
+                <TextField label="Administrador Responsável" value={admResponsavel} onChangeText={setAdmResponsavel} placeholder="Nome do Responsável" />
               )}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Endereço</Text>
-                <TextInput style={styles.input} value={address} onChangeText={setAddress} placeholder="Rua, número, bairro" />
-              </View>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Telefone</Text>
-                <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="(00) 00000-0000" keyboardType="phone-pad" />
-              </View>
-              <TouchableOpacity 
-                style={[styles.saveButton, loading && { opacity: 0.7 }]} 
-                onPress={handleSave}
-                disabled={loading}
-              >
-                {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveButtonText}>Salvar</Text>}
-              </TouchableOpacity>
+              <TextField label="Endereço" value={address} onChangeText={setAddress} placeholder="Rua, número, bairro" />
+              <TextField label="Telefone" value={phone} onChangeText={setPhone} placeholder="(00) 00000-0000" keyboardType="phone-pad" />
+              <Button label="Salvar" onPress={handleSave} loading={loading} fullWidth style={styles.saveButton} />
             </View>
           </View>
         </ScrollView>
@@ -205,19 +175,12 @@ export default function RegisterScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#FAFAFA' },
-  scrollContent: { flexGrow: 1, padding: 20, paddingTop: 60 },
+  screen: { flex: 1, backgroundColor: colors.background },
+  scrollContent: { flexGrow: 1, padding: layout.screenMargin, paddingTop: 48 },
   wrapper: { width: '100%', maxWidth: 440, alignSelf: 'center' },
-  header: { marginBottom: 16 },
-  title: { fontFamily: 'Inter_700Bold', fontSize: 28, color: '#1D1D1F', marginBottom: 4 },
-  subtitle: { fontFamily: 'Inter_400Regular', fontSize: 16, color: '#86868B', marginBottom: 32 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 32, elevation: 4, borderWidth: 1, borderColor: 'rgba(0, 0, 0, 0.04)' },
-  fieldGroup: { marginBottom: 24 },
-  label: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#1D1D1F', marginBottom: 12 },
-  input: { fontFamily: 'Inter_400Regular', fontSize: 17, height: 52, borderRadius: 12, backgroundColor: '#F5F5F7', paddingHorizontal: 16 },
-  passwordContainer: { position: 'relative', justifyContent: 'center' },
-  passwordInput: { paddingRight: 48 },
-  eyeButton: { position: 'absolute', right: 16, cursor: 'pointer' } as any,
-  saveButton: { height: 52, borderRadius: 12, backgroundColor: '#1976D2', alignItems: 'center', justifyContent: 'center', marginTop: 8, cursor: 'pointer' } as any,
-  saveButtonText: { fontFamily: 'Inter_600SemiBold', fontSize: 17, color: '#FFFFFF' },
+  header: { marginBottom: spacing.sm, marginLeft: -spacing.md },
+  title: { ...typography.display, color: colors.ink, marginBottom: spacing.xs },
+  subtitle: { ...typography.body, color: colors.slate500, marginBottom: spacing.xl },
+  card: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, borderWidth: 1, borderColor: colors.border, gap: spacing.lg },
+  saveButton: { marginTop: spacing.sm },
 });

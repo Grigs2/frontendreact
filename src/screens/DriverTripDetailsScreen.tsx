@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, FlatList } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
@@ -10,6 +9,8 @@ import { ViagemDTO, DependenteDTO } from '../types';
 import DriverLayout from '../components/DriverLayout';
 
 import ConfirmDialog from '../components/ConfirmDialog';
+import { Button, Card, Chip, ScreenHeader, StateView } from '../components/ui';
+import { borders, colors, layout, radius, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DriverTripDetails'>;
 
@@ -73,9 +74,7 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
   if (loading && !viagem) {
     return (
       <DriverLayout>
-        <View style={styles.loading}>
-          <ActivityIndicator size="large" color="#1976D2" />
-        </View>
+        <StateView kind="loading" title="Carregando viagem..." style={styles.loading} />
       </DriverLayout>
     );
   }
@@ -85,31 +84,27 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
   return (
     <DriverLayout>
       <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Feather name="arrow-left" size={24} color="#1D1D1F" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Detalhes da Viagem</Text>
-        </View>
+        <ScreenHeader title="Detalhes da Viagem" onBack={() => navigation.goBack()} />
 
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <View style={styles.cardHeader}>
-            <Feather name="map" size={24} color="#1976D2" />
             <Text style={styles.cardTitle}>{viagem.periodo.replace('_', ' ')}</Text>
+            <Chip label={viagem.ativo ? 'Ativa' : 'Inativa'} tone={viagem.ativo ? 'success' : 'neutral'} />
           </View>
-          <Text style={styles.cardSubtitle}>Status: {viagem.ativo ? 'Ativa' : 'Inativa'}</Text>
-        </View>
+          <Text style={styles.cardSubtitle}>{viagem.dependentes?.length || 0} dependente(s) vinculado(s)</Text>
+        </Card>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Dependentes ({viagem.dependentes?.length || 0})</Text>
-            <TouchableOpacity 
+            <Button
+              label="Adicionar"
+              icon="plus"
+              variant="tertiary"
+              size="md"
+              accessibilityLabel="Adicionar dependente"
               onPress={() => navigation.navigate('DriverAvailableDependents', { viagemId })}
-              style={styles.addDepButton}
-            >
-              <Feather name="plus" size={16} color="#1976D2" />
-              <Text style={styles.addDepText}>Adicionar</Text>
-            </TouchableOpacity>
+            />
           </View>
 
           {viagem.dependentes && viagem.dependentes.length > 0 ? (
@@ -122,28 +117,20 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
               </View>
             ))
           ) : (
-            <Text style={styles.emptyText}>Nenhum dependente vinculado.</Text>
+            <StateView kind="empty" icon="users" title="Nenhum dependente vinculado." />
           )}
         </View>
 
         <View style={styles.actions}>
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.startButton]}
-            onPress={handleIniciarViagem}
-            disabled={loading}
-          >
-            <Feather name="play" size={20} color="#FFF" />
-            <Text style={styles.actionButtonText}>Iniciar Viagem do Dia</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.deleteButton]}
+          <Button label="Iniciar Viagem do Dia" icon="play" onPress={handleIniciarViagem} disabled={loading} fullWidth />
+          <Button
+            label="Desativar Viagem"
+            icon="trash-2"
+            variant="destructive"
             onPress={() => setShowConfirmDeactivate(true)}
             disabled={loading}
-          >
-            <Feather name="trash-2" size={20} color="#FF3B30" />
-            <Text style={[styles.actionButtonText, { color: '#FF3B30' }]}>Desativar Viagem</Text>
-          </TouchableOpacity>
+            fullWidth
+          />
         </View>
 
         <ConfirmDialog
@@ -163,27 +150,25 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, paddingBottom: 40 },
-  loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 24, marginTop: 10 },
-  title: { fontSize: 24, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  card: { backgroundColor: '#FFF', padding: 24, borderRadius: 24, elevation: 4, marginBottom: 32 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
-  cardTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  cardSubtitle: { fontSize: 14, color: '#86868B', fontFamily: 'Inter_500Medium' },
-  section: { marginBottom: 32 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  sectionTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', color: '#1D1D1F' },
-  addDepButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  addDepText: { color: '#1976D2', fontFamily: 'Inter_600SemiBold', fontSize: 14 },
-  depCard: { backgroundColor: '#FFF', padding: 16, borderRadius: 16, marginBottom: 12, borderLeftWidth: 4, borderLeftColor: '#1976D2', elevation: 2 },
-  depInfo: { flex: 1 },
-  depName: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#1D1D1F' },
-  depDetail: { fontSize: 13, color: '#86868B', marginTop: 2 },
-  emptyText: { color: '#86868B', textAlign: 'center', marginTop: 10 },
-  actions: { gap: 12 },
-  actionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 16, gap: 10 },
-  startButton: { backgroundColor: '#1976D2' },
-  deleteButton: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#FF3B30' },
-  actionButtonText: { color: '#FFF', fontSize: 16, fontFamily: 'Inter_700Bold' }
+  container: { padding: layout.screenMargin, paddingBottom: spacing.xxl, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  loading: { flex: 1 },
+  card: { marginBottom: spacing.xxl },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, flexWrap: 'wrap' },
+  cardTitle: { ...typography.heading, color: colors.ink, flexShrink: 1 },
+  cardSubtitle: { ...typography.caption, color: colors.slate500 },
+  section: { marginBottom: spacing.xxl },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+  sectionTitle: { ...typography.heading, color: colors.ink, flexShrink: 1 },
+  depCard: {
+    backgroundColor: colors.surface,
+    padding: layout.cardPadding,
+    borderRadius: radius.card,
+    marginBottom: spacing.md,
+    borderWidth: borders.hairline,
+    borderColor: colors.border,
+  },
+  depInfo: { flex: 1, gap: spacing.xs },
+  depName: { ...typography.label, fontSize: 18, lineHeight: 22, color: colors.ink },
+  depDetail: { ...typography.caption, color: colors.slate500 },
+  actions: { gap: layout.buttonGap },
 });

@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
+  View, Text, Pressable,
   StyleSheet, KeyboardAvoidingView, Platform,
-  ScrollView, ActivityIndicator,
+  ScrollView,
 } from 'react-native';
-import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import Logo from '../components/Logo';
 import { useAppContext } from '../context/AppContext';
 import { authService } from '../services/authService';
+import { Button, TextField } from '../components/ui';
+import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
 export default function LoginScreen({ onLogin }: any) {
   const navigation = useNavigation<any>();
@@ -81,86 +82,79 @@ export default function LoginScreen({ onLogin }: any) {
         <View style={styles.wrapper}>
           <View style={styles.brandContainer}>
             <Logo size="large" showText={false} />
-            <Text style={styles.title}>Tio da Perua</Text>
+            <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
+              Tio da Perua
+            </Text>
+            <Text style={styles.subtitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+              Entre para acompanhar o transporte escolar
+            </Text>
           </View>
 
           <View style={styles.card}>
-            <View style={styles.segmentedControl}>
-              {['driver', 'guardian', 'school'].map((role) => (
-                <TouchableOpacity
-                  key={role}
-                  style={[
-                    styles.segmentButton,
-                    selectedRole === role && styles.segmentButtonActive,
-                  ]}
-                  onPress={() => setSelectedRole(role as any)}
-                >
-                  <Text
-                    style={[
-                      styles.segmentText,
-                      selectedRole === role && styles.segmentTextActive,
+            <Text style={styles.fieldLabel} maxFontSizeMultiplier={maxFontSizeMultiplier}>Entrar como</Text>
+            <View style={styles.segmentedControl} accessibilityRole="tablist">
+              {['driver', 'guardian', 'school'].map((role) => {
+                const label = role === 'driver' ? 'Motorista' : role === 'guardian' ? 'Responsável' : 'Escola';
+                const active = selectedRole === role;
+                return (
+                  <Pressable
+                    key={role}
+                    accessibilityRole="tab"
+                    accessibilityLabel={label}
+                    accessibilityState={{ selected: active }}
+                    style={({ pressed }) => [
+                      styles.segmentButton,
+                      active && styles.segmentButtonActive,
+                      pressed && !active && styles.segmentButtonPressed,
                     ]}
+                    onPress={() => setSelectedRole(role as any)}
                   >
-                    {role === 'driver'
-                      ? 'Motorista'
-                      : role === 'guardian'
-                      ? 'Responsável'
-                      : 'Escola'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={[styles.segmentText, active && styles.segmentTextActive]}
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={maxFontSizeMultiplier}
+                    >
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
-            <TextInput
-              style={styles.input}
+            <TextField
+              label="E-mail"
               value={email}
               onChangeText={setEmail}
-              placeholder="E-mail (ex: teste@teste.com)"
+              placeholder="ex: teste@teste.com"
               keyboardType="email-address"
               autoCapitalize="none"
+              leftIcon="mail"
               editable={!loading}
             />
 
-            <View style={styles.passwordContainer}>
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Senha"
-                secureTextEntry={!showPassword}
-                editable={!loading}
+            <TextField
+              label="Senha"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Sua senha"
+              secureTextEntry={!showPassword}
+              leftIcon="lock"
+              rightIcon={showPassword ? 'eye-off' : 'eye'}
+              rightIconLabel={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+              onRightIconPress={() => setShowPassword(!showPassword)}
+              editable={!loading}
+            />
+
+            <View style={styles.actions}>
+              <Button label="Entrar" onPress={handleLogin} loading={loading} fullWidth />
+              <Button
+                label="Cadastrar"
+                variant="secondary"
+                onPress={() => navigation.navigate('Register', { role: selectedRole })}
+                disabled={loading}
+                fullWidth
               />
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <Feather
-                  name={showPassword ? 'eye-off' : 'eye'}
-                  size={20}
-                  color="#86868B"
-                />
-              </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-              onPress={handleLogin}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.loginButtonText}>Entrar</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.registerButton}
-              onPress={() => navigation.navigate('Register', { role: selectedRole })}
-              disabled={loading}
-            >
-              <Text style={styles.registerButtonText}>Cadastrar</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -169,36 +163,39 @@ export default function LoginScreen({ onLogin }: any) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#FAFAFA' },
-  scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 20 },
+  screen: { flex: 1, backgroundColor: colors.background },
+  scrollContent: { flexGrow: 1, justifyContent: 'center', padding: layout.screenMargin },
   wrapper: { width: '100%', maxWidth: 440, alignSelf: 'center' },
-  brandContainer: { alignItems: 'center', marginBottom: 48 },
-  title: { fontFamily: 'Inter_700Bold', fontSize: 32, color: '#1D1D1F' },
-  offlineBadge: { fontSize: 10, color: '#FF3B30', fontWeight: 'bold', marginTop: 4 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 32, elevation: 4 },
+  brandContainer: { alignItems: 'center', marginBottom: spacing.xxl, gap: spacing.sm },
+  title: { ...typography.display, color: colors.ink },
+  subtitle: { ...typography.body, color: colors.slate500, textAlign: 'center' },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.xl,
+    gap: spacing.lg,
+  },
+  fieldLabel: { ...typography.captionBold, color: colors.slate700, marginBottom: -spacing.sm },
   segmentedControl: {
-    flexDirection: 'row', backgroundColor: '#F5F5F7',
-    borderRadius: 12, padding: 4, marginBottom: 24,
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+    borderRadius: radius.button,
+    padding: spacing.xs,
+    gap: spacing.xs,
   },
-  segmentButton: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
-  segmentButtonActive: { backgroundColor: '#FFFFFF' },
-  segmentText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#86868B' },
-  segmentTextActive: { color: '#1976D2' },
-  input: {
-    height: 52, borderRadius: 12, backgroundColor: '#F5F5F7',
-    paddingHorizontal: 16, marginBottom: 16,
+  segmentButton: {
+    flex: 1,
+    minHeight: layout.minTouch,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  passwordContainer: { flexDirection: 'row', alignItems: 'center' },
-  eyeButton: { position: 'absolute', right: 16 },
-  loginButton: {
-    height: 52, borderRadius: 12, backgroundColor: '#1976D2',
-    alignItems: 'center', justifyContent: 'center', marginTop: 16,
-  },
-  loginButtonDisabled: { backgroundColor: '#90CAF9' },
-  loginButtonText: { color: '#FFFFFF', fontWeight: '600', fontSize: 16 },
-  registerButton: {
-    height: 52, borderRadius: 12, borderWidth: 2, borderColor: '#1976D2',
-    alignItems: 'center', justifyContent: 'center', marginTop: 12,
-  },
-  registerButtonText: { color: '#1976D2', fontWeight: '600' },
+  segmentButtonActive: { backgroundColor: colors.primary },
+  segmentButtonPressed: { backgroundColor: colors.pressedNeutral },
+  segmentText: { ...typography.caption, color: colors.slate700 },
+  segmentTextActive: { ...typography.captionBold, color: colors.onPrimary },
+  actions: { gap: layout.buttonGap, marginTop: spacing.sm },
 });

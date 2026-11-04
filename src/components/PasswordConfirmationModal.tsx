@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Modal, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { Button, TextField } from './ui';
+import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
 interface Props {
   visible: boolean;
@@ -21,31 +23,28 @@ export default function PasswordConfirmationModal({ visible, onConfirm, onCancel
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={() => !loading && onCancel()}>
       <View style={styles.overlay}>
-        <View style={styles.content}>
+        <View style={styles.content} accessibilityViewIsModal>
           <View style={styles.iconContainer}>
-            <Feather name="lock" size={32} color="#1976D2" />
+            <Feather name="lock" size={layout.icon} color={colors.ink} />
           </View>
-          <Text style={styles.title}>Confirmação de Segurança</Text>
-          <Text style={styles.message}>Por favor, informe sua senha atual para autorizar esta alteração cadastral.</Text>
-          
-          <TextInput
-            style={styles.input}
+          <Text style={styles.title} maxFontSizeMultiplier={maxFontSizeMultiplier}>Confirmação de Segurança</Text>
+          <Text style={styles.message} maxFontSizeMultiplier={maxFontSizeMultiplier}>Por favor, informe sua senha atual para autorizar esta alteração cadastral.</Text>
+
+          <TextField
             value={password}
             onChangeText={setPassword}
             placeholder="Sua senha atual"
+            accessibilityLabel="Senha atual"
             secureTextEntry
             autoFocus
+            containerStyle={styles.input}
           />
 
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onCancel} disabled={loading}>
-              <Text style={styles.cancelBtnText}>Cancelar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm} disabled={loading}>
-              {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.confirmBtnText}>Confirmar</Text>}
-            </TouchableOpacity>
+            <Button label="Confirmar" onPress={handleConfirm} loading={loading} fullWidth />
+            <Button label="Cancelar" variant="tertiary" onPress={onCancel} disabled={loading} fullWidth />
           </View>
         </View>
       </View>
@@ -54,15 +53,11 @@ export default function PasswordConfirmationModal({ visible, onConfirm, onCancel
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  content: { backgroundColor: '#FFF', borderRadius: 28, padding: 24, width: '100%', maxWidth: 400, alignItems: 'center' },
-  iconContainer: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#E3F2FD', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  title: { fontSize: 20, fontFamily: 'Inter_700Bold', color: '#1D1D1F', textAlign: 'center', marginBottom: 12 },
-  message: { fontSize: 14, color: '#86868B', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
-  input: { width: '100%', height: 56, backgroundColor: '#F5F5F7', borderRadius: 16, paddingHorizontal: 16, fontSize: 16, marginBottom: 24 },
-  actions: { flexDirection: 'row', gap: 12, width: '100%' },
-  cancelBtn: { flex: 1, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  cancelBtnText: { color: '#86868B', fontFamily: 'Inter_600SemiBold' },
-  confirmBtn: { flex: 2, height: 52, borderRadius: 16, backgroundColor: '#1976D2', alignItems: 'center', justifyContent: 'center' },
-  confirmBtnText: { color: '#FFF', fontFamily: 'Inter_700Bold' }
+  overlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', alignItems: 'center', padding: layout.screenMargin },
+  content: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, width: '100%', maxWidth: 400, alignItems: 'center' },
+  iconContainer: { width: layout.iconSlot, height: layout.iconSlot, borderRadius: radius.pill, backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.lg },
+  title: { ...typography.heading, color: colors.ink, textAlign: 'center', marginBottom: spacing.sm },
+  message: { ...typography.body, color: colors.slate700, textAlign: 'center', marginBottom: spacing.xl },
+  input: { width: '100%', marginBottom: spacing.xl },
+  actions: { gap: layout.buttonGap, width: '100%' },
 });

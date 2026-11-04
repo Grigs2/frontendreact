@@ -3,9 +3,7 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   LayoutAnimation,
   Platform,
   UIManager,
@@ -16,6 +14,8 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DriverLayout from '../components/DriverLayout';
 import { RootStackParamList } from '../navigation';
+import { Button, Chip, ScreenHeader, StateView } from '../components/ui';
+import { borders, colors, layout, radius, spacing, typography } from '../theme';
 
 interface SolicitacaoVinculo {
   id: number;
@@ -47,7 +47,7 @@ export default function DriverInvitesScreen({ navigation }: Props) {
         // Simular persistência do aluno aceito
         const stored = await AsyncStorage.getItem('@accepted_students');
         const acceptedStudents = stored ? JSON.parse(stored) : [];
-        
+
         // Evita duplicatas no mock
         if (!acceptedStudents.find((s: any) => s.id === item.id)) {
           acceptedStudents.push({
@@ -63,7 +63,7 @@ export default function DriverInvitesScreen({ navigation }: Props) {
 
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setInvites(prev => prev.filter(inv => inv.id !== item.id));
-      
+
       if (accept && Platform.OS !== 'web') {
         Alert.alert('Sucesso', `${item.dependenteNome} agora faz parte da sua lista de passageiros.`);
       }
@@ -76,7 +76,7 @@ export default function DriverInvitesScreen({ navigation }: Props) {
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.studentAvatar}>
-          <Feather name="user" size={20} color="#1976D2" />
+          <Feather name="user" size={20} color={colors.ink} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.studentName}>{item.dependenteNome}</Text>
@@ -87,19 +87,21 @@ export default function DriverInvitesScreen({ navigation }: Props) {
       <View style={styles.footer}>
         <Text style={styles.dateInfo}>Solicitado em: {item.dataSolicitacao}</Text>
         <View style={styles.actionButtons}>
-          <TouchableOpacity 
-            style={[styles.actionBtn, styles.rejectBtn]}
+          <Button
+            label="Recusar"
+            variant="tertiary"
+            size="md"
+            icon="x"
+            accessibilityLabel={`Recusar ${item.dependenteNome}`}
             onPress={() => handleResponse(item, false)}
-          >
-            <Feather name="x" size={18} color="#E53935" />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.actionBtn, styles.acceptBtn]}
+          />
+          <Button
+            label="Aceitar"
+            size="md"
+            icon="check"
+            accessibilityLabel={`Aceitar ${item.dependenteNome}`}
             onPress={() => handleResponse(item, true)}
-          >
-            <Feather name="check" size={18} color="#FFFFFF" />
-            <Text style={styles.acceptBtnText}>Aceitar</Text>
-          </TouchableOpacity>
+          />
         </View>
       </View>
     </View>
@@ -108,22 +110,14 @@ export default function DriverInvitesScreen({ navigation }: Props) {
   return (
     <DriverLayout>
       <View style={styles.container}>
-        <View style={styles.headerTitleRow}>
-          <Text style={styles.title}>Convites Pendentes</Text>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{invites.length}</Text>
-          </View>
-        </View>
+        <ScreenHeader title="Convites Pendentes" right={<Chip label={String(invites.length)} tone="warning" />} />
         <FlatList
           data={invites}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderInviteCard}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Feather name="mail" size={60} color="#E0E0E0" />
-              <Text style={styles.emptyText}>Nenhuma solicitação nova.</Text>
-            </View>
+            <StateView kind="empty" icon="mail" title="Nenhuma solicitação nova." />
           }
         />
       </View>
@@ -132,25 +126,15 @@ export default function DriverInvitesScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  headerTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  title: { fontFamily: 'Inter_700Bold', fontSize: 22, color: '#1D1D1F' },
-  badge: { backgroundColor: '#1976D2', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, marginLeft: 10 },
-  badgeText: { color: '#FFFFFF', fontFamily: 'Inter_700Bold', fontSize: 12 },
-  listContent: { paddingBottom: 20 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 16, elevation: 3, borderWidth: 1, borderColor: '#F0F0F0' },
-  cardHeader: { flexDirection: 'row', alignItems: 'center' },
-  studentAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#E3F2FD', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  studentName: { fontFamily: 'Inter_600SemiBold', fontSize: 17, color: '#1D1D1F' },
-  guardianInfo: { fontFamily: 'Inter_400Regular', fontSize: 14, color: '#666666' },
-  divider: { height: 1, backgroundColor: '#F0F0F0', marginVertical: 12 },
-  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  dateInfo: { fontFamily: 'Inter_400Regular', fontSize: 12, color: '#999999' },
-  actionButtons: { flexDirection: 'row' },
-  actionBtn: { height: 40, borderRadius: 8, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', paddingHorizontal: 12 },
-  rejectBtn: { backgroundColor: '#FFEBEE', marginRight: 8 },
-  acceptBtn: { backgroundColor: '#4CAF50' },
-  acceptBtnText: { color: '#FFFFFF', fontFamily: 'Inter_600SemiBold', fontSize: 14, marginLeft: 6 },
-  emptyContainer: { alignItems: 'center', marginTop: 60 },
-  emptyText: { fontFamily: 'Inter_400Regular', fontSize: 16, color: '#888888', marginTop: 12 },
+  container: { flex: 1, padding: layout.screenMargin, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  listContent: { paddingBottom: spacing.xl },
+  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: layout.cardPadding, marginBottom: spacing.lg, borderWidth: borders.hairline, borderColor: colors.border },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  studentAvatar: { width: layout.iconSlot, height: layout.iconSlot, borderRadius: radius.pill, backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center' },
+  studentName: { ...typography.heading, color: colors.ink },
+  guardianInfo: { ...typography.caption, color: colors.slate700 },
+  divider: { height: borders.hairline, backgroundColor: colors.border, marginVertical: spacing.md },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: spacing.md },
+  dateInfo: { ...typography.caption, color: colors.slate500 },
+  actionButtons: { flexDirection: 'row', gap: spacing.sm },
 });

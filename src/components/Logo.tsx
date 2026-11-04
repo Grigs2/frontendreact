@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
+import { colors, fonts, spacing } from '../theme';
 
 interface LogoProps {
   size?: 'small' | 'medium' | 'large';
@@ -21,10 +22,12 @@ export default function Logo({ size = 'medium', showText = true }: LogoProps) {
     <View style={styles.container}>
       <Image
         source={logoImage}
+        accessibilityLabel="Logotipo Tio da Perua"
         style={{ width, height, resizeMode: 'contain' }}
       />
       {showText && size !== 'small' && (
         <Text
+          accessibilityRole="header"
           style={[
             styles.text,
             { fontSize: size === 'large' ? 32 : 20 },
@@ -41,12 +44,11 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.md,
   },
   text: {
-    fontFamily: 'Inter_700Bold',
-    fontWeight: '700',
-    color: '#1D1D1F',
+    fontFamily: fonts.bold,
+    color: colors.ink,
     letterSpacing: -0.5,
   },
 });
