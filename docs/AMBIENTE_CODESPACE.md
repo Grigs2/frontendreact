@@ -189,7 +189,7 @@ Depois, reinicie o serviço (backend: `Ctrl+C` e rode `./mvnw spring-boot:run` d
 - Codespaces para sozinho após um tempo sem uso (padrão de 30 minutos). Você não perde o código.
 - Para retomar: acesse https://github.com/codespaces, clique no codespace e aguarde ligar.
 - Ao retomar, os processos (`spring-boot:run` e `expo start`) **não sobem sozinhos**. Rode-os de novo.
-- O banco Postgres fica no volume `pgdata`, então os dados sobrevivem a paradas. Para zerar o banco, remova o volume (seção 9).
+- O banco Postgres fica no volume `pgdata`, então os dados sobrevivem a paradas. Para zerar o banco, veja a seção 9 do guia do backend.
 - **A URL do backend pode mudar** se você recriar o codespace do backend. Se mudar, atualize `EXPO_PUBLIC_API_URL` no `.env.local` do frontend e reinicie o `expo start`.
 
 ---
