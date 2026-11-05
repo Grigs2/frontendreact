@@ -181,7 +181,7 @@ export default function GuardianInvitesScreen() {
                 </View>
               );
             }}
-            ListEmptyComponent={!loading ? <StateView kind="empty" icon="mail" title="Nenhum convite pendente." /> : null}
+            ListEmptyComponent={!loading ? <StateView kind="empty" icon="mail" title="Nenhum convite pendente." /> : undefined}
           />
         ) : (
           <FlatList
@@ -235,7 +235,7 @@ export default function GuardianInvitesScreen() {
                 </View>
               );
             }}
-            ListEmptyComponent={!loading ? <StateView kind="empty" icon="link" title="Você não possui vínculos ativos." /> : null}
+            ListEmptyComponent={!loading ? <StateView kind="empty" icon="link" title="Você não possui vínculos ativos." /> : undefined}
           />
         )}
 

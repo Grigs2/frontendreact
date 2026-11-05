@@ -13,7 +13,7 @@ export default function DriverMainScreen() {
   return (
     <DriverLayout>
       <View style={styles.webWrapper}>
-        <ScrollView contentContainerStyle={styles.container}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
           <View style={styles.hero}>
             <Text style={styles.greeting} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
               Olá, {currentUser?.nome || 'Motorista'}!
@@ -53,14 +53,17 @@ export default function DriverMainScreen() {
 const styles = StyleSheet.create({
   webWrapper: {
     flex: 1,
-    alignItems: 'center',
     width: '100%',
+  },
+  scroll: {
+    width: '100%',
+    maxWidth: 800,
+    alignSelf: 'center',
   },
   container: {
     padding: layout.screenMargin,
     paddingBottom: spacing.xxl,
     width: '100%',
-    maxWidth: 800,
   },
   hero: { marginTop: spacing.sm, marginBottom: spacing.xl, gap: spacing.xs },
   greeting: { ...typography.display, color: colors.ink },

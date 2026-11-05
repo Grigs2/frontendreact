@@ -15,7 +15,7 @@ export default function SchoolMainScreen({ navigation }: Props) {
 
   return (
     <SchoolLayout>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
         <View style={styles.hero}>
           <Text style={styles.greeting} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
             Olá, {school?.nome || 'Escola'}!
@@ -62,7 +62,8 @@ export default function SchoolMainScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: layout.screenMargin, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  scroll: { width: '100%', maxWidth: 800, alignSelf: 'center' },
+  container: { padding: layout.screenMargin, width: '100%' },
   hero: { marginTop: spacing.sm, marginBottom: spacing.xl, gap: spacing.xs },
   greeting: { ...typography.display, color: colors.ink },
   status: { ...typography.bodyLg, color: colors.slate500 },

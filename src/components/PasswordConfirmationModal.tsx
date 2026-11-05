@@ -23,7 +23,7 @@ export default function PasswordConfirmationModal({ visible, onConfirm, onCancel
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={() => !loading && onCancel()}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={() => { if (!loading) onCancel(); }}>
       <View style={styles.overlay}>
         <View style={styles.content} accessibilityViewIsModal>
           <View style={styles.iconContainer}>

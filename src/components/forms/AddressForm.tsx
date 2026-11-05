@@ -90,7 +90,7 @@ export default function AddressForm({ value, onChange, errors = {}, editable = t
   const [lookup, setLookup] = useState<LookupState>('idle');
   const [lookupMessage, setLookupMessage] = useState<string | null>(null);
   const lastLookup = useRef<string>(onlyDigits(value.cep));
-  const numeroRef = useRef<TextInput>(null);
+  const numeroRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
   const set = (field: keyof AddressValue) => (text: string) => onChange({ ...value, [field]: text });
 

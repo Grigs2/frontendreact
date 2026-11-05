@@ -90,7 +90,7 @@ export default function GuardianDependentsScreen() {
           contentContainerStyle={styles.list}
           renderItem={renderItem}
           ListEmptyComponent={
-            !loading ? <StateView kind="empty" icon="users" title="Nenhum dependente cadastrado." /> : null
+            !loading ? <StateView kind="empty" icon="users" title="Nenhum dependente cadastrado." /> : undefined
           }
         />
       </View>

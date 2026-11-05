@@ -26,7 +26,7 @@ interface TextFieldProps extends TextInputProps {
   containerStyle?: StyleProp<ViewStyle>;
 }
 
-const TextField = forwardRef<TextInput, TextFieldProps>(function TextField(
+const TextField = forwardRef<React.ComponentRef<typeof TextInput>, TextFieldProps>(function TextField(
   {
     label,
     error,

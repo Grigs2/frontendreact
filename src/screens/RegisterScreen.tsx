@@ -82,7 +82,7 @@ type Errors = Record<string, string | null | undefined>;
 
 export default function RegisterScreen({ navigation, route }: Props) {
   const { showToast, setCurrentUser } = useAppContext();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   const [role, setRole] = useState<RegisterRole>(route.params?.role ?? 'guardian');
   const [stepIndex, setStepIndex] = useState(0);

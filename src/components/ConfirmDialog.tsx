@@ -28,7 +28,7 @@ export default function ConfirmDialog({
   destructive = true
 }: Props) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={() => !loading && onCancel()}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={() => { if (!loading) onCancel(); }}>
       <View style={styles.overlay}>
         <View style={styles.content} accessibilityViewIsModal>
           <View style={[styles.iconContainer, destructive ? styles.iconDestructive : styles.iconInfo]}>

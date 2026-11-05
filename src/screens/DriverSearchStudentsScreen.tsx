@@ -106,7 +106,7 @@ export default function DriverSearchStudentsScreen() {
                   />
                 </View>
               )}
-              ListEmptyComponent={!loading ? <StateView kind="empty" icon="users" title="Nenhum novo aluno para solicitar neste período." /> : null}
+              ListEmptyComponent={!loading ? <StateView kind="empty" icon="users" title="Nenhum novo aluno para solicitar neste período." /> : undefined}
             />
 
             <View style={styles.footer}>

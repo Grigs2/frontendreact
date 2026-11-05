@@ -72,7 +72,7 @@ export default function DriverStudentsScreen() {
           ListEmptyComponent={
             !loading ? (
               <StateView kind="empty" icon="users" title="Nenhum passageiro vinculado encontrado." />
-            ) : null
+            ) : undefined
           }
         />
       </View>

@@ -50,7 +50,7 @@ export default function NoticeBoardScreen() {
         ListEmptyComponent={
           !loading ? (
             <StateView kind="empty" icon="bell-off" title="Nenhum aviso no momento." />
-          ) : null
+          ) : undefined
         }
         renderItem={({ item }) => (
           <View style={[styles.card, !item.visto && styles.unreadCard]}>

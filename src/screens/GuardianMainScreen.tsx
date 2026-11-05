@@ -39,7 +39,7 @@ export default function GuardianMainScreen({ navigation }: Props) {
       <GuardianLayout>
         <StatusBar barStyle="dark-content" />
         <View style={styles.webWrapper}>
-          <ScrollView contentContainerStyle={styles.gridContainer}>
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.gridContainer}>
             <View style={styles.hero}>
               <Text style={styles.greeting} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
                 Olá, {currentUser?.nome || 'Responsável'}!
@@ -62,8 +62,12 @@ export default function GuardianMainScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   webWrapper: {
     flex: 1,
-    alignItems: 'center',
     width: '100%',
+  },
+  scroll: {
+    width: '100%',
+    maxWidth: 800,
+    alignSelf: 'center',
   },
   hero: { marginTop: spacing.sm, marginBottom: spacing.xl, gap: spacing.xs },
   greeting: { ...typography.display, color: colors.ink },
@@ -71,10 +75,9 @@ const styles = StyleSheet.create({
   gridContainer: {
     padding: layout.screenMargin,
     paddingBottom: spacing.xxl,
-    width: '100%',
-    maxWidth: 800,
   },
   grid: {
+    width: '100%',
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: layout.gridGap,

@@ -13,6 +13,7 @@ import { Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Logo from './Logo';
+import BottomTabBar, { BottomTab } from './BottomTabBar';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { authService } from '../services/authService';
@@ -61,6 +62,28 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
+export const BOTTOM_TABS: Record<LayoutRole, BottomTab[]> = {
+  driver: [
+    { key: 'DriverMain', label: 'Início', icon: 'home' },
+    { key: 'DriverTrips', label: 'Roteiro', icon: 'map-pin' },
+    { key: 'DriverAttendance', label: 'Chamada', icon: 'clipboard' },
+    { key: 'DriverVehicle', label: 'Veículo', icon: 'truck' },
+    { key: 'DriverProfile', label: 'Perfil', icon: 'user' },
+  ],
+  guardian: [
+    { key: 'GuardianMain', label: 'Início', icon: 'home' },
+    { key: 'GuardianInvites', label: 'Convite', icon: 'mail' },
+    { key: 'GuardianTracking', label: 'Rastreio', icon: 'navigation' },
+    { key: 'GuardianDependents', label: 'Alunos', icon: 'users' },
+    { key: 'GuardianProfile', label: 'Perfil', icon: 'user' },
+  ],
+  school: [
+    { key: 'SchoolMain', label: 'Início', icon: 'home' },
+    { key: 'NotificationList', label: 'Notificações', icon: 'bell' },
+    { key: 'SchoolProfile', label: 'Perfil', icon: 'user' },
+  ],
+};
+
 export default function AppLayout({ role, children }: AppLayoutProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
@@ -82,6 +105,10 @@ export default function AppLayout({ role, children }: AppLayoutProps) {
       Animated.timing(translateX, { toValue: -DRAWER_WIDTH, duration: 200, useNativeDriver: true }),
       Animated.timing(overlayOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
     ]).start(() => setDrawerOpen(false));
+  };
+
+  const handleTabPress = (key: string) => {
+    if (route.name !== key) navigation.navigate(key as any);
   };
 
   const handleMenuPress = (key: string) => {
@@ -120,6 +147,9 @@ export default function AppLayout({ role, children }: AppLayoutProps) {
 
       {/* Page Content */}
       <View style={styles.content}>{children}</View>
+
+      {/* Bottom Tabs */}
+      <BottomTabBar items={BOTTOM_TABS[role]} activeKey={route.name} onPress={handleTabPress} />
 
       {/* Drawer Overlay */}
       {drawerOpen && (
@@ -221,7 +251,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     backgroundColor: colors.overlay,
     zIndex: 10,
   },
