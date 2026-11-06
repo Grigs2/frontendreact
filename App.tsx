@@ -34,6 +34,8 @@ import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import ForgotPasswordCodeScreen from './src/screens/ForgotPasswordCodeScreen';
 import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import SessionExpiryHandler from './src/components/SessionExpiryHandler';
+import TermsReacceptGate from './src/components/TermsReacceptGate';
+import PushNotificationsHandler from './src/components/PushNotificationsHandler';
 import { colors } from './src/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -123,6 +125,8 @@ export default function App() {
             </Stack.Navigator>
           </NavigationContainer>
           <SessionExpiryHandler />
+          <TermsReacceptGate />
+          <PushNotificationsHandler />
           <Toast />
           <StatusBar style="dark" />
         </View>

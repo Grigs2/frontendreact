@@ -4,7 +4,7 @@ import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import DriverLayout from '../components/DriverLayout';
 import { useAppContext } from '../context/AppContext';
-import { viagemService } from '../services/viagemService';
+import { periodoLabel, viagemService } from '../services/viagemService';
 import { DependenteDTO, MotoristaDTO } from '../types';
 import { Chip, ScreenHeader, StateView } from '../components/ui';
 import { borders, colors, layout, radius, spacing, typography } from '../theme';
@@ -50,7 +50,7 @@ export default function DriverStudentsScreen() {
       </View>
       <View style={styles.info}>
         <Text style={styles.name}>{item.nome}</Text>
-        <Text style={styles.detail}>Período: {item.periodo.replace('_', ' ')}</Text>
+        <Text style={styles.detail}>Período: {periodoLabel(item.periodo)}</Text>
         <Text style={styles.detail}>Escola: {item.escola?.nome || 'N/A'}</Text>
       </View>
       <Chip label="Ativo" tone="success" />

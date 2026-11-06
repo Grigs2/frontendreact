@@ -5,7 +5,7 @@ import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native'
 import GuardianLayout from '../components/GuardianLayout';
 import { useAppContext } from '../context/AppContext';
 import { responsavelService } from '../services/responsavelService';
-import { viagemService } from '../services/viagemService';
+import { periodoLabel, viagemService } from '../services/viagemService';
 import { ResponsavelDTO, MotoristaViagemDTO, ViagemDiaDTO, ViagemDTO, MonitoramentoDTO, MonitoramentoItemDTO } from '../types';
 import StatusBadge from '../components/StatusBadge';
 import { Chip, ScreenHeader, StateView } from '../components/ui';
@@ -236,7 +236,7 @@ export default function GuardianMonitoringScreen() {
               <View style={styles.currentTripCard}>
                 <View style={styles.cardHeader}>
                   <Chip
-                    label={currentTripDetails?.trip?.periodo?.replace('_', ' ') || monitorData.statusAtual.periodoViagem?.replace('_', ' ') || 'Período N/A'}
+                    label={periodoLabel(currentTripDetails?.trip?.periodo || monitorData.statusAtual.periodoViagem) || 'Período não informado'}
                     tone="info"
                     icon="clock"
                   />
@@ -301,7 +301,7 @@ export default function GuardianMonitoringScreen() {
                 {historyDetails.map((item, index) => (
                   <View key={index} style={styles.historyCard}>
                     <View style={styles.historyTop}>
-                      <Chip label={item.periodo?.replace('_', ' ') || 'Período N/A'} tone="neutral" size="sm" />
+                      <Chip label={periodoLabel(item.periodo) || 'Período não informado'} tone="neutral" size="sm" />
                       <Text style={styles.historyDate}>{formatDate(item.dataExibicao)}</Text>
                     </View>
 

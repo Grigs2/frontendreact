@@ -19,13 +19,14 @@ import { responsavelService } from '../services/responsavelService';
 import { escolaService } from '../services/escolaService';
 import { authService } from '../services/authService';
 import PasswordConfirmationModal from '../components/PasswordConfirmationModal';
-import { Button, Card, Chip, StateView, TextField } from '../components/ui';
+import { Button, Card, Chip, ListRow, StateView, TextField } from '../components/ui';
 import {
   AddressForm,
   AddressErrors,
   AddressValue,
   EMPTY_ADDRESS,
   PasswordStrength,
+  TermsModal,
   formatAddress,
   fromEnderecoOperacional,
   hasErrors,
@@ -50,6 +51,24 @@ type Section = 'pessoais' | 'contato' | 'endereco' | 'senha';
 
 const ROLE_LABEL = { MOTORISTA: 'Motorista', RESPONSAVEL: 'Responsável', ESCOLA: 'Escola' } as const;
 
+type MoreOption = { route: string; title: string; caption: string; icon: React.ComponentProps<typeof Feather>['name'] };
+
+/** Telas que saíram do menu lateral e não são abas. */
+const MORE_OPTIONS: Record<'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA', MoreOption[]> = {
+  MOTORISTA: [
+    { route: 'DriverVehicle', title: 'Meu veículo', caption: 'Modelo, placa e capacidade', icon: 'truck' },
+    { route: 'NotificationList', title: 'Notificações', caption: 'Avisos recebidos e enviados', icon: 'bell' },
+    { route: 'DriverHelp', title: 'Ajuda', caption: 'Dúvidas sobre o aplicativo', icon: 'help-circle' },
+  ],
+  RESPONSAVEL: [
+    { route: 'GuardianHistory', title: 'Histórico de viagens', caption: 'Embarques e desembarques', icon: 'clock' },
+    { route: 'NotificationList', title: 'Notificações', caption: 'Avisos recebidos e enviados', icon: 'bell' },
+    { route: 'GuardianPlans', title: 'Planos', caption: 'Em breve', icon: 'credit-card' },
+    { route: 'GuardianHelp', title: 'Ajuda', caption: 'Dúvidas sobre o aplicativo', icon: 'help-circle' },
+  ],
+  ESCOLA: [],
+};
+
 export default function ProfileScreen({ navigation }: Props) {
   const { currentUser, userRole, setCurrentUser, showToast } = useAppContext();
   const profile = currentUser as any;
@@ -59,6 +78,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const [refreshing, setRefreshing] = useState(true);
   const [editing, setEditing] = useState<Section | null>(null);
+  const [termsVisible, setTermsVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
 
@@ -116,6 +136,13 @@ export default function ProfileScreen({ navigation }: Props) {
   useEffect(() => {
     if (!editing) resetFields();
   }, [currentUser, editing, resetFields]);
+
+  // Revoga a sessão no backend (sem bloquear a saída se a rede falhar) e volta ao login.
+  const handleLogout = async () => {
+    await authService.sair();
+    setCurrentUser(null, null);
+    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+  };
 
   const startEditing = (section: Section) => {
     resetFields();
@@ -482,7 +509,34 @@ export default function ProfileScreen({ navigation }: Props) {
             <ReadOnlyRow label="Senha" value="••••••••••••" />
           )}
         </Card>
+
+        {/* Mais opções: telas que não são abas da barra inferior */}
+        <Card style={styles.moreCard}>
+          <Text style={styles.sectionTitle} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
+            Mais opções
+          </Text>
+          {MORE_OPTIONS[userRole ?? 'RESPONSAVEL'].map((item, index) => (
+            <ListRow
+              key={item.route}
+              icon={item.icon}
+              title={item.title}
+              caption={item.caption}
+              divider={index > 0}
+              onPress={() => navigation.navigate(item.route as any)}
+            />
+          ))}
+          <ListRow
+            icon="file-text"
+            title="Termos e privacidade"
+            caption="Termos de Uso, Política de Privacidade e PDF"
+            divider
+            onPress={() => setTermsVisible(true)}
+          />
+          <ListRow icon="log-out" title="Sair da conta" tone="danger" divider onPress={handleLogout} />
+        </Card>
       </ScrollView>
+
+      <TermsModal visible={termsVisible} onClose={() => setTermsVisible(false)} />
 
       <PasswordConfirmationModal
         visible={showPasswordModal}
@@ -517,4 +571,5 @@ const styles = StyleSheet.create({
   readEmpty: { color: colors.slate500 },
   hint: { ...typography.caption, color: colors.slate500 },
   sectionActions: { gap: layout.buttonGap },
+  moreCard: { gap: spacing.xs },
 });

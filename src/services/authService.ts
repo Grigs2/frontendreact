@@ -1,5 +1,8 @@
+import axios from 'axios';
 import { api, API_ENDPOINTS } from './api';
 import { authSession } from './authSession';
+import { pushService } from './pushService';
+import { BASE_URL, REQUEST_TIMEOUT_MS } from './config';
 import { AutenticacaoResponseDTO, EscolaDTO, MotoristaDTO, ResponsavelDTO, TipoPerfil } from '../types';
 
 export type AppRole = 'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA';
@@ -56,17 +59,32 @@ export const authService = {
     }
   },
 
-  /** Encerra a sessão no backend (revoga o refresh token) e descarta os tokens locais. */
+  /**
+   * Descarta os tokens locais primeiro e só depois pede ao backend para revogar o refresh token (sem esperar).
+   * Assim a tela de login, aberta logo em seguida, não encontra a sessão antiga e não entra de novo sozinha.
+   */
   sair: async () => {
     const refreshToken = await authSession.getRefreshToken();
-    try {
-      if (refreshToken && authSession.getAccessToken()) {
-        await api.post(API_ENDPOINTS.sair, { refreshToken });
-      }
-    } catch (error) {
-      console.warn('[authService] Falha ao encerrar sessão no servidor:', error);
-    } finally {
-      await authSession.clear();
+    const accessToken = authSession.getAccessToken();
+    const pushToken = pushService.getToken();
+    pushService.esquecer();
+    await authSession.clear();
+    if (pushToken && accessToken) {
+      // Este aparelho para de receber push da conta que saiu.
+      axios
+        .post(`${BASE_URL}${API_ENDPOINTS.removerDispositivo}`, { expoToken: pushToken }, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          timeout: REQUEST_TIMEOUT_MS,
+        })
+        .catch((error) => console.warn('[authService] Falha ao remover o aparelho do push:', error));
+    }
+    if (refreshToken && accessToken) {
+      axios
+        .post(`${BASE_URL}${API_ENDPOINTS.sair}`, { refreshToken }, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          timeout: REQUEST_TIMEOUT_MS,
+        })
+        .catch((error) => console.warn('[authService] Falha ao encerrar sessão no servidor:', error));
     }
   },
 
@@ -86,5 +104,17 @@ export const authService = {
 
   redefinirSenha: async (token: string, novaSenha: string) => {
     await api.post(API_ENDPOINTS.redefinirSenha, { token, novaSenha });
+  },
+
+  /** Novo aceite da versão vigente dos termos (quando o login devolve termosPendentes = true). */
+  aceitarTermos: async () => {
+    await api.post(API_ENDPOINTS.aceitarTermos);
+    await authSession.setTermosPendentes(false);
+  },
+
+  /** Versão vigente e caminho do PDF dos termos (rota pública). */
+  termosVigente: async (): Promise<{ versao: string | null; caminhoPdf: string }> => {
+    const response = await api.get(API_ENDPOINTS.termosVigente);
+    return response.data;
   },
 };

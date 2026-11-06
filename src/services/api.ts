@@ -19,9 +19,15 @@ const PUBLIC_ROUTES = [
   '/Motorista/Cadastrar',
   '/Responsavel/Cadastrar',
   '/Escola/Cadastrar',
+  '/Termos/vigente',
 ];
 
-const isPublic = (url?: string) => !!url && PUBLIC_ROUTES.some((route) => url.startsWith(route));
+// Comparação exata do caminho: "/Responsavel/CadastrarDependente/2" NÃO é pública só por começar com "/Responsavel/Cadastrar".
+const isPublic = (url?: string) => {
+  if (!url) return false;
+  const path = url.split('?')[0].replace(/\/+$/, '');
+  return PUBLIC_ROUTES.includes(path);
+};
 
 // Mensagem do SecurityJsonExceptionHandler do backend quando o token é ausente/inválido/expirado.
 // Outros 401 (ex.: "senha atual incorreta" em AlterarInfos/AlterarSenha) são regra de negócio e não renovam a sessão.
@@ -119,6 +125,16 @@ export const API_ENDPOINTS = {
   visualizarViagem: (idViagem: number) => `/Viagem/Visualizar/${idViagem}`,
   dependentesDisponiveis: (idViagem: number) => `/Viagem/DependentesDisponiveis/${idViagem}`,
   solicitarDependente: (idViagem: number, idDependente: number) => `/Viagem/SolicitarDependente/${idViagem}/${idDependente}`,
+
+  // Busca e solicitações nos dois sentidos
+  buscarEscolasMotorista: '/Motorista/Escolas',
+  solicitacoesMotorista: (idMotorista: number) => `/Motorista/${idMotorista}/Solicitacoes`,
+  responderSolicitacaoMotorista: (idSolicitacao: number) => `/Motorista/Solicitacoes/${idSolicitacao}/Responder`,
+  buscarMotoristas: (idResponsavel: number) => `/Responsavel/${idResponsavel}/Motoristas/Buscar`,
+  solicitarTransporte: (idViagem: number, idDependente: number) => `/Responsavel/SolicitarTransporte/${idViagem}/${idDependente}`,
+  enderecosDependente: (idDependente: number) => `/Responsavel/Dependente/${idDependente}/Enderecos`,
+  enderecoDependente: (idDependente: number, idEndereco: number) => `/Responsavel/Dependente/${idDependente}/Enderecos/${idEndereco}`,
+  atualizarVeiculo: (idMotorista: number) => `/Motorista/${idMotorista}/Veiculo`,
   
   iniciarViagemDia: (idViagem: number) => `/Viagem/IniciarViagemDia/${idViagem}`,
   alterarStatusViagemDia: '/Viagem/AlterarStatusViagemDia',
@@ -130,4 +146,18 @@ export const API_ENDPOINTS = {
   listarNotificacoes: (idUsuario: number) => `/Notificacao/Listar/${idUsuario}`,
   visualizarNotificacao: (idNotificacao: number) => `/Notificacao/VisualizarNotificacao/${idNotificacao}`,
   listarUsuariosNotificacao: '/Notificacao/ListarUsuarios',
+  contarNaoLidas: '/Notificacao/NaoLidas/Contagem',
+  marcarTodasLidas: '/Notificacao/MarcarTodasLidas',
+  registrarDispositivo: '/Notificacao/Dispositivos',
+  removerDispositivo: '/Notificacao/Dispositivos/Remover',
+
+  historicoDependente: (idDependente: number) => `/Responsavel/Dependente/${idDependente}/Historico`,
+  ausencias: (idDependente: number) => `/Responsavel/Dependente/${idDependente}/Ausencias`,
+  cancelarAusencia: (idDependente: number, idAusencia: number) =>
+    `/Responsavel/Dependente/${idDependente}/Ausencias/${idAusencia}`,
+  avisarAtraso: (idViagemDia: number) => `/Viagem/ViagemDia/${idViagemDia}/Atraso`,
+  historicoPresencaViagemDia: (idViagemDia: number) => `/Viagem/HistoricoPresenca/${idViagemDia}`,
+
+  termosVigente: '/Termos/vigente',
+  aceitarTermos: '/Autenticacao/AceitarTermos',
 };

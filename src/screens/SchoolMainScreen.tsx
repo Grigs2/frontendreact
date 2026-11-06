@@ -1,77 +1,65 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import SchoolLayout from '../components/SchoolLayout';
-import { Card, Chip, ShortcutCard } from '../components/ui';
-import { colors, layout, maxFontSizeMultiplier, spacing, typography } from '../theme';
+import { Greeting, Grid, HighlightCard, HomeScroll, SectionTitle, homeStyles } from '../components/HomeBlocks';
+import { Card, ListRow, ShortcutCard } from '../components/ui';
+import { EscolaDTO } from '../types';
+import { colors, maxFontSizeMultiplier, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SchoolMain'>;
 
+/** Início da escola: dados da instituição, avisos e acesso ao perfil. */
 export default function SchoolMainScreen({ navigation }: Props) {
   const { currentUser } = useAppContext();
-  const school = currentUser as any;
+  const school = currentUser as EscolaDTO;
+  const endereco = school?.enderecoOperacionalDTO;
 
   return (
     <SchoolLayout>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
-        <View style={styles.hero}>
-          <Text style={styles.greeting} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
-            Olá, {school?.nome || 'Escola'}!
-          </Text>
-          <Text style={styles.status} maxFontSizeMultiplier={maxFontSizeMultiplier}>Bem-vindo ao Painel da Escola</Text>
-        </View>
+      <View style={homeStyles.wrapper}>
+        <HomeScroll>
+          <Greeting name={school?.nome} subtitle="Painel da escola" />
 
-        <Card variant="muted" style={styles.infoCard}>
-          <Chip label="Em breve" tone="info" icon="info" />
-          <Text style={styles.infoText} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-            As funcionalidades para o perfil Escola estão sendo implementadas e estarão disponíveis em breve.
-          </Text>
-        </Card>
-
-        <View style={styles.grid}>
-          <ShortcutCard
-            label="Notificações"
-            caption="Ver avisos recebidos"
-            icon="bell"
-            onPress={() => navigation.navigate('NotificationList')}
+          <HighlightCard
+            chip="Em breve"
+            chipTone="info"
+            icon="info"
+            title="Acompanhamento dos alunos"
+            lines={['Em breve a escola verá os motoristas vinculados e o embarque dos seus alunos.']}
           />
-        </View>
 
-        <Card style={styles.details}>
-          <Text style={styles.detailTitle} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
-            Dados da Instituição
-          </Text>
-          <View>
-            <Text style={styles.detailLabel} maxFontSizeMultiplier={maxFontSizeMultiplier}>Administrador</Text>
-            <Text style={styles.detailValue} maxFontSizeMultiplier={maxFontSizeMultiplier}>{school?.admResponsavel}</Text>
-          </View>
-          <View>
-            <Text style={styles.detailLabel} maxFontSizeMultiplier={maxFontSizeMultiplier}>E-mail</Text>
-            <Text style={styles.detailValue} maxFontSizeMultiplier={maxFontSizeMultiplier}>{school?.usuarioDTO?.email}</Text>
-          </View>
-          <View>
-            <Text style={styles.detailLabel} maxFontSizeMultiplier={maxFontSizeMultiplier}>Endereço</Text>
-            <Text style={styles.detailValue} maxFontSizeMultiplier={maxFontSizeMultiplier}>{school?.usuarioDTO?.endereco}</Text>
-          </View>
-        </Card>
-      </ScrollView>
+          <SectionTitle>Atalhos</SectionTitle>
+          <Grid>
+            <ShortcutCard label="Avisos" icon="bell" caption="Notificações" onPress={() => navigation.navigate('NotificationList')} />
+            <ShortcutCard label="Perfil" icon="user" caption="Dados da escola" onPress={() => navigation.navigate('SchoolProfile')} />
+          </Grid>
+
+          <Card>
+            <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
+              Dados da instituição
+            </Text>
+            <ListRow icon="user" title={school?.admResponsavel || '—'} caption="Administrador responsável" />
+            <ListRow icon="mail" title={school?.usuarioDTO?.email || '—'} caption="E-mail" divider />
+            <ListRow
+              icon="map-pin"
+              title={
+                endereco
+                  ? `${endereco.logradouro}, ${endereco.numero} - ${endereco.bairro}`
+                  : school?.usuarioDTO?.endereco || '—'
+              }
+              caption={endereco ? `${endereco.cidade}/${endereco.uf}` : 'Endereço'}
+              divider
+            />
+          </Card>
+        </HomeScroll>
+      </View>
     </SchoolLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { width: '100%', maxWidth: 800, alignSelf: 'center' },
-  container: { padding: layout.screenMargin, width: '100%' },
-  hero: { marginTop: spacing.sm, marginBottom: spacing.xl, gap: spacing.xs },
-  greeting: { ...typography.display, color: colors.ink },
-  status: { ...typography.bodyLg, color: colors.slate500 },
-  infoCard: { gap: spacing.sm },
-  infoText: { ...typography.body, color: colors.ink },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: layout.gridGap, marginTop: spacing.xl },
-  details: { marginTop: spacing.xl },
-  detailTitle: { ...typography.heading, color: colors.ink },
-  detailLabel: { ...typography.caption, color: colors.slate500 },
-  detailValue: { ...typography.bodyLg, color: colors.ink },
+  title: { ...typography.heading, color: colors.ink },
 });

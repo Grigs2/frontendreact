@@ -24,6 +24,8 @@ const storage = {
 let accessToken: string | null = null;
 let accessTokenExpiresAt = 0;
 let perfil: PerfilAutenticadoDTO | null = null;
+// Versão dos termos mudou desde o último aceite: o app pede um novo aceite antes de seguir.
+let termosPendentes = false;
 let refreshInFlight: Promise<AutenticacaoResponseDTO> | null = null;
 let sessionExpiredHandler: (() => void) | null = null;
 
@@ -37,6 +39,10 @@ const plain = axios.create({
 export const authSession = {
   getAccessToken: () => accessToken,
   getPerfil: () => perfil,
+  getTermosPendentes: () => termosPendentes,
+  async setTermosPendentes(valor: boolean) {
+    termosPendentes = valor;
+  },
 
   /** true quando o access token vence nos próximos `marginMs` (renovação proativa antes de enviar). */
   isAccessTokenExpiring: (marginMs = 30000) => !!accessToken && Date.now() >= accessTokenExpiresAt - marginMs,
@@ -45,6 +51,7 @@ export const authSession = {
     accessToken = response.accessToken;
     accessTokenExpiresAt = Date.now() + (response.accessTokenExpiresIn || 0) * 1000;
     perfil = response.perfil;
+    termosPendentes = !!response.termosPendentes;
     try {
       await storage.set(REFRESH_TOKEN_KEY, response.refreshToken);
     } catch (error) {
@@ -65,6 +72,7 @@ export const authSession = {
     accessToken = null;
     accessTokenExpiresAt = 0;
     perfil = null;
+    termosPendentes = false;
     try {
       await storage.remove(REFRESH_TOKEN_KEY);
     } catch {

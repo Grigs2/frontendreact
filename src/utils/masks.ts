@@ -29,6 +29,13 @@ export const maskCEP = (value: string) => apply(onlyDigits(value).slice(0, 8), '
 /** DD/MM/AAAA */
 export const maskDate = (value: string) => apply(onlyDigits(value).slice(0, 8), '00/00/0000');
 
+/** Placa: ABC-1234 (antiga) ou ABC1D23 (Mercosul), sempre em maiúsculas. */
+export const maskPlate = (value: string) => {
+  const raw = (value || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 7);
+  const isOld = raw.length >= 5 && /\d/.test(raw[4]);
+  return isOld && raw.length > 3 ? `${raw.slice(0, 3)}-${raw.slice(3)}` : raw;
+};
+
 /** CNH: 11 dígitos, sem separadores */
 export const maskCNH = (value: string) => onlyDigits(value).slice(0, 11);
 

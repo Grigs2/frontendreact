@@ -1,257 +1,181 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { useIsFocused } from '@react-navigation/native';
+import React, { useCallback, useState } from 'react';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppContext } from '../context/AppContext';
 import GuardianLayout from '../components/GuardianLayout';
-import StatusBadge from '../components/StatusBadge';
-import { responsavelService } from '../services/responsavelService';
-import { viagemService } from '../services/viagemService';
-import { ResponsavelDTO, SolicitacaoDTO } from '../types';
-
 import ConfirmDialog from '../components/ConfirmDialog';
-import { Button, ScreenHeader, SegmentedControl, StateView } from '../components/ui';
-import { borders, colors, layout, radius, spacing, typography } from '../theme';
+import { responsavelService } from '../services/responsavelService';
+import { periodoLabel } from '../services/viagemService';
+import { ResponsavelDTO, SolicitacaoDTO } from '../types';
+import { Button, Card, Chip, ScreenHeader, SegmentedControl, StateView } from '../components/ui';
+import { getApiErrorMessage } from '../utils/apiError';
+import { colors, layout, maxFontSizeMultiplier, spacing, typography } from '../theme';
 
+type Tab = 'CONVITES' | 'PEDIDOS' | 'ATIVOS';
+
+const formatDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '');
+
+/**
+ * Vínculos do responsável:
+ * - Convites: o motorista convidou o aluno (o responsável aceita ou recusa);
+ * - Pedidos: o responsável pediu vaga (aguardando o motorista);
+ * - Ativos: transporte em andamento, com opção de encerrar.
+ */
 export default function GuardianInvitesScreen() {
-  const isFocused = useIsFocused();
+  const navigation = useNavigation<any>();
   const { currentUser, pendingSolicitations, updateSolicitations, showToast } = useAppContext();
-
-  const [activeTab, setActiveTab] = useState<'TRIP' | 'DRIVER'>('TRIP');
-  const [loading, setLoading] = useState(false);
-  const [loadingPeriods, setLoadingPeriods] = useState(false);
-  const [showConfirmUnlink, setShowConfirmUnlink] = useState(false);
-  const [selectedSolId, setSelectedSolId] = useState<number | null>(null);
-
-  const tripCache = useRef<Record<number, string>>({});
-
   const guardian = currentUser as ResponsavelDTO;
 
-  const enrichSolicitations = useCallback(async (sols: SolicitacaoDTO[]) => {
-    const uniqueViagemIds = Array.from(new Set(sols.map(s => s.viagemId)));
-    const neededIds = uniqueViagemIds.filter(id => !tripCache.current[id]);
+  const [tab, setTab] = useState<Tab>('CONVITES');
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [unlinkId, setUnlinkId] = useState<number | null>(null);
 
-    if (neededIds.length > 0) {
-      setLoadingPeriods(true);
-      try {
-        await Promise.all(neededIds.map(async (id) => {
-          try {
-            const trip = await viagemService.visualizar(id);
-            if (trip?.periodo) {
-              tripCache.current[id] = trip.periodo;
-            }
-          } catch (e) {
-            console.warn(`Failed to fetch period for trip ${id}`, e);
-          }
-        }));
-      } finally {
-        setLoadingPeriods(false);
-      }
-    }
-
-    const enriched = sols.map(s => ({
-      ...s,
-      periodo: s.periodo || tripCache.current[s.viagemId] || 'N/A'
-    }));
-    updateSolicitations(enriched);
-  }, [updateSolicitations]);
-
-  const loadData = async () => {
+  const load = useCallback(async () => {
     if (!guardian?.id) return;
     setLoading(true);
     try {
-      const sols = await responsavelService.listarSolicitacoes(guardian.id);
-      await enrichSolicitations(sols);
+      updateSolicitations(await responsavelService.listarSolicitacoes(guardian.id));
     } catch (error) {
-      console.error('Error loading solicitations:', error);
-      showToast('Erro ao carregar solicitações.', 'error');
+      showToast(getApiErrorMessage(error, 'Não foi possível carregar os vínculos.'), 'error');
     } finally {
       setLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guardian?.id]);
 
-  useEffect(() => {
-    if (isFocused && guardian?.id) {
-      loadData();
-    }
-  }, [isFocused]);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
-  const handleTripResponse = async (solId: number, accept: boolean) => {
-    setLoading(true);
+  const convites = pendingSolicitations.filter((s) => !s.respondido && s.origem !== 'RESPONSAVEL');
+  const pedidos = pendingSolicitations.filter((s) => !s.respondido && s.origem === 'RESPONSAVEL');
+  const ativos = pendingSolicitations.filter((s) => s.aceito && !s.dataFim);
+  const data = tab === 'CONVITES' ? convites : tab === 'PEDIDOS' ? pedidos : ativos;
+
+  const alunoNome = (s: SolicitacaoDTO) =>
+    s.dependenteNome || guardian?.dependentes?.find((d) => d.id === s.dependenteId)?.nome || `Aluno #${s.dependenteId}`;
+
+  const respond = async (item: SolicitacaoDTO, aceito: boolean) => {
+    if (!item.id) return;
+    setBusyId(item.id);
     try {
-      await responsavelService.responderSolicitacao(solId, accept);
-      showToast(accept ? 'Solicitação aceita!' : 'Solicitação recusada.', 'success');
-      loadData();
+      await responsavelService.responderSolicitacao(item.id, aceito);
+      showToast(aceito ? `${alunoNome(item)} entrou na viagem.` : 'Convite recusado.', aceito ? 'success' : 'info');
+      load();
     } catch (error) {
-      showToast('Não foi possível registrar a resposta.', 'error');
+      showToast(getApiErrorMessage(error, 'Não foi possível registrar a resposta.'), 'error');
     } finally {
-      setLoading(false);
+      setBusyId(null);
     }
   };
 
-  const handleUnlink = async () => {
-    if (selectedSolId === null) return;
-    setLoading(true);
+  const unlink = async () => {
+    if (unlinkId === null) return;
+    setBusyId(unlinkId);
     try {
-      await responsavelService.encerrarVinculo(selectedSolId);
-      showToast('Vínculo encerrado com sucesso!', 'success');
-      setShowConfirmUnlink(false);
-      setSelectedSolId(null);
-      loadData();
+      await responsavelService.encerrarVinculo(unlinkId);
+      showToast('Transporte encerrado.', 'success');
+      setUnlinkId(null);
+      load();
     } catch (error) {
-      showToast('Não foi possível encerrar o vínculo.', 'error');
+      showToast(getApiErrorMessage(error, 'Não foi possível encerrar o vínculo.'), 'error');
     } finally {
-      setLoading(false);
+      setBusyId(null);
     }
   };
 
-  const tripInvites = pendingSolicitations.filter(s => !s.respondido);
-  const linkedDrivers = pendingSolicitations.filter(s => s.aceito && !s.dataFim);
+  const renderItem = ({ item }: { item: SolicitacaoDTO }) => (
+    <Card style={styles.card}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.cardTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>{alunoNome(item)}</Text>
+        {tab === 'CONVITES' && <Chip label="Convite" tone="info" size="sm" />}
+        {tab === 'PEDIDOS' && <Chip label="Aguardando motorista" tone="warning" size="sm" />}
+        {tab === 'ATIVOS' && <Chip label="Ativo" tone="success" size="sm" />}
+      </View>
+      <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+        {item.viagemNome || 'Viagem'} · {periodoLabel(item.viagemPeriodo || item.periodo)}
+      </Text>
+      <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+        Motorista: {item.motoristaNome || 'não informado'}
+        {item.dataInicio ? ` · desde ${formatDate(item.dataInicio)}` : ''}
+      </Text>
+      {tab === 'CONVITES' && (
+        <View style={styles.actions}>
+          <Button label="Recusar" variant="secondary" size="md" onPress={() => respond(item, false)} disabled={busyId !== null} style={styles.flex} />
+          <Button label="Aceitar" icon="check" size="md" onPress={() => respond(item, true)} loading={busyId === item.id} disabled={busyId !== null} style={styles.flex} />
+        </View>
+      )}
+      {tab === 'ATIVOS' && (
+        <Button
+          label="Encerrar transporte"
+          icon="user-x"
+          variant="tertiary"
+          size="md"
+          onPress={() => setUnlinkId(item.id!)}
+          disabled={busyId !== null}
+          fullWidth
+        />
+      )}
+    </Card>
+  );
 
-  const getStatusVariant = (status: string) => {
-    const s = status.toUpperCase();
-    if (s.includes('ACEITA') || s.includes('ATIVA')) return 'success';
-    if (s.includes('PENDENTE')) return 'warning';
-    if (s.includes('ENCERRADA') || s.includes('CANCELADA')) return 'error';
-    return 'default';
+  const empty: Record<Tab, { title: string; message: string; icon: 'mail' | 'send' | 'link' }> = {
+    CONVITES: { title: 'Nenhum convite pendente.', message: 'Quando um motorista convidar seu aluno, o convite aparece aqui.', icon: 'mail' },
+    PEDIDOS: { title: 'Nenhum pedido aguardando.', message: 'Peça vaga para seu aluno na aba Motoristas.', icon: 'send' },
+    ATIVOS: { title: 'Nenhum transporte ativo.', message: 'Aceite um convite ou peça vaga a um motorista.', icon: 'link' },
   };
 
   return (
     <GuardianLayout>
       <View style={styles.container}>
-        <ScreenHeader title="Convites & Associações" subtitle="Gerencie profissionais e viagens" />
-
-        <SegmentedControl
-          options={[
-            { value: 'TRIP', label: 'Convites' },
-            { value: 'DRIVER', label: 'Vínculos Ativos' },
-          ]}
-          value={activeTab}
-          onChange={setActiveTab}
-          style={styles.tabs}
+        <FlatList
+          data={data}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+          refreshing={loading}
+          onRefresh={load}
+          ListHeaderComponent={
+            <View style={styles.header}>
+              <ScreenHeader title="Vínculos" subtitle="Convites, pedidos de vaga e transportes ativos" />
+              <SegmentedControl
+                options={[
+                  { value: 'CONVITES', label: `Convites (${convites.length})` },
+                  { value: 'PEDIDOS', label: `Pedidos (${pedidos.length})` },
+                  { value: 'ATIVOS', label: `Ativos (${ativos.length})` },
+                ]}
+                value={tab}
+                onChange={(v) => setTab(v as Tab)}
+              />
+            </View>
+          }
+          ListEmptyComponent={
+            loading ? (
+              <StateView kind="loading" title="Carregando..." />
+            ) : (
+              <View style={styles.emptyBlock}>
+                <StateView kind="empty" icon={empty[tab].icon} title={empty[tab].title} message={empty[tab].message} />
+                {tab === 'PEDIDOS' && (
+                  <Button label="Procurar motoristas" icon="search" variant="secondary" onPress={() => navigation.navigate('GuardianSearchDriver')} fullWidth />
+                )}
+              </View>
+            )
+          }
         />
 
-        {loading && <StateView kind="loading" style={styles.loading} />}
-
-        {activeTab === 'TRIP' ? (
-          <FlatList
-            data={tripInvites}
-            keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
-            contentContainerStyle={styles.list}
-            renderItem={({ item }) => {
-              const student = guardian.dependentes?.find(d => d.id === item.dependenteId);
-              return (
-                <View style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.tripIcon}>
-                      <Feather name="truck" size={24} color={colors.ink} />
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={styles.driverName}>{item.motoristaNome || `Motorista Viagem #${item.viagemId}`}</Text>
-                      <View style={styles.periodRow}>
-                        <Feather name="clock" size={14} color={colors.slate500} />
-                        {loadingPeriods && !item.periodo ? (
-                          <ActivityIndicator size="small" color={colors.ink} style={{ marginLeft: 4 }} />
-                        ) : (
-                          <Text style={styles.periodText}>{item.periodo?.replace('_', ' ') || 'Carregando...'}</Text>
-                        )}
-                      </View>
-                    </View>
-                  </View>
-                  <Text style={styles.inviteText}>
-                    Solicitou transportar <Text style={styles.bold}>{item.dependenteNome || student?.nome || 'Dependente #' + item.dependenteId}</Text>.
-                  </Text>
-                  <View style={styles.actions}>
-                    <Button
-                      label="Recusar"
-                      variant="secondary"
-                      size="md"
-                      onPress={() => handleTripResponse(item.id!, false)}
-                      disabled={loading}
-                      style={styles.btn}
-                    />
-                    <Button
-                      label="Aceitar"
-                      size="md"
-                      onPress={() => handleTripResponse(item.id!, true)}
-                      disabled={loading}
-                      style={styles.btn}
-                    />
-                  </View>
-                </View>
-              );
-            }}
-            ListEmptyComponent={!loading ? <StateView kind="empty" icon="mail" title="Nenhum convite pendente." /> : undefined}
-          />
-        ) : (
-          <FlatList
-            data={linkedDrivers}
-            keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
-            contentContainerStyle={styles.list}
-            renderItem={({ item }) => {
-              const student = guardian.dependentes?.find(d => d.id === item.dependenteId);
-              return (
-                <View style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.avatar}><Text style={styles.avatarText}>{item.motoristaNome?.charAt(0) || 'M'}</Text></View>
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={styles.driverName}>{item.motoristaNome || `Motorista Viagem #${item.viagemId}`}</Text>
-                      {item.motoristaTelefone && <Text style={styles.driverPhone}>{item.motoristaTelefone}</Text>}
-                    </View>
-                    <StatusBadge status={item.status || 'ATIVA'} variant={getStatusVariant(item.status || 'ATIVA')} />
-                  </View>
-
-                  <View style={styles.detailsList}>
-                    <View style={styles.detailRow}>
-                      <Feather name="user" size={14} color={colors.slate500} />
-                      <Text style={styles.detailText}>Aluno: <Text style={styles.bold}>{item.dependenteNome || student?.nome || 'Dependente #' + item.dependenteId}</Text></Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Feather name="book-open" size={14} color={colors.slate500} />
-                      <Text style={styles.detailText}>Escola: <Text style={styles.bold}>{item.escolaNome || student?.escola?.nome || 'Não informada'}</Text></Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Feather name="clock" size={14} color={colors.slate500} />
-                      <Text style={styles.detailText}>Período: <Text style={styles.bold}>{item.periodo?.replace('_', ' ') || 'Não informado'}</Text></Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Feather name="calendar" size={14} color={colors.slate500} />
-                      <Text style={styles.detailText}>Início: <Text style={styles.bold}>{new Date(item.dataInicio).toLocaleDateString()}</Text></Text>
-                    </View>
-                  </View>
-
-                  <Button
-                    label="Encerrar Vínculo"
-                    icon="user-x"
-                    variant="destructive"
-                    size="md"
-                    onPress={() => {
-                      setSelectedSolId(item.id!);
-                      setShowConfirmUnlink(true);
-                    }}
-                    disabled={loading}
-                    fullWidth
-                  />
-                </View>
-              );
-            }}
-            ListEmptyComponent={!loading ? <StateView kind="empty" icon="link" title="Você não possui vínculos ativos." /> : undefined}
-          />
-        )}
-
         <ConfirmDialog
-          visible={showConfirmUnlink}
-          title="Encerrar Vínculo"
-          message="Tem certeza que deseja encerrar o transporte com este motorista? Esta ação é irreversível."
-          confirmLabel="Encerrar Vínculo"
+          visible={unlinkId !== null}
+          title="Encerrar transporte"
+          message="O aluno sai desta viagem. Para voltar, será preciso um novo convite ou pedido de vaga."
+          confirmLabel="Encerrar"
           cancelLabel="Cancelar"
-          onConfirm={handleUnlink}
-          onCancel={() => {
-            setShowConfirmUnlink(false);
-            setSelectedSolId(null);
-          }}
-          destructive={true}
-          loading={loading}
+          onConfirm={unlink}
+          onCancel={() => setUnlinkId(null)}
+          destructive
+          loading={busyId !== null}
         />
       </View>
     </GuardianLayout>
@@ -259,24 +183,15 @@ export default function GuardianInvitesScreen() {
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   container: { flex: 1, padding: layout.screenMargin, width: '100%', maxWidth: 800, alignSelf: 'center' },
-  tabs: { marginBottom: spacing.xl },
-  loading: { paddingVertical: spacing.md },
-  list: { paddingBottom: spacing.xl },
-  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: layout.cardPadding, marginBottom: spacing.lg, borderWidth: borders.hairline, borderColor: colors.border },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
-  tripIcon: { width: layout.iconSlot, height: layout.iconSlot, borderRadius: radius.pill, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
-  driverName: { ...typography.heading, color: colors.ink },
-  periodRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs, gap: spacing.xs },
-  periodText: { ...typography.captionBold, color: colors.slate500 },
-  driverPhone: { ...typography.caption, color: colors.slate500, marginTop: spacing.xs },
-  inviteText: { ...typography.body, color: colors.slate700, marginBottom: spacing.lg },
-  detailsList: { gap: spacing.sm, marginBottom: spacing.lg, backgroundColor: colors.background, padding: spacing.md, borderRadius: radius.md },
-  detailRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  detailText: { ...typography.caption, color: colors.slate700, flexShrink: 1 },
-  bold: { fontFamily: typography.label.fontFamily, color: colors.ink },
-  actions: { flexDirection: 'row', gap: layout.buttonGap },
-  btn: { flex: 1 },
-  avatar: { width: layout.iconSlot, height: layout.iconSlot, borderRadius: radius.pill, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { ...typography.heading, color: colors.ink },
+  header: { gap: spacing.lg, marginBottom: spacing.sm },
+  list: { paddingBottom: spacing.xl, gap: spacing.md },
+  card: { gap: spacing.sm },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  cardTitle: { ...typography.label, fontSize: 18, lineHeight: 24, color: colors.ink, flexShrink: 1 },
+  body: { ...typography.body, color: colors.ink },
+  caption: { ...typography.caption, color: colors.slate500 },
+  actions: { flexDirection: 'row', gap: layout.buttonGap, marginTop: spacing.sm },
+  emptyBlock: { gap: spacing.lg },
 });

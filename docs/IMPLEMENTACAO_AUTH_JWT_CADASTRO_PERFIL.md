@@ -235,8 +235,28 @@ Progressive disclosure: cada perfil vê só as etapas que se aplicam.
 3. **Política de senha divergente do pedido:** backend exige 12+ caracteres sem composição; o app exige 12+ **e** maiúscula/número/especial. Alinhar com o backend se a composição também deve ser obrigatória no servidor.
 4. **Link de redefinição no app nativo:** só o web abre a tela automaticamente. Para o app nativo é preciso configurar um *deep link* (scheme no `app.json` + `linking` no `NavigationContainer`); hoje o usuário cola o código/link.
 5. **Troca de e-mail** não tem verificação do novo endereço no backend ("Confirmação de contato ainda não é oferecida"); o app exige a senha atual.
-6. **Termos de Uso / Política de Privacidade:** o aceite é registrado, mas não há texto/URL dos termos para exibir.
+6. **Termos de Uso / Política de Privacidade:** texto criado (ver seção 9). Falta definir o e-mail de contato de privacidade (`CONTATO_PRIVACIDADE`) e configurar `TERMS_VERSION=1.0` no backend, para a versão aceita ficar gravada em `usuario.termos_versao`.
 7. **Documentos do motorista:** o backend trata CNH, vistoria e licenciamento como metadados em `/Motorista/{id}/Documentos` (sem upload de arquivo). O cadastro envia apenas o número da CNH (campo legado); a submissão de documentos ainda não tem tela.
 8. **Web:** sem armazenamento seguro, o refresh token fica no `AsyncStorage` (localStorage). Aceitável para desenvolvimento; em produção web, avaliar cookie `HttpOnly`.
 9. `GuardianDependentFormScreen` continua com data `YYYY-MM-DD` e endereço livre; pode reaproveitar `AddressForm`/máscaras e os endpoints de endereços estruturados do dependente.
 10. O merge da `main` (notificações) está aplicado na branch, **sem commit**.
+
+---
+
+## 9. Termos de Uso e Política de Privacidade (04/11/2026)
+
+- **Texto:** `src/content/termosPrivacidade.ts` (versão `1.0`). Ele descreve o que o backend novo realmente coleta e faz:
+  - dados de conta, perfil, endereço, veículo, documentos, dependentes, presença e localização;
+  - compartilhamento com SendGrid e ViaCEP;
+  - retenção: localização por 7 dias, consentimento e auditoria por 1 ano, sessão por 30 dias;
+  - BCrypt, consentimento específico para a localização, art. 14 (crianças) e art. 18 (direitos do titular) da LGPD.
+- **Tela:** `src/components/forms/TermsModal.tsx`, em tela cheia com rolagem, versão e data. No cadastro abre pelo botão "Ler os termos completos". Tem duas saídas:
+  - "Li e aceito" marca o checkbox e fecha;
+  - "Voltar sem aceitar" fecha sem marcar.
+- **Aceite:** sem o checkbox marcado, o cadastro continua bloqueado na última etapa. O app envia `aceitouTermos: true`. O backend (`TermosService`) grava `termos_aceitos_em` e `termos_versao`, esta última vinda da variável `TERMS_VERSION`.
+- **Ao mudar o texto:** aumentar `TERMS_VERSION` no arquivo e no backend.
+- **Validação:** `tsc` sem erros. No Expo web foram testados:
+  - abrir os termos e aceitar marca o checkbox;
+  - "Voltar sem aceitar" não marca;
+  - em 375 px o modal fica legível e o rótulo do botão foi encurtado para caber.
+- **Revisar antes de publicar:** o texto é um modelo coerente com o sistema, não um parecer jurídico. Deve ser revisado pela equipe ou pela orientação, e o e-mail de contato precisa ser definido.

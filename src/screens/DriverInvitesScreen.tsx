@@ -1,123 +1,153 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
-  LayoutAnimation,
-  Platform,
-  UIManager,
-  Alert,
-} from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import React, { useCallback, useState } from 'react';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import DriverLayout from '../components/DriverLayout';
 import { RootStackParamList } from '../navigation';
-import { Button, Chip, ScreenHeader, StateView } from '../components/ui';
-import { borders, colors, layout, radius, spacing, typography } from '../theme';
-
-interface SolicitacaoVinculo {
-  id: number;
-  dependenteNome: string;
-  responsavelNome: string;
-  status: string;
-  dataSolicitacao: string;
-}
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-// Mock inicial de convites
-const SOLICITACOES_MOCK: SolicitacaoVinculo[] = [
-  { id: 101, dependenteNome: 'Enzo Rodrigues', responsavelNome: 'Marcos Rodrigues', status: 'PENDENTE', dataSolicitacao: '25/10/2023' },
-  { id: 102, dependenteNome: 'Julia Mendes', responsavelNome: 'Clara Mendes', status: 'PENDENTE', dataSolicitacao: '26/10/2023' },
-  { id: 103, dependenteNome: 'Felipe Souza', responsavelNome: 'Roberto Souza', status: 'PENDENTE', dataSolicitacao: '27/10/2023' },
-];
+import { useAppContext } from '../context/AppContext';
+import { motoristaService } from '../services/motoristaService';
+import { periodoLabel } from '../services/viagemService';
+import { SolicitacaoDTO } from '../types';
+import { Button, Card, Chip, ScreenHeader, SegmentedControl, StateView } from '../components/ui';
+import { getApiErrorMessage } from '../utils/apiError';
+import { colors, layout, maxFontSizeMultiplier, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DriverInvites'>;
+type Tab = 'RECEBIDOS' | 'ENVIADOS';
 
+const formatDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '');
+
+/**
+ * Vínculos do motorista: pedidos de vaga feitos por responsáveis (o motorista aceita ou recusa)
+ * e convites que o motorista enviou (aguardando o responsável).
+ */
 export default function DriverInvitesScreen({ navigation }: Props) {
-  const [invites, setInvites] = useState<SolicitacaoVinculo[]>(SOLICITACOES_MOCK);
+  const { currentUser, showToast } = useAppContext();
+  const [tab, setTab] = useState<Tab>('RECEBIDOS');
+  const [items, setItems] = useState<SolicitacaoDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [answering, setAnswering] = useState<number | null>(null);
 
-  const handleResponse = async (item: SolicitacaoVinculo, accept: boolean) => {
+  const load = useCallback(async () => {
+    if (!currentUser?.id) return;
+    setLoading(true);
     try {
-      if (accept) {
-        // Simular persistência do aluno aceito
-        const stored = await AsyncStorage.getItem('@accepted_students');
-        const acceptedStudents = stored ? JSON.parse(stored) : [];
-
-        // Evita duplicatas no mock
-        if (!acceptedStudents.find((s: any) => s.id === item.id)) {
-          acceptedStudents.push({
-            id: item.id,
-            nome: item.dependenteNome,
-            responsavel: item.responsavelNome,
-            status: 'FORA', // Status inicial para a chamada
-            escola: 'Escola Adventista'
-          });
-          await AsyncStorage.setItem('@accepted_students', JSON.stringify(acceptedStudents));
-        }
-      }
-
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setInvites(prev => prev.filter(inv => inv.id !== item.id));
-
-      if (accept && Platform.OS !== 'web') {
-        Alert.alert('Sucesso', `${item.dependenteNome} agora faz parte da sua lista de passageiros.`);
-      }
+      setItems(await motoristaService.listarSolicitacoes(currentUser.id));
     } catch (error) {
-      console.error(error);
+      showToast(getApiErrorMessage(error, 'Não foi possível carregar as solicitações.'), 'error');
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
+
+  const received = items.filter((s) => s.origem === 'RESPONSAVEL');
+  const sent = items.filter((s) => s.origem !== 'RESPONSAVEL');
+  const data = tab === 'RECEBIDOS' ? received : sent;
+
+  const answer = async (item: SolicitacaoDTO, aceito: boolean) => {
+    if (!item.id) return;
+    setAnswering(item.id);
+    try {
+      await motoristaService.responderSolicitacao(item.id, aceito);
+      showToast(aceito ? `${item.dependenteNome || 'Aluno'} entrou na viagem.` : 'Pedido recusado.', aceito ? 'success' : 'info');
+      load();
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Não foi possível registrar a resposta.'), 'error');
+    } finally {
+      setAnswering(null);
     }
   };
 
-  const renderInviteCard = ({ item }: { item: SolicitacaoVinculo }) => (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.studentAvatar}>
-          <Feather name="user" size={20} color={colors.ink} />
+  const renderItem = ({ item }: { item: SolicitacaoDTO }) => {
+    const isReceived = item.origem === 'RESPONSAVEL';
+    return (
+      <Card style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+            {item.dependenteNome || `Aluno #${item.dependenteId}`}
+          </Text>
+          <Chip label={isReceived ? 'Pedido de vaga' : 'Aguardando'} tone={isReceived ? 'info' : 'warning'} size="sm" />
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.studentName}>{item.dependenteNome}</Text>
-          <Text style={styles.guardianInfo}>Responsável: {item.responsavelNome}</Text>
-        </View>
-      </View>
-      <View style={styles.divider} />
-      <View style={styles.footer}>
-        <Text style={styles.dateInfo}>Solicitado em: {item.dataSolicitacao}</Text>
-        <View style={styles.actionButtons}>
-          <Button
-            label="Recusar"
-            variant="tertiary"
-            size="md"
-            icon="x"
-            accessibilityLabel={`Recusar ${item.dependenteNome}`}
-            onPress={() => handleResponse(item, false)}
-          />
-          <Button
-            label="Aceitar"
-            size="md"
-            icon="check"
-            accessibilityLabel={`Aceitar ${item.dependenteNome}`}
-            onPress={() => handleResponse(item, true)}
-          />
-        </View>
-      </View>
-    </View>
-  );
+        <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+          {item.viagemNome || 'Viagem'} · {periodoLabel(item.viagemPeriodo)}
+        </Text>
+        <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+          {isReceived ? `Pedido por ${item.responsavelNome || 'responsável'}` : `Convite enviado a ${item.responsavelNome || 'responsável'}`}
+          {item.dataInicio ? ` · ${formatDate(item.dataInicio)}` : ''}
+        </Text>
+        {isReceived && (
+          <View style={styles.actions}>
+            <Button
+              label="Recusar"
+              variant="secondary"
+              size="md"
+              onPress={() => answer(item, false)}
+              disabled={answering !== null}
+              style={styles.flex}
+              accessibilityLabel={`Recusar pedido de ${item.dependenteNome}`}
+            />
+            <Button
+              label="Aceitar"
+              icon="check"
+              size="md"
+              onPress={() => answer(item, true)}
+              loading={answering === item.id}
+              disabled={answering !== null}
+              style={styles.flex}
+              accessibilityLabel={`Aceitar pedido de ${item.dependenteNome}`}
+            />
+          </View>
+        )}
+      </Card>
+    );
+  };
 
   return (
     <DriverLayout>
       <View style={styles.container}>
-        <ScreenHeader title="Convites Pendentes" right={<Chip label={String(invites.length)} tone="warning" />} />
         <FlatList
-          data={invites}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderInviteCard}
-          contentContainerStyle={styles.listContent}
+          data={data}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+          refreshing={loading}
+          onRefresh={load}
+          ListHeaderComponent={
+            <View style={styles.header}>
+              <ScreenHeader title="Vínculos" subtitle="Pedidos de vaga e convites para suas viagens" />
+              <Button label="Buscar alunos" icon="search" variant="secondary" onPress={() => navigation.navigate('DriverSearchStudents')} fullWidth />
+              <SegmentedControl
+                options={[
+                  { value: 'RECEBIDOS', label: `Pedidos (${received.length})` },
+                  { value: 'ENVIADOS', label: `Enviados (${sent.length})` },
+                ]}
+                value={tab}
+                onChange={(v) => setTab(v as Tab)}
+              />
+            </View>
+          }
           ListEmptyComponent={
-            <StateView kind="empty" icon="mail" title="Nenhuma solicitação nova." />
+            loading ? (
+              <StateView kind="loading" title="Carregando..." />
+            ) : (
+              <StateView
+                kind="empty"
+                icon={tab === 'RECEBIDOS' ? 'inbox' : 'send'}
+                title={tab === 'RECEBIDOS' ? 'Nenhum pedido de vaga.' : 'Nenhum convite aguardando.'}
+                message={
+                  tab === 'RECEBIDOS'
+                    ? 'Quando um responsável pedir vaga em uma das suas viagens, ele aparece aqui.'
+                    : 'Use Buscar alunos para convidar alunos para suas viagens.'
+                }
+              />
+            )
           }
         />
       </View>
@@ -126,15 +156,14 @@ export default function DriverInvitesScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   container: { flex: 1, padding: layout.screenMargin, width: '100%', maxWidth: 800, alignSelf: 'center' },
-  listContent: { paddingBottom: spacing.xl },
-  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: layout.cardPadding, marginBottom: spacing.lg, borderWidth: borders.hairline, borderColor: colors.border },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  studentAvatar: { width: layout.iconSlot, height: layout.iconSlot, borderRadius: radius.pill, backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center' },
-  studentName: { ...typography.heading, color: colors.ink },
-  guardianInfo: { ...typography.caption, color: colors.slate700 },
-  divider: { height: borders.hairline, backgroundColor: colors.border, marginVertical: spacing.md },
-  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: spacing.md },
-  dateInfo: { ...typography.caption, color: colors.slate500 },
-  actionButtons: { flexDirection: 'row', gap: spacing.sm },
+  header: { gap: spacing.lg, marginBottom: spacing.sm },
+  list: { paddingBottom: spacing.xl, gap: spacing.md },
+  card: { gap: spacing.sm },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  cardTitle: { ...typography.label, fontSize: 18, lineHeight: 24, color: colors.ink, flexShrink: 1 },
+  body: { ...typography.body, color: colors.ink },
+  caption: { ...typography.caption, color: colors.slate500 },
+  actions: { flexDirection: 'row', gap: layout.buttonGap, marginTop: spacing.sm },
 });

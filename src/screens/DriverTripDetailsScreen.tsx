@@ -4,7 +4,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
-import { viagemService } from '../services/viagemService';
+import { periodoLabel, viagemNome, viagemService } from '../services/viagemService';
 import { ViagemDTO, DependenteDTO } from '../types';
 import DriverLayout from '../components/DriverLayout';
 
@@ -88,10 +88,12 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
 
         <Card style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>{viagem.periodo.replace('_', ' ')}</Text>
-            <Chip label={viagem.ativo ? 'Ativa' : 'Inativa'} tone={viagem.ativo ? 'success' : 'neutral'} />
+            <Text style={styles.cardTitle}>{viagemNome(viagem)}</Text>
+            <Chip label={viagem.ativo === false ? 'Encerrada' : 'Ativa'} tone={viagem.ativo === false ? 'neutral' : 'success'} />
           </View>
-          <Text style={styles.cardSubtitle}>{viagem.dependentes?.length || 0} dependente(s) vinculado(s)</Text>
+          <Text style={styles.cardSubtitle}>
+            {periodoLabel(viagem.periodo)} · {viagem.dependentes?.length || 0} aluno(s) na viagem
+          </Text>
         </Card>
 
         <View style={styles.section}>
