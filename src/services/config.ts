@@ -3,3 +3,6 @@
 export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080/TioDaPerua/api';
 
 export const REQUEST_TIMEOUT_MS = 10000;
+
+/** Link permanente do PDF dos Termos de Uso e da Política de Privacidade (servido pelo backend, rota pública). */
+export const TERMOS_PDF_URL = `${BASE_URL}/termos/termos-de-uso-e-privacidade.pdf`;

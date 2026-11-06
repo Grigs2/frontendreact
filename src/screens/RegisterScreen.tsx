@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  TextInput,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { HOME_BY_ROLE, RegisterRole, RootStackParamList } from '../navigation';
@@ -25,6 +26,7 @@ import {
   RadioCardGroup,
   RadioCardOption,
   StepIndicator,
+  TermsModal,
   formatAddress,
   hasErrors,
   toEnderecoOperacional,
@@ -80,6 +82,14 @@ const API_ROLE = { driver: 'MOTORISTA', guardian: 'RESPONSAVEL', school: 'ESCOLA
 
 type Errors = Record<string, string | null | undefined>;
 
+/** Campos de cada etapa, na ordem em que aparecem na tela. */
+const STEP_FIELDS: Record<StepKey, (role: RegisterRole) => string[]> = {
+  acesso: () => ['email', 'password', 'passwordConfirmation'],
+  pessoais: (role) => (role === 'school' ? ['name', 'cnpj', 'admResponsavel', 'phone'] : ['name', 'cpf', 'birthDate', 'phone']),
+  endereco: () => [],
+  documentos: () => ['cnh'],
+};
+
 export default function RegisterScreen({ navigation, route }: Props) {
   const { showToast, setCurrentUser } = useAppContext();
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
@@ -106,6 +116,7 @@ export default function RegisterScreen({ navigation, route }: Props) {
   const [cnh, setCnh] = useState('');
   // Termos (última etapa)
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [termsVisible, setTermsVisible] = useState(false);
 
   const [errors, setErrors] = useState<Errors>({});
   const [addressErrors, setAddressErrors] = useState<AddressErrors>({});
@@ -118,37 +129,53 @@ export default function RegisterScreen({ navigation, route }: Props) {
     if (errors[field]) setErrors((e) => ({ ...e, [field]: null }));
   };
 
+  // Validação de cada campo (usada ao sair do campo e ao avançar a etapa).
+  const fieldValidators: Record<string, () => string | null> = {
+    email: () => validateEmail(email),
+    password: () => validatePassword(password),
+    passwordConfirmation: () => validatePasswordConfirmation(password, passwordConfirmation),
+    name: () =>
+      role === 'school'
+        ? validateRequired(name, 'o nome da escola')
+        : name.trim().split(/\s+/).length < 2
+          ? 'Informe o nome completo.'
+          : null,
+    cpf: () => validateCPF(cpf),
+    birthDate: () => validateBirthDate(birthDate, 18),
+    phone: () => validatePhone(phone),
+    cnpj: () => validateCNPJ(cnpj),
+    admResponsavel: () => validateRequired(admResponsavel, 'o administrador responsável'),
+    cnh: () => validateCNH(cnh),
+  };
+  const fieldValues: Record<string, string> = {
+    email, password, passwordConfirmation, name, cpf, birthDate, phone, cnpj, admResponsavel, cnh,
+  };
+
+  // Referências dos campos, para levar o foco ao primeiro erro.
+  const fieldRefs = useRef<Record<string, React.ComponentRef<typeof TextInput> | null>>({});
+  const bindRef = (field: string) => (input: React.ComponentRef<typeof TextInput> | null) => {
+    fieldRefs.current[field] = input;
+  };
+
+  /** Ao sair do campo: valida o que foi digitado (campo vazio só é cobrado ao tocar em Continuar). */
+  const validateOnBlur = (field: string) => () => {
+    if (!fieldValues[field]?.trim()) return;
+    const message = fieldValidators[field]?.() ?? null;
+    setErrors((e) => (e[field] === message ? e : { ...e, [field]: message }));
+  };
+
   const validateStep = (key: StepKey): boolean => {
-    let stepErrors: Errors = {};
+    const fields = STEP_FIELDS[key](role);
+    const stepErrors: Errors = {};
+    fields.forEach((f) => {
+      stepErrors[f] = fieldValidators[f]();
+    });
     let valid = true;
 
-    if (key === 'acesso') {
-      stepErrors = {
-        email: validateEmail(email),
-        password: validatePassword(password),
-        passwordConfirmation: validatePasswordConfirmation(password, passwordConfirmation),
-      };
-    } else if (key === 'pessoais') {
-      stepErrors =
-        role === 'school'
-          ? {
-              name: validateRequired(name, 'o nome da escola'),
-              cnpj: validateCNPJ(cnpj),
-              admResponsavel: validateRequired(admResponsavel, 'o administrador responsável'),
-              phone: validatePhone(phone),
-            }
-          : {
-              name: name.trim().split(/\s+/).length < 2 ? 'Informe o nome completo.' : null,
-              cpf: validateCPF(cpf),
-              birthDate: validateBirthDate(birthDate, 18),
-              phone: validatePhone(phone),
-            };
-    } else if (key === 'endereco') {
+    if (key === 'endereco') {
       const nextAddressErrors = validateAddress(address);
       setAddressErrors(nextAddressErrors);
       valid = !hasErrors(nextAddressErrors);
-    } else if (key === 'documentos') {
-      stepErrors = { cnh: validateCNH(cnh) };
     }
 
     if (steps[steps.length - 1].key === key) {
@@ -156,7 +183,15 @@ export default function RegisterScreen({ navigation, route }: Props) {
     }
 
     setErrors((e) => ({ ...e, ...stepErrors }));
-    return valid && !hasErrors(stepErrors);
+    const ok = valid && !hasErrors(stepErrors);
+    if (!ok) {
+      // Leva o foco (e a rolagem) ao primeiro campo com erro, na ordem em que aparecem.
+      const first = fields.find((f) => stepErrors[f]);
+      if (first) setTimeout(() => fieldRefs.current[first]?.focus(), 50);
+      else if (valid && stepErrors.terms) setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+      else if (!valid) scrollRef.current?.scrollTo({ y: 0, animated: true });
+    }
+    return ok;
   };
 
   const goToStep = (index: number) => {
@@ -260,15 +295,35 @@ export default function RegisterScreen({ navigation, route }: Props) {
   );
 
   const termsCheckbox = (
-    <Checkbox
-      checked={acceptedTerms}
-      onChange={(value) => {
-        setAcceptedTerms(value);
-        clearError('terms');
-      }}
-      label="Li e aceito os Termos de Uso e a Política de Privacidade."
-      error={errors.terms}
-    />
+    <View style={styles.terms}>
+      <Button
+        label="Ler os termos completos"
+        accessibilityLabel="Ler os Termos de Uso e a Política de Privacidade"
+        variant="secondary"
+        icon="file-text"
+        onPress={() => setTermsVisible(true)}
+        disabled={loading}
+        fullWidth
+      />
+      <Checkbox
+        checked={acceptedTerms}
+        onChange={(value) => {
+          setAcceptedTerms(value);
+          clearError('terms');
+        }}
+        label="Li e aceito os Termos de Uso e a Política de Privacidade."
+        error={errors.terms}
+      />
+      <TermsModal
+        visible={termsVisible}
+        onClose={() => setTermsVisible(false)}
+        onAccept={() => {
+          setAcceptedTerms(true);
+          clearError('terms');
+          setTermsVisible(false);
+        }}
+      />
+    </View>
   );
 
   return (
@@ -313,6 +368,8 @@ export default function RegisterScreen({ navigation, route }: Props) {
                   textContentType="emailAddress"
                   leftIcon="mail"
                   error={errors.email || undefined}
+                  onBlur={validateOnBlur('email')}
+                  ref={bindRef('email')}
                 />
                 <TextField
                   label="Senha"
@@ -329,6 +386,8 @@ export default function RegisterScreen({ navigation, route }: Props) {
                   rightIconLabel={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                   onRightIconPress={() => setShowPassword(!showPassword)}
                   error={errors.password || undefined}
+                  onBlur={validateOnBlur('password')}
+                  ref={bindRef('password')}
                 />
                 <PasswordStrength value={password} />
                 <TextField
@@ -342,6 +401,8 @@ export default function RegisterScreen({ navigation, route }: Props) {
                   autoComplete="new-password"
                   leftIcon="lock"
                   error={errors.passwordConfirmation || undefined}
+                  onBlur={validateOnBlur('passwordConfirmation')}
+                  ref={bindRef('passwordConfirmation')}
                 />
               </>
             )}
@@ -359,6 +420,8 @@ export default function RegisterScreen({ navigation, route }: Props) {
                   autoCapitalize="words"
                   autoComplete="name"
                   error={errors.name || undefined}
+                  onBlur={validateOnBlur('name')}
+                  ref={bindRef('name')}
                 />
                 <TextField
                   label="CPF"
@@ -371,6 +434,8 @@ export default function RegisterScreen({ navigation, route }: Props) {
                   keyboardType="number-pad"
                   maxLength={14}
                   error={errors.cpf || undefined}
+                  onBlur={validateOnBlur('cpf')}
+                  ref={bindRef('cpf')}
                 />
                 <TextField
                   label="Data de nascimento"
@@ -384,6 +449,8 @@ export default function RegisterScreen({ navigation, route }: Props) {
                   maxLength={10}
                   hint="É preciso ter 18 anos ou mais."
                   error={errors.birthDate || undefined}
+                  onBlur={validateOnBlur('birthDate')}
+                  ref={bindRef('birthDate')}
                 />
                 <TextField
                   label="Celular"
@@ -398,6 +465,8 @@ export default function RegisterScreen({ navigation, route }: Props) {
                   maxLength={15}
                   leftIcon="phone"
                   error={errors.phone || undefined}
+                  onBlur={validateOnBlur('phone')}
+                  ref={bindRef('phone')}
                 />
               </>
             )}
@@ -412,6 +481,8 @@ export default function RegisterScreen({ navigation, route }: Props) {
                     clearError('name');
                   }}
                   error={errors.name || undefined}
+                  onBlur={validateOnBlur('name')}
+                  ref={bindRef('name')}
                 />
                 <TextField
                   label="CNPJ"
@@ -424,6 +495,8 @@ export default function RegisterScreen({ navigation, route }: Props) {
                   keyboardType="number-pad"
                   maxLength={18}
                   error={errors.cnpj || undefined}
+                  onBlur={validateOnBlur('cnpj')}
+                  ref={bindRef('cnpj')}
                 />
                 <TextField
                   label="Administrador responsável"
@@ -434,6 +507,8 @@ export default function RegisterScreen({ navigation, route }: Props) {
                   }}
                   autoCapitalize="words"
                   error={errors.admResponsavel || undefined}
+                  onBlur={validateOnBlur('admResponsavel')}
+                  ref={bindRef('admResponsavel')}
                 />
                 <TextField
                   label="Telefone"
@@ -447,6 +522,8 @@ export default function RegisterScreen({ navigation, route }: Props) {
                   maxLength={15}
                   leftIcon="phone"
                   error={errors.phone || undefined}
+                  onBlur={validateOnBlur('phone')}
+                  ref={bindRef('phone')}
                 />
               </>
             )}
@@ -481,6 +558,8 @@ export default function RegisterScreen({ navigation, route }: Props) {
                   leftIcon="credit-card"
                   hint="Os documentos (CNH, vistoria e licenciamento) são revisados depois, pelo administrador."
                   error={errors.cnh || undefined}
+                  onBlur={validateOnBlur('cnh')}
+                  ref={bindRef('cnh')}
                 />
                 {termsCheckbox}
               </>
@@ -513,6 +592,7 @@ const styles = StyleSheet.create({
   header: { marginBottom: 0 },
   card: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, borderWidth: 1, borderColor: colors.border, gap: spacing.lg },
   fieldGroup: { gap: spacing.sm },
+  terms: { gap: spacing.md },
   label: { ...typography.captionBold, color: colors.slate700 },
   actions: { gap: layout.buttonGap, marginTop: spacing.sm },
 });

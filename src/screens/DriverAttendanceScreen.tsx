@@ -1,302 +1,340 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, RefreshControl } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import DriverLayout from '../components/DriverLayout';
-import StatusBadge from '../components/StatusBadge';
 import { viagemService } from '../services/viagemService';
-import { ParadaViagemDTO, ViagemDiaDTO } from '../types';
-import { Button, StateView } from '../components/ui';
-import { borders, colors, layout, radius, spacing, typography } from '../theme';
+import { DependenteParadaDTO, ParadaViagemDTO, ViagemDiaDTO } from '../types';
+import { Button, Card, Chip, ScreenHeader, StateView, TextField } from '../components/ui';
+import { getApiErrorMessage } from '../utils/apiError';
+import { StatusTone, colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DriverAttendance'>;
+type TripStatus = ViagemDiaDTO['status'] | 'INTERROMPIDA';
+type Presence = DependenteParadaDTO['statusEmbarque'];
 
-const TRIP_STATUS_OPTIONS: ViagemDiaDTO['status'][] = ['PLANEJADA', 'EM_ANDAMENTO', 'FINALIZADA', 'CANCELADA'];
+const TRIP_STATUS: Record<string, { label: string; tone: StatusTone }> = {
+  PLANEJADA: { label: 'Planejada', tone: 'warning' },
+  EM_ANDAMENTO: { label: 'Em rota', tone: 'info' },
+  FINALIZADA: { label: 'Concluída', tone: 'success' },
+  CANCELADA: { label: 'Cancelada', tone: 'danger' },
+  INTERROMPIDA: { label: 'Interrompida', tone: 'danger' },
+};
 
+const PRESENCE: Record<Presence, { label: string; tone: StatusTone }> = {
+  ESPERANDO: { label: 'Aguardando', tone: 'neutral' },
+  EMBARCADO: { label: 'Embarcou', tone: 'success' },
+  DESEMBARCADO: { label: 'Desembarcou', tone: 'info' },
+  FALTOU: { label: 'Faltou', tone: 'danger' },
+};
+
+/**
+ * Chamada da viagem do dia. Cada aluno mostra só as ações válidas (regra da API):
+ * Aguardando → Embarcou ou Faltou; Embarcou → Desembarcou.
+ */
 export default function DriverAttendanceScreen({ route, navigation }: Props) {
   const { activeViagemDia, setActiveViagemDia, currentStops, setCurrentStops, showToast } = useAppContext();
   const viagemDiaId = route.params?.viagemDiaId || activeViagemDia?.id;
+  const status = (activeViagemDia?.status ?? 'PLANEJADA') as TripStatus;
+  const closed = status === 'FINALIZADA' || status === 'CANCELADA' || status === 'INTERROMPIDA';
+
   const [refreshing, setRefreshing] = useState(false);
-  const [submittingIds, setSubmittingIds] = useState<Record<number, boolean>>({});
-  const [isUpdatingTripStatus, setIsUpdatingTripStatus] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [submitting, setSubmitting] = useState<number | null>(null);
+  const [updatingTrip, setUpdatingTrip] = useState(false);
+  const [reasonFor, setReasonFor] = useState<'CANCELADA' | 'INTERROMPIDA' | null>(null);
+  const [reason, setReason] = useState('');
+  const [atrasoAberto, setAtrasoAberto] = useState(false);
+  const [atrasoMin, setAtrasoMin] = useState(15);
+  const [atrasoMotivo, setAtrasoMotivo] = useState('');
+  const [enviandoAtraso, setEnviandoAtraso] = useState(false);
+  const loadingRef = useRef(false);
 
-  const isTripInactive = activeViagemDia?.status === 'FINALIZADA' || activeViagemDia?.status === 'CANCELADA';
-
-  const isLoadingRef = useRef(false);
-
-  const loadStops = useCallback(async (isSilent = false) => {
-    if (!viagemDiaId || isLoadingRef.current) return;
-    
-    isLoadingRef.current = true;
-    if (!isSilent) setRefreshing(true);
+  /** Avisa os responsáveis dos alunos que ainda vão embarcar ou estão no veículo. */
+  const enviarAtraso = async () => {
+    if (!viagemDiaId) return;
+    setEnviandoAtraso(true);
     try {
-      const stops = await viagemService.buscarParadasViagemDia(viagemDiaId);
-      setCurrentStops(stops);
-    } catch (error) {
-      console.error('Error loading stops:', error);
-      showToast('Não foi possível carregar as paradas.', 'error');
+      await viagemService.avisarAtraso(viagemDiaId, atrasoMin, atrasoMotivo);
+      showToast('Responsáveis avisados do atraso.', 'success');
+      setAtrasoAberto(false);
+      setAtrasoMotivo('');
+    } catch (error: any) {
+      showToast(getApiErrorMessage(error, 'Não foi possível avisar o atraso.'), 'error');
     } finally {
-      setRefreshing(false);
-      isLoadingRef.current = false;
+      setEnviandoAtraso(false);
     }
-  }, [viagemDiaId, setCurrentStops, showToast]);
+  };
+
+  const loadStops = useCallback(
+    async (silent = false) => {
+      if (!viagemDiaId || loadingRef.current) return;
+      loadingRef.current = true;
+      if (!silent) setRefreshing(true);
+      try {
+        setCurrentStops(await viagemService.buscarParadasViagemDia(viagemDiaId));
+      } catch (error) {
+        showToast(getApiErrorMessage(error, 'Não foi possível carregar as paradas.'), 'error');
+      } finally {
+        setRefreshing(false);
+        loadingRef.current = false;
+      }
+    },
+    [viagemDiaId, setCurrentStops, showToast],
+  );
 
   useFocusEffect(
     useCallback(() => {
       if (!viagemDiaId) {
-        showToast('Nenhuma viagem ativa encontrada.', 'info');
+        showToast('Nenhuma viagem em andamento. Escolha uma viagem em Rotas.', 'info');
         navigation.navigate('DriverTrips');
         return;
       }
       loadStops();
-    }, [viagemDiaId, loadStops, navigation, showToast])
+    }, [viagemDiaId, loadStops, navigation, showToast]),
   );
 
-  const handleUpdateTripStatus = async (newStatus: ViagemDiaDTO['status']) => {
-    if (!viagemDiaId || isUpdatingTripStatus) return;
-    setIsUpdatingTripStatus(true);
+  const changeTrip = async (novo: TripStatus, motivo?: string) => {
+    if (!viagemDiaId || updatingTrip) return;
+    setUpdatingTrip(true);
     try {
-      const updated = await viagemService.alterarStatusViagemDia(viagemDiaId, newStatus);
-      if (updated) {
-        setActiveViagemDia(updated);
-        showToast(`Viagem ${newStatus.replace('_', ' ')}!`, 'success');
-        setShowStatusModal(false);
-        // Load stops silently to update UI without blocking
-        await loadStops(true);
-      }
-    } catch (error: any) {
-      console.error('Trip status update error:', error);
-      showToast(error.response?.data?.mensagem || 'Erro ao atualizar status.', 'error');
+      const updated = await viagemService.alterarStatusViagemDia(viagemDiaId, novo, motivo);
+      setActiveViagemDia(updated);
+      showToast(`Viagem ${TRIP_STATUS[novo].label.toLowerCase()}.`, 'success');
+      setReasonFor(null);
+      setReason('');
+      loadStops(true);
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Não foi possível alterar a viagem.'), 'error');
     } finally {
-      setIsUpdatingTripStatus(false);
-      // Ensure modal closes even if logic above fails for some reason
-      setShowStatusModal(false);
+      setUpdatingTrip(false);
     }
   };
 
-  const handleUpdateStudentStatus = async (studentId: number, status: 'EMBARCADO' | 'DESEMBARCADO' | 'FALTOU') => {
-    if (!viagemDiaId || isTripInactive || submittingIds[studentId]) return;
-    
-    setSubmittingIds(prev => ({ ...prev, [studentId]: true }));
+  const mark = async (aluno: DependenteParadaDTO, novo: 'EMBARCADO' | 'DESEMBARCADO' | 'FALTOU') => {
+    if (!viagemDiaId || closed || submitting !== null) return;
+    setSubmitting(aluno.id);
     try {
-      const updatedStops = await viagemService.alterarStatusPresenca(viagemDiaId, studentId, status);
-      if (Array.isArray(updatedStops)) {
-        setCurrentStops(updatedStops);
-        showToast('Presença atualizada!', 'success');
-      }
-    } catch (error: any) {
-      console.error('Student status update error:', error);
-      showToast(error.response?.data?.mensagem || 'Erro ao atualizar presença.', 'error');
+      const stops = await viagemService.alterarStatusPresenca(viagemDiaId, aluno.id, novo);
+      if (Array.isArray(stops)) setCurrentStops(stops);
+      showToast(`${aluno.nomeDependente.split(' ')[0]}: ${PRESENCE[novo].label.toLowerCase()}. Responsável avisado.`, 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Não foi possível registrar a presença.'), 'error');
     } finally {
-      setSubmittingIds(prev => ({ ...prev, [studentId]: false }));
+      setSubmitting(null);
     }
   };
 
-  const getStatusVariant = (status: string) => {
-    switch (status) {
-      case 'EM_ANDAMENTO': return 'info';
-      case 'FINALIZADA': return 'success';
-      case 'CANCELADA': return 'error';
-      case 'PLANEJADA': return 'warning';
-      default: return 'default';
-    }
+  // Resumo e próxima parada com aluno aguardando
+  const alunos = currentStops.flatMap((s) => s.listaDependentes);
+  const unique = Array.from(new Map(alunos.map((a) => [a.id, a])).values());
+  const count = (st: Presence) => unique.filter((a) => a.statusEmbarque === st).length;
+  const nextStop = currentStops.find((s) => s.listaDependentes.some((d) => d.statusEmbarque === 'ESPERANDO'));
+  const waiting = nextStop?.listaDependentes.filter((d) => d.statusEmbarque === 'ESPERANDO') ?? [];
+
+  const renderStudent = (aluno: DependenteParadaDTO, stop: ParadaViagemDTO) => {
+    const st = aluno.statusEmbarque;
+    const busy = submitting === aluno.id;
+    return (
+      <View key={`${stop.ordem}-${aluno.id}`} style={styles.student}>
+        <View style={styles.studentHead}>
+          <View style={styles.flex}>
+            <Text style={styles.studentName} maxFontSizeMultiplier={maxFontSizeMultiplier}>{aluno.nomeDependente}</Text>
+            <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>Responsável: {aluno.nomeResponsavel}</Text>
+          </View>
+          <Chip label={PRESENCE[st].label} tone={PRESENCE[st].tone} size="sm" />
+        </View>
+        {!closed && status === 'EM_ANDAMENTO' && st === 'ESPERANDO' && (
+          <View style={styles.actions}>
+            <Button label="Embarcou" icon="log-in" size="md" onPress={() => mark(aluno, 'EMBARCADO')} loading={busy} disabled={submitting !== null} style={styles.flex} accessibilityLabel={`${aluno.nomeDependente} embarcou`} />
+            <Button label="Faltou" icon="x" size="md" variant="secondary" onPress={() => mark(aluno, 'FALTOU')} disabled={submitting !== null} style={styles.flex} accessibilityLabel={`${aluno.nomeDependente} faltou`} />
+          </View>
+        )}
+        {!closed && status === 'EM_ANDAMENTO' && st === 'EMBARCADO' && (
+          <Button label="Desembarcou" icon="log-out" size="md" variant="secondary" onPress={() => mark(aluno, 'DESEMBARCADO')} loading={busy} disabled={submitting !== null} fullWidth accessibilityLabel={`${aluno.nomeDependente} desembarcou`} />
+        )}
+      </View>
+    );
   };
 
   return (
     <DriverLayout>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Button variant="tertiary" size="icon" icon="arrow-left" accessibilityLabel="Voltar" onPress={() => navigation.goBack()} style={styles.backBtn} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Chamada do Dia</Text>
-            {activeViagemDia && (
-              <TouchableOpacity
-                onPress={() => setShowStatusModal(true)}
-                style={styles.currentStatusRow}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Alterar status da viagem"
-              >
-                <StatusBadge status={activeViagemDia.status} variant={getStatusVariant(activeViagemDia.status)} />
-                <Feather name="edit-2" size={14} color={colors.ink} style={{ marginLeft: 8 }} />
-              </TouchableOpacity>
-            )}
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadStops()} colors={[colors.ink]} tintColor={colors.ink} />}
+      >
+        <ScreenHeader
+          title="Chamada"
+          subtitle="Registre embarque e desembarque em cada parada"
+          onBack={() => navigation.goBack()}
+          right={<Chip label={TRIP_STATUS[status]?.label ?? status} tone={TRIP_STATUS[status]?.tone ?? 'neutral'} />}
+        />
+
+        <Card>
+          <View style={styles.summary}>
+            {(['EMBARCADO', 'ESPERANDO', 'DESEMBARCADO', 'FALTOU'] as Presence[]).map((st) => (
+              <View key={st} style={styles.summaryItem}>
+                <Text style={styles.summaryValue} maxFontSizeMultiplier={maxFontSizeMultiplier}>{count(st)}</Text>
+                <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{PRESENCE[st].label}</Text>
+              </View>
+            ))}
+          </View>
+          {status === 'PLANEJADA' && (
+            <View style={styles.tripActions}>
+              <Button label="Iniciar viagem" icon="play" onPress={() => changeTrip('EM_ANDAMENTO')} loading={updatingTrip} fullWidth />
+              <Button label="Avisar atraso" icon="clock" variant="secondary" onPress={() => setAtrasoAberto(true)} disabled={updatingTrip} fullWidth />
+              <Button label="Cancelar viagem de hoje" variant="tertiary" onPress={() => setReasonFor('CANCELADA')} disabled={updatingTrip} fullWidth />
+            </View>
+          )}
+          {status === 'EM_ANDAMENTO' && (
+            <View style={styles.tripActions}>
+              <Button label="Finalizar viagem" icon="flag" onPress={() => changeTrip('FINALIZADA')} loading={updatingTrip} fullWidth />
+              <Button label="Avisar atraso" icon="clock" variant="secondary" onPress={() => setAtrasoAberto(true)} disabled={updatingTrip} fullWidth />
+              <Button label="Interromper viagem" variant="tertiary" onPress={() => setReasonFor('INTERROMPIDA')} disabled={updatingTrip} fullWidth />
+            </View>
+          )}
+        </Card>
+
+        {status === 'EM_ANDAMENTO' && waiting.length > 0 && nextStop && (
+          <Card variant="alert">
+            <Chip label="Atenção" tone="danger" size="sm" style={styles.alignStart} />
+            <Text style={styles.alertTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+              {waiting.map((w) => w.nomeDependente.split(' ')[0]).join(', ')} ainda não {waiting.length > 1 ? 'embarcaram' : 'embarcou'}
+            </Text>
+            <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+              Parada {nextStop.ordem} · {nextStop.endereco || nextStop.nomeLocal}
+            </Text>
+          </Card>
+        )}
+
+        {refreshing && currentStops.length === 0 && <StateView kind="loading" title="Carregando paradas..." />}
+
+        {currentStops.map((stop, index) => (
+          <Card key={`${stop.ordem}-${index}`} variant={stop === nextStop && status === 'EM_ANDAMENTO' ? 'selected' : 'default'} style={styles.stop}>
+            <View style={styles.stopHead}>
+              <View style={[styles.stopBadge, stop.tipoParada === 'MOTORISTA' && styles.stopBadgeDriver]}>
+                {stop.tipoParada === 'MOTORISTA' ? (
+                  <Feather name="home" size={16} color={colors.surface} />
+                ) : (
+                  <Text style={styles.stopNumber} maxFontSizeMultiplier={maxFontSizeMultiplier}>{stop.ordem}</Text>
+                )}
+              </View>
+              <View style={styles.flex}>
+                <Text style={styles.stopTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>{stop.nomeLocal}</Text>
+                {!!stop.endereco && <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{stop.endereco}</Text>}
+              </View>
+            </View>
+            {stop.listaDependentes.map((aluno) => renderStudent(aluno, stop))}
+          </Card>
+        ))}
+
+        {!refreshing && currentStops.length === 0 && (
+          <StateView kind="empty" icon="map-pin" title="Nenhuma parada nesta viagem." message="Convide alunos para a viagem em Rotas." />
+        )}
+      </ScrollView>
+
+      <Modal visible={reasonFor !== null} transparent animationType="slide" onRequestClose={() => setReasonFor(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent} accessibilityViewIsModal>
+            <Text style={styles.modalTitle} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
+              {reasonFor === 'CANCELADA' ? 'Cancelar viagem de hoje' : 'Interromper viagem'}
+            </Text>
+            <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+              Os responsáveis serão avisados. Informe o motivo.
+            </Text>
+            <TextField label="Motivo" value={reason} onChangeText={setReason} placeholder="Ex.: pneu furado, feriado" multiline maxLength={1000} />
+            <Button
+              label="Confirmar"
+              variant="destructive"
+              onPress={() => reasonFor && changeTrip(reasonFor, reason)}
+              loading={updatingTrip}
+              disabled={!reason.trim()}
+              fullWidth
+            />
+            <Button label="Voltar" variant="tertiary" onPress={() => setReasonFor(null)} disabled={updatingTrip} fullWidth />
           </View>
         </View>
+      </Modal>
 
-        <ScrollView 
-          contentContainerStyle={styles.timelineContainer}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadStops()} colors={[colors.ink]} tintColor={colors.ink} />}
-        >
-          {refreshing && currentStops.length === 0 && (
-            <StateView kind="loading" title="Carregando paradas..." />
-          )}
-          
-          {currentStops.map((stop, index) => (
-            <View key={`${stop.ordem}-${index}`} style={styles.stopRow}>
-              <View style={styles.indicator}>
-                <View style={[styles.dot, stop.tipoParada === 'MOTORISTA' ? styles.dotDriver : styles.dotStudent]}>
-                  {stop.tipoParada === 'MOTORISTA' ? <Feather name="home" size={14} color={colors.surface} /> : <Text style={styles.dotNum}>{stop.ordem}</Text>}
-                </View>
-                {index < currentStops.length - 1 && <View style={styles.line} />}
-              </View>
-
-              <View style={styles.details}>
-                <View style={styles.detailsContent}>
-                  <Text style={styles.stopLocal}>{stop.nomeLocal}</Text>
-                  <Text style={styles.stopAddr}>{stop.endereco}</Text>
-                  
-                  {stop.listaDependentes.map(dep => {
-                    const isSubmitting = !!submittingIds[dep.id];
-                    return (
-                      <View key={dep.id} style={styles.studentCard}>
-                        <View style={styles.studentHeader}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.studentName}>{dep.nomeDependente}</Text>
-                            <Text style={styles.responsavelName}>Resp: {dep.nomeResponsavel}</Text>
-                          </View>
-                          {isSubmitting ? (
-                            <ActivityIndicator size="small" color={colors.ink} />
-                          ) : (
-                            <StatusBadge 
-                              status={dep.statusEmbarque} 
-                              variant={dep.statusEmbarque === 'ESPERANDO' ? 'default' : dep.statusEmbarque === 'FALTOU' ? 'error' : 'success'} 
-                            />
-                          )}
-                        </View>
-
-                        {!isTripInactive && (
-                          <View style={styles.quickActions}>
-                            <TouchableOpacity 
-                              style={[
-                                styles.quickBtn, 
-                                styles.btnEmbarcado, 
-                                dep.statusEmbarque === 'EMBARCADO' && styles.btnActiveEmbarcado
-                              ]}
-                              onPress={() => handleUpdateStudentStatus(dep.id, 'EMBARCADO')}
-                              disabled={isSubmitting || refreshing}
-                            >
-                              <Feather name="log-in" size={16} color={dep.statusEmbarque === 'EMBARCADO' ? colors.surface : colors.success} />
-                              <Text style={[styles.quickBtnText, { color: colors.success }, dep.statusEmbarque === 'EMBARCADO' && styles.textWhite]}>Embarcar</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity 
-                              style={[
-                                styles.quickBtn, 
-                                styles.btnDesembarcado, 
-                                dep.statusEmbarque === 'DESEMBARCADO' && styles.btnActiveDesembarcado
-                              ]}
-                              onPress={() => handleUpdateStudentStatus(dep.id, 'DESEMBARCADO')}
-                              disabled={isSubmitting || refreshing}
-                            >
-                              <Feather name="log-out" size={16} color={dep.statusEmbarque === 'DESEMBARCADO' ? colors.surface : colors.info} />
-                              <Text style={[styles.quickBtnText, { color: colors.info }, dep.statusEmbarque === 'DESEMBARCADO' && styles.textWhite]}>Desembarcar</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity 
-                              style={[
-                                styles.quickBtn, 
-                                styles.btnFaltou, 
-                                dep.statusEmbarque === 'FALTOU' && styles.btnActiveFaltou
-                              ]}
-                              onPress={() => handleUpdateStudentStatus(dep.id, 'FALTOU')}
-                              disabled={isSubmitting || refreshing}
-                            >
-                              <Feather name="x-circle" size={16} color={dep.statusEmbarque === 'FALTOU' ? colors.surface : colors.danger} />
-                              <Text style={[styles.quickBtnText, { color: colors.danger }, dep.statusEmbarque === 'FALTOU' && styles.textWhite]}>Faltou</Text>
-                            </TouchableOpacity>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            </View>
-          ))}
-          {!refreshing && currentStops.length === 0 && (
-            <StateView kind="empty" icon="map-pin" title="Nenhuma parada encontrada para esta viagem." />
-          )}
-        </ScrollView>
-
-        <Modal visible={showStatusModal} transparent animationType="fade" onRequestClose={() => setShowStatusModal(false)}>
-          <TouchableOpacity 
-            style={styles.modalOverlay} 
-            activeOpacity={1} 
-            onPress={() => !isUpdatingTripStatus && setShowStatusModal(false)}
-          >
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Alterar Status da Viagem</Text>
-                <Button
-                  variant="tertiary"
-                  size="icon"
-                  icon="x"
-                  accessibilityLabel="Fechar"
-                  onPress={() => setShowStatusModal(false)}
-                  disabled={isUpdatingTripStatus}
-                />
-              </View>
-              {TRIP_STATUS_OPTIONS.map((status) => (
-                <TouchableOpacity 
-                  key={status} 
-                  style={[styles.statusOption, activeViagemDia?.status === status && styles.statusOptionActive]}
-                  onPress={() => handleUpdateTripStatus(status)}
-                  disabled={isUpdatingTripStatus}
+      <Modal visible={atrasoAberto} transparent animationType="fade" onRequestClose={() => setAtrasoAberto(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent} accessibilityViewIsModal>
+            <Text style={styles.modalTitle} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
+              Avisar atraso
+            </Text>
+            <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+              Os responsáveis dos alunos que ainda vão embarcar ou estão no veículo recebem o aviso.
+            </Text>
+            <View style={styles.atrasoOpcoes}>
+              {ATRASO_OPCOES.map((min) => (
+                <Pressable
+                  key={min}
+                  onPress={() => setAtrasoMin(min)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: atrasoMin === min }}
+                  accessibilityLabel={`${min} minutos`}
+                  style={[styles.atrasoOpcao, atrasoMin === min && styles.atrasoOpcaoAtiva]}
                 >
-                  <StatusBadge status={status} variant={getStatusVariant(status)} />
-                  {activeViagemDia?.status === status && !isUpdatingTripStatus && <Feather name="check" size={20} color={colors.ink} />}
-                  {activeViagemDia?.status === status && isUpdatingTripStatus && <ActivityIndicator size="small" color={colors.ink} />}
-                </TouchableOpacity>
+                  <Text style={[styles.caption, atrasoMin === min && styles.atrasoTextoAtivo]}>{min} min</Text>
+                </Pressable>
               ))}
             </View>
-          </TouchableOpacity>
-        </Modal>
-      </View>
+            <TextField
+              label="Motivo (opcional)"
+              value={atrasoMotivo}
+              onChangeText={setAtrasoMotivo}
+              placeholder="Ex.: trânsito na avenida"
+              maxLength={200}
+            />
+            <Button label="Enviar aviso" icon="send" onPress={enviarAtraso} loading={enviandoAtraso} fullWidth />
+            <Button label="Voltar" variant="tertiary" onPress={() => setAtrasoAberto(false)} disabled={enviandoAtraso} fullWidth />
+          </View>
+        </View>
+      </Modal>
     </DriverLayout>
   );
 }
 
+/** Opções rápidas de atraso (o backend aceita de 5 a 180 minutos). */
+const ATRASO_OPCOES = [5, 10, 15, 20, 30, 45];
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: layout.screenMargin, paddingVertical: spacing.md, backgroundColor: colors.surface, borderBottomWidth: borders.hairline, borderBottomColor: colors.border },
-  backBtn: { marginLeft: -spacing.md, marginRight: spacing.xs },
-  title: { ...typography.title, color: colors.ink },
-  currentStatusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs, minHeight: layout.minTouch, alignSelf: 'flex-start' },
-  timelineContainer: { padding: layout.screenMargin, paddingBottom: spacing.xxl, width: '100%', maxWidth: 800, alignSelf: 'center' },
-  stopRow: { flexDirection: 'row', minHeight: 80 },
-  indicator: { alignItems: 'center', width: 32, marginRight: spacing.md },
-  dot: { width: 32, height: 32, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', zIndex: 2 },
-  dotDriver: { backgroundColor: colors.slate500 },
-  dotStudent: { backgroundColor: colors.primary },
-  dotNum: { ...typography.captionBold, color: colors.onPrimary },
-  line: { width: 2, flex: 1, backgroundColor: colors.border, marginTop: -2, marginBottom: -2 },
-  details: { flex: 1, paddingBottom: spacing.xl },
-  stopLocal: { ...typography.heading, color: colors.ink },
-  stopAddr: { ...typography.caption, color: colors.slate500, marginTop: spacing.xs, marginBottom: spacing.md },
-  detailsContent: { flex: 1 },
-  studentCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: layout.cardPadding, marginBottom: spacing.md, borderWidth: borders.hairline, borderColor: colors.border },
-  studentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.md },
-  studentName: { ...typography.label, fontSize: 18, lineHeight: 22, color: colors.ink },
-  responsavelName: { ...typography.caption, color: colors.slate500, marginTop: spacing.xs },
-  quickActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, borderTopWidth: borders.hairline, borderTopColor: colors.border, paddingTop: spacing.md },
-  quickBtn: { flexGrow: 1, flexBasis: 96, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: layout.minTouch, paddingHorizontal: spacing.sm, borderRadius: radius.md, gap: spacing.xs, borderWidth: borders.hairline },
-  btnEmbarcado: { borderColor: colors.successTint, backgroundColor: colors.successTint },
-  btnDesembarcado: { borderColor: colors.infoTint, backgroundColor: colors.infoTint },
-  btnFaltou: { borderColor: colors.dangerTint, backgroundColor: colors.dangerTint },
-  btnActiveEmbarcado: { backgroundColor: colors.success, borderColor: colors.success },
-  btnActiveDesembarcado: { backgroundColor: colors.info, borderColor: colors.info },
-  btnActiveFaltou: { backgroundColor: colors.danger, borderColor: colors.danger },
-  quickBtnText: { ...typography.captionBold },
-  textWhite: { color: colors.surface },
+  flex: { flex: 1 },
+  alignStart: { alignSelf: 'flex-start' },
+  content: { padding: layout.screenMargin, paddingBottom: spacing.xxl, gap: spacing.lg, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  summary: { flexDirection: 'row', gap: spacing.sm },
+  summaryItem: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: radius.md, backgroundColor: colors.background },
+  summaryValue: { ...typography.title, color: colors.ink },
+  tripActions: { gap: layout.buttonGap, marginTop: spacing.sm },
+  atrasoOpcoes: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  atrasoOpcao: {
+    minHeight: 40,
+    minWidth: 64,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  atrasoOpcaoAtiva: { backgroundColor: colors.ink, borderColor: colors.ink },
+  atrasoTextoAtivo: { color: colors.surface, fontWeight: '700' },
+  alertTitle: { ...typography.label, fontSize: 18, lineHeight: 24, color: colors.ink },
+  body: { ...typography.body, color: colors.slate700 },
+  caption: { ...typography.caption, color: colors.slate500 },
+  stop: { gap: spacing.md },
+  stopHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  stopBadge: { width: 32, height: 32, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  stopBadgeDriver: { backgroundColor: colors.slate500 },
+  stopNumber: { ...typography.captionBold, color: colors.onPrimary },
+  stopTitle: { ...typography.label, color: colors.ink },
+  student: { gap: spacing.sm, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
+  studentHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  studentName: { ...typography.label, fontSize: 18, lineHeight: 24, color: colors.ink },
+  actions: { flexDirection: 'row', gap: layout.buttonGap },
   modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.xl, paddingBottom: spacing.xxl, width: '100%', maxWidth: 600, alignSelf: 'center' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
-  modalTitle: { ...typography.heading, color: colors.ink, flexShrink: 1 },
-  statusOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: layout.buttonLg, paddingHorizontal: spacing.lg, borderRadius: radius.button, marginBottom: spacing.sm, backgroundColor: colors.surface, borderWidth: borders.hairline, borderColor: colors.border },
-  statusOptionActive: { backgroundColor: colors.primaryTint, borderWidth: borders.alert, borderColor: colors.ink },
+  modalContent: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.xl, gap: spacing.md, width: '100%', maxWidth: 600, alignSelf: 'center' },
+  modalTitle: { ...typography.heading, color: colors.ink },
 });

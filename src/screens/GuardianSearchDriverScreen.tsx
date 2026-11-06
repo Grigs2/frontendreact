@@ -1,140 +1,262 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
-} from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import GuardianLayout from '../components/GuardianLayout';
 import { RootStackParamList } from '../navigation';
-import { Button, Chip, ScreenHeader, StateView, TextField } from '../components/ui';
-import { borders, colors, layout, radius, spacing, typography } from '../theme';
-
-interface Driver {
-  id: number;
-  nome: string;
-  veiculo: string;
-  placa: string;
-  telefone: string;
-}
-
-// 1. Mock Data
-const MOTORISTAS_MOCK: Driver[] = [
-  { id: 1, nome: 'João da Silva', veiculo: 'Sprinter Branca', placa: 'ABC-1234', telefone: '11988887777' },
-  { id: 2, nome: 'Maria Oliveira', veiculo: 'Ducato Prata', placa: 'XYZ-5678', telefone: '11977776666' },
-  { id: 3, nome: 'Carlos Santos', veiculo: 'Master Azul', placa: 'KJG-9012', telefone: '11966665555' },
-  { id: 4, nome: 'Ricardo Pereira', veiculo: 'Sprinter Escolar', placa: 'MNB-4567', telefone: '11955554444' },
-];
+import { useAppContext } from '../context/AppContext';
+import { responsavelService } from '../services/responsavelService';
+import { periodoLabel, viagemNome } from '../services/viagemService';
+import { DependenteDTO, MotoristaDisponivelDTO, ResponsavelDTO, ViagemDTO } from '../types';
+import { Button, Card, Chip, ScreenHeader, SegmentedControl, StateView, TextField } from '../components/ui';
+import { getApiErrorMessage } from '../utils/apiError';
+import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GuardianSearchDriver'>;
+type Mode = 'PROXIMOS' | 'NOME';
 
+const PROXIMIDADE: Record<MotoristaDisponivelDTO['proximidade'], { label: string; tone: 'success' | 'info' | 'neutral' } | null> = {
+  MESMO_BAIRRO: { label: 'Mesmo bairro', tone: 'success' },
+  MESMA_CIDADE: { label: 'Mesma cidade', tone: 'info' },
+  OUTRA_CIDADE: { label: 'Outra cidade', tone: 'neutral' },
+  SEM_REFERENCIA: null,
+};
+
+const initials = (nome: string) =>
+  nome.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
+
+/**
+ * O responsável encontra motoristas próximos (mesmo bairro/cidade do endereço do aluno) ou pelo nome,
+ * vê o veículo e as viagens de cada um e pede vaga para o aluno. O motorista aceita ou recusa.
+ */
 export default function GuardianSearchDriverScreen({ navigation }: Props) {
-  const [search, setSearch] = useState('');
-  const [drivers, setDrivers] = useState<Driver[]>(MOTORISTAS_MOCK);
+  const { currentUser, showToast } = useAppContext();
+  const guardian = currentUser as ResponsavelDTO;
+  const dependentes = guardian?.dependentes ?? [];
+
+  const [mode, setMode] = useState<Mode>('PROXIMOS');
+  const [aluno, setAluno] = useState<DependenteDTO | null>(dependentes[0] ?? null);
+  const [nome, setNome] = useState('');
+  const [drivers, setDrivers] = useState<MotoristaDisponivelDTO[]>([]);
   const [loading, setLoading] = useState(false);
-  const [requestedIds, setRequestedIds] = useState<number[]>([]);
+  const [sending, setSending] = useState<number | null>(null);
+  const [requested, setRequested] = useState<number[]>([]);
 
-  const handleSearch = () => {
+  const search = useCallback(async () => {
+    if (!guardian?.id) return;
     setLoading(true);
-    // Simulação de delay para realismo
-    setTimeout(() => {
-      const filtered = MOTORISTAS_MOCK.filter(d =>
-        d.nome.toLowerCase().includes(search.toLowerCase()) ||
-        d.veiculo.toLowerCase().includes(search.toLowerCase())
+    try {
+      setDrivers(
+        await responsavelService.buscarMotoristas(guardian.id, {
+          nome: mode === 'NOME' ? nome : undefined,
+          idDependente: aluno?.id,
+          somenteProximos: mode === 'PROXIMOS',
+        }),
       );
-      setDrivers(filtered);
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Não foi possível buscar motoristas.'), 'error');
+    } finally {
       setLoading(false);
-    }, 500);
-  };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guardian?.id, mode, nome, aluno?.id]);
 
-  const handleRequestLink = (driverId: number) => {
-    // Implementa a lógica visual de feedback
-    if (!requestedIds.includes(driverId)) {
-      setRequestedIds([...requestedIds, driverId]);
+  useEffect(() => {
+    if (mode === 'NOME' && nome.trim().length < 2) {
+      setDrivers([]);
+      return;
+    }
+    const timer = setTimeout(search, mode === 'NOME' ? 400 : 0);
+    return () => clearTimeout(timer);
+  }, [search, mode, nome]);
+
+  const requestSeat = async (viagem: ViagemDTO) => {
+    if (!aluno?.id || !viagem.id) return;
+    setSending(viagem.id);
+    try {
+      await responsavelService.solicitarTransporte(viagem.id, aluno.id);
+      setRequested((ids) => [...ids, viagem.id!]);
+      showToast('Pedido enviado. O motorista vai aceitar ou recusar.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Não foi possível enviar o pedido.'), 'error');
+    } finally {
+      setSending(null);
     }
   };
 
-  const renderDriverCard = ({ item }: { item: Driver }) => {
-    const isRequested = requestedIds.includes(item.id);
-
+  const renderTrip = (viagem: ViagemDTO, motoristaNome: string) => {
+    const outraEscola = !!viagem.escolaId && !!aluno?.escola?.id && viagem.escolaId !== aluno.escola.id;
+    const sent = requested.includes(viagem.id!);
     return (
-      <View style={styles.card}>
-        <View style={styles.cardInfo}>
-          <View style={styles.avatarContainer}>
-            <Feather name="user" size={24} color={colors.ink} />
-          </View>
-          <View style={styles.textContainer}>
-            <Text style={styles.driverName}>{item.nome}</Text>
-            <Text style={styles.vehicleInfo}>{item.veiculo} • {item.placa}</Text>
-          </View>
+      <View key={viagem.id} style={styles.trip}>
+        <View style={styles.flex}>
+          <Text style={styles.tripTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>{viagemNome(viagem)}</Text>
+          <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+            {outraEscola ? 'Vai para outra escola' : periodoLabel(viagem.periodo)}
+          </Text>
         </View>
-
-        {isRequested ? (
-          <Chip label="Solicitado" tone="success" icon="check-circle" style={styles.requested} />
+        {sent ? (
+          <Chip label="Pedido enviado" tone="success" icon="check" size="sm" />
         ) : (
           <Button
-            label="Solicitar Vínculo"
-            icon="plus-circle"
-            iconPosition="right"
+            label="Pedir vaga"
             size="md"
-            accessibilityLabel={`Solicitar vínculo com ${item.nome}`}
-            onPress={() => handleRequestLink(item.id)}
-            fullWidth
+            variant={outraEscola ? 'secondary' : 'primary'}
+            disabled={outraEscola || !aluno || sending !== null}
+            loading={sending === viagem.id}
+            onPress={() => requestSeat(viagem)}
+            accessibilityLabel={`Pedir vaga para ${aluno?.nome ?? 'o aluno'} na ${viagemNome(viagem)}, ${periodoLabel(viagem.periodo)}, com ${motoristaNome}`}
           />
         )}
       </View>
     );
   };
 
+  const renderDriver = ({ item }: { item: MotoristaDisponivelDTO }) => {
+    const prox = PROXIMIDADE[item.proximidade];
+    const veiculo = [item.veiculoModelo, item.veiculoCor].filter(Boolean).join(' · ');
+    return (
+      <Card style={styles.card}>
+        <View style={styles.driverRow}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText} maxFontSizeMultiplier={maxFontSizeMultiplier}>{initials(item.nome)}</Text>
+          </View>
+          <View style={styles.flex}>
+            <Text style={styles.driverName} maxFontSizeMultiplier={maxFontSizeMultiplier}>{item.nome}</Text>
+            {!!veiculo && (
+              <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                {veiculo}
+                {item.veiculoCapacidade ? ` · ${item.veiculoCapacidade} lugares` : ''}
+              </Text>
+            )}
+          </View>
+          {prox && <Chip label={prox.label} tone={prox.tone} size="sm" />}
+        </View>
+        {!!(item.bairro || item.cidade) && (
+          <View style={styles.place}>
+            <Feather name="map-pin" size={16} color={colors.slate500} />
+            <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+              Atende a partir de {[item.bairro, item.cidade && `${item.cidade}${item.uf ? `/${item.uf}` : ''}`].filter(Boolean).join(', ')}
+            </Text>
+          </View>
+        )}
+        {item.viagens.length > 0 ? (
+          <View style={styles.trips}>{item.viagens.map((v) => renderTrip(v, item.nome))}</View>
+        ) : (
+          <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>Ainda sem viagens abertas.</Text>
+        )}
+      </Card>
+    );
+  };
+
+  const header = (
+    <View style={styles.header}>
+      <ScreenHeader title="Motoristas" subtitle="Encontre um motorista e peça vaga para o seu aluno" />
+      {dependentes.length > 0 ? (
+        <View style={styles.block}>
+          <Text style={styles.label} maxFontSizeMultiplier={maxFontSizeMultiplier}>Para qual aluno?</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.alunos}>
+            {dependentes.map((d) => {
+              const active = aluno?.id === d.id;
+              return (
+                <Pressable
+                  key={d.id}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: active }}
+                  onPress={() => {
+                    setAluno(d);
+                    setRequested([]);
+                  }}
+                  style={[styles.alunoChip, active && styles.alunoChipActive]}
+                >
+                  <Text style={[styles.alunoName, active && styles.alunoNameActive]} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                    {d.nome.split(' ')[0]}
+                  </Text>
+                  <Text style={styles.caption} numberOfLines={1} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                    {d.escola?.nome || 'Sem escola'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : (
+        <Card variant="alert">
+          <Text style={styles.alertTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>Cadastre um aluno primeiro</Text>
+          <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+            O pedido de vaga é feito para um aluno, e o endereço dele é usado para achar motoristas próximos.
+          </Text>
+          <Button label="Cadastrar aluno" variant="secondary" icon="user-plus" onPress={() => navigation.navigate('GuardianDependentForm')} fullWidth />
+        </Card>
+      )}
+      <SegmentedControl
+        options={[
+          { value: 'PROXIMOS', label: 'Próximos' },
+          { value: 'NOME', label: 'Por nome' },
+        ]}
+        value={mode}
+        onChange={(v) => setMode(v as Mode)}
+      />
+      {mode === 'NOME' ? (
+        <TextField label="Nome do motorista" value={nome} onChangeText={setNome} placeholder="Digite ao menos 2 letras" leftIcon="search" autoCapitalize="words" />
+      ) : (
+        <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+          Motoristas do mesmo bairro ou da mesma cidade do endereço do aluno.
+        </Text>
+      )}
+    </View>
+  );
+
   return (
     <GuardianLayout>
       <View style={styles.container}>
-        <ScreenHeader title="Buscar Motorista" />
-
-        <View style={styles.searchContainer}>
-          <TextField
-            placeholder="Digite o nome ou modelo da van..."
-            accessibilityLabel="Buscar motorista"
-            leftIcon="search"
-            value={search}
-            onChangeText={setSearch}
-            onSubmitEditing={handleSearch}
-            returnKeyType="search"
-            containerStyle={styles.searchInput}
-          />
-          <Button size="icon" icon="search" accessibilityLabel="Buscar" onPress={handleSearch} />
-        </View>
-
-        {loading ? (
-          <StateView kind="loading" title="Buscando motoristas..." />
-        ) : (
-          <FlatList
-            data={drivers}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={renderDriverCard}
-            contentContainerStyle={styles.listContent}
-            ListEmptyComponent={
-              <StateView kind="empty" icon="search" title="Nenhum motorista encontrado." />
-            }
-          />
-        )}
+        <FlatList
+          data={drivers}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={renderDriver}
+          contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={header}
+          ListEmptyComponent={
+            loading ? (
+              <StateView kind="loading" title="Buscando motoristas..." />
+            ) : mode === 'NOME' && nome.trim().length < 2 ? undefined : (
+              <StateView
+                kind="empty"
+                icon="truck"
+                title={mode === 'PROXIMOS' ? 'Nenhum motorista perto deste endereço.' : 'Nenhum motorista com esse nome.'}
+                message={mode === 'PROXIMOS' ? 'Tente a busca por nome.' : undefined}
+              />
+            )
+          }
+        />
       </View>
     </GuardianLayout>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   container: { flex: 1, padding: layout.screenMargin, width: '100%', maxWidth: 800, alignSelf: 'center' },
-  searchContainer: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.xl },
-  searchInput: { flex: 1 },
-  listContent: { paddingBottom: spacing.xl },
-  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: layout.cardPadding, marginBottom: spacing.lg, borderWidth: borders.hairline, borderColor: colors.border, gap: spacing.md },
-  cardInfo: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  avatarContainer: { width: layout.iconSlot, height: layout.iconSlot, borderRadius: radius.pill, backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center' },
-  textContainer: { flex: 1, gap: spacing.xs },
-  driverName: { ...typography.heading, color: colors.ink },
-  vehicleInfo: { ...typography.caption, color: colors.slate700 },
-  requested: { flex: 1, justifyContent: 'center', minHeight: layout.buttonMd },
+  header: { gap: spacing.lg, marginBottom: spacing.sm },
+  block: { gap: spacing.sm },
+  label: { ...typography.captionBold, color: colors.slate700 },
+  alunos: { gap: spacing.sm },
+  alunoChip: { minWidth: 120, maxWidth: 200, padding: spacing.md, borderRadius: radius.card, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, gap: 2 },
+  alunoChipActive: { backgroundColor: colors.primaryTint, borderColor: colors.ink, borderWidth: 2 },
+  alunoName: { ...typography.label, color: colors.slate700 },
+  alunoNameActive: { color: colors.ink },
+  list: { paddingBottom: spacing.xl, gap: spacing.md },
+  card: { gap: spacing.md },
+  driverRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  avatar: { width: layout.iconSlot, height: layout.iconSlot, borderRadius: radius.pill, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { ...typography.label, color: colors.ink },
+  driverName: { ...typography.label, fontSize: 18, lineHeight: 24, color: colors.ink },
+  place: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  trips: { gap: spacing.sm },
+  trip: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.background },
+  tripTitle: { ...typography.label, color: colors.ink },
+  caption: { ...typography.caption, color: colors.slate500 },
+  body: { ...typography.body, color: colors.slate700 },
+  alertTitle: { ...typography.heading, color: colors.ink },
 });

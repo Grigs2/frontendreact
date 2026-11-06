@@ -10,6 +10,7 @@ import { useAppContext } from '../context/AppContext';
 import { authService, PerfilNaoSuportadoError, SessaoCarregada } from '../services/authService';
 import { HOME_BY_ROLE } from '../navigation';
 import { Button, StateView, TextField } from '../components/ui';
+import { TermsModal } from '../components/forms';
 import { getApiErrorMessage, getApiStatus } from '../utils/apiError';
 import { validateEmail } from '../utils/validators';
 import { colors, layout, maxFontSizeMultiplier, spacing, typography } from '../theme';
@@ -27,6 +28,7 @@ const readResetTokenFromUrl = () => {
 export default function LoginScreen({ onLogin }: any) {
   const navigation = useNavigation<any>();
   const { setCurrentUser, showToast } = useAppContext();
+  const [termsVisible, setTermsVisible] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -179,6 +181,19 @@ export default function LoginScreen({ onLogin }: any) {
                 fullWidth
               />
             </View>
+
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Ler os Termos de Uso e a Política de Privacidade"
+              onPress={() => setTermsVisible(true)}
+              style={styles.termsLink}
+              hitSlop={8}
+            >
+              <Text style={styles.termsLinkText} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                Termos de Uso e Política de Privacidade
+              </Text>
+            </Pressable>
+            <TermsModal visible={termsVisible} onClose={() => setTermsVisible(false)} />
           </View>
         </View>
       </ScrollView>
@@ -202,6 +217,8 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.lg,
   },
+  termsLink: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', marginTop: spacing.sm },
+  termsLinkText: { ...typography.caption, color: colors.slate700, textDecorationLine: 'underline' },
   forgot: { alignSelf: 'flex-end', minHeight: 32, justifyContent: 'center', marginTop: -spacing.sm },
   forgotText: { ...typography.label, color: colors.ink, textDecorationLine: 'underline' },
   actions: { gap: layout.buttonGap },

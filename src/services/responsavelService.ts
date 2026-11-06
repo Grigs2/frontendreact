@@ -1,5 +1,15 @@
 import { api, API_ENDPOINTS } from './api';
-import { ResponsavelDTO, DependenteDTO, EscolaDTO, SolicitacaoDTO, MonitoramentoDTO } from '../types';
+import {
+  ResponsavelDTO,
+  DependenteDTO,
+  EscolaDTO,
+  SolicitacaoDTO,
+  MonitoramentoDTO,
+  MotoristaDisponivelDTO,
+  EnderecoDependenteDTO,
+  HistoricoAlunoDTO,
+  AusenciaDTO,
+} from '../types';
 
 export const responsavelService = {
   cadastrar: async (data: ResponsavelDTO): Promise<ResponsavelDTO> => {
@@ -48,5 +58,67 @@ export const responsavelService = {
   alterarInfos: async (data: ResponsavelDTO): Promise<ResponsavelDTO> => {
     const response = await api.put(API_ENDPOINTS.alterarInfosResponsavel, data);
     return response.data;
+  },
+
+  /** Motoristas por nome e/ou proximidade do aluno (mesmo bairro ou cidade). */
+  buscarMotoristas: async (
+    idResponsavel: number,
+    filtros: { nome?: string; idDependente?: number; somenteProximos?: boolean },
+  ): Promise<MotoristaDisponivelDTO[]> => {
+    const response = await api.get(API_ENDPOINTS.buscarMotoristas(idResponsavel), {
+      params: {
+        nome: filtros.nome?.trim() || undefined,
+        idDependente: filtros.idDependente,
+        somenteProximos: filtros.somenteProximos || undefined,
+      },
+    });
+    return response.data;
+  },
+
+  /** Pede vaga para o aluno em uma viagem; o motorista aceita ou recusa. */
+  solicitarTransporte: async (idViagem: number, idDependente: number): Promise<SolicitacaoDTO> => {
+    const response = await api.post(API_ENDPOINTS.solicitarTransporte(idViagem, idDependente));
+    return response.data;
+  },
+
+  listarEnderecosDependente: async (idDependente: number): Promise<EnderecoDependenteDTO[]> => {
+    const response = await api.get(API_ENDPOINTS.enderecosDependente(idDependente));
+    return response.data;
+  },
+
+  /** Cria ou atualiza o endereço estruturado (CEP) usado como parada do aluno. */
+  salvarEnderecoDependente: async (idDependente: number, endereco: EnderecoDependenteDTO): Promise<EnderecoDependenteDTO> => {
+    const { id, ...body } = endereco;
+    const response = id
+      ? await api.put(API_ENDPOINTS.enderecoDependente(idDependente, id), body)
+      : await api.post(API_ENDPOINTS.enderecosDependente(idDependente), body);
+    return response.data;
+  },
+
+  /** Edita nome, CPF, nascimento e endereço do aluno (exige a senha do responsável). */
+  alterarDependente: async (data: DependenteDTO & { senha: string }): Promise<DependenteDTO> => {
+    const response = await api.put(API_ENDPOINTS.alterarInfosDependente, data);
+    return response.data;
+  },
+
+  /** Histórico do aluno (padrão: últimos 30 dias). Datas em yyyy-MM-dd. */
+  historicoDependente: async (idDependente: number, de?: string, ate?: string): Promise<HistoricoAlunoDTO[]> => {
+    const response = await api.get(API_ENDPOINTS.historicoDependente(idDependente), { params: { de, ate } });
+    return response.data;
+  },
+
+  /** Ausências avisadas de hoje em diante. */
+  listarAusencias: async (idDependente: number): Promise<AusenciaDTO[]> => {
+    const response = await api.get(API_ENDPOINTS.ausencias(idDependente));
+    return response.data;
+  },
+
+  avisarAusencia: async (idDependente: number, ausencia: AusenciaDTO): Promise<AusenciaDTO> => {
+    const response = await api.post(API_ENDPOINTS.ausencias(idDependente), ausencia);
+    return response.data;
+  },
+
+  cancelarAusencia: async (idDependente: number, idAusencia: number): Promise<void> => {
+    await api.delete(API_ENDPOINTS.cancelarAusencia(idDependente, idAusencia));
   },
 };

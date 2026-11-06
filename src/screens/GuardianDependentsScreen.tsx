@@ -1,111 +1,151 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
+import React, { useCallback, useState } from 'react';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppContext } from '../context/AppContext';
 import GuardianLayout from '../components/GuardianLayout';
+import AbsenceModal from '../components/AbsenceModal';
 import { responsavelService } from '../services/responsavelService';
-import { ResponsavelDTO, SolicitacaoDTO, DependenteDTO } from '../types';
-import { Button, Chip, ScreenHeader, StateView } from '../components/ui';
-import { borders, colors, layout, radius, spacing, typography } from '../theme';
+import { periodoLabel } from '../services/viagemService';
+import { DependenteDTO, ResponsavelDTO } from '../types';
+import { Button, Card, Chip, ScreenHeader, StateView } from '../components/ui';
+import { isoToBrDate } from '../utils/masks';
+import { ageLabel } from '../utils/validators';
+import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
+const initials = (nome: string) =>
+  nome.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
+
+/** Alunos do responsável, com idade, escola, período e situação do transporte. */
 export default function GuardianDependentsScreen() {
   const navigation = useNavigation<any>();
-  const isFocused = useIsFocused();
   const { currentUser, pendingSolicitations, updateSolicitations } = useAppContext();
-
   const guardian = currentUser as ResponsavelDTO;
   const [loading, setLoading] = useState(false);
+  const [ausenciaDe, setAusenciaDe] = useState<DependenteDTO | null>(null);
 
-  useEffect(() => {
-    if (isFocused && guardian?.id) {
-      loadData();
-    }
-  }, [isFocused]);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const sols = await responsavelService.listarSolicitacoes(guardian.id!);
-      updateSolicitations(sols);
-    } catch (error) {
-      console.error('Error loading solicitations:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useFocusEffect(
+    useCallback(() => {
+      if (!guardian?.id) return;
+      setLoading(true);
+      responsavelService
+        .listarSolicitacoes(guardian.id)
+        .then(updateSolicitations)
+        .catch(() => undefined)
+        .finally(() => setLoading(false));
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [guardian?.id]),
+  );
 
   const renderItem = ({ item }: { item: DependenteDTO }) => {
-    const activeSol = pendingSolicitations.find(s => s.dependenteId === item.id && s.aceito && !s.dataFim);
-    const pendingSol = pendingSolicitations.find(s => s.dependenteId === item.id && !s.respondido);
+    const ativo = pendingSolicitations.find((s) => s.dependenteId === item.id && s.aceito && !s.dataFim);
+    const pendente = pendingSolicitations.find((s) => s.dependenteId === item.id && !s.respondido);
+    const idade = ageLabel(isoToBrDate(item.dataNascimento));
 
     return (
-      <View style={styles.card}>
-        <View style={styles.cardInfo}>
-          <Text style={styles.studentName}>{item.nome}</Text>
-          <Text style={styles.schoolName}>Escola: {item.escola?.nome || 'Não vinculada'}</Text>
-          <Chip
-            label={activeSol ? 'Vínculo Ativo' : pendingSol ? 'Solicitação Pendente' : 'Sem Transporte'}
-            tone={activeSol ? 'success' : pendingSol ? 'warning' : 'neutral'}
-            style={styles.statusBadge}
-          />
+      <Card style={styles.card}>
+        <View style={styles.row}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText} maxFontSizeMultiplier={maxFontSizeMultiplier}>{initials(item.nome)}</Text>
+          </View>
+          <View style={styles.flex}>
+            <Text style={styles.name} maxFontSizeMultiplier={maxFontSizeMultiplier}>{item.nome}</Text>
+            <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+              {[idade, periodoLabel(item.periodo)].filter(Boolean).join(' · ')}
+            </Text>
+            <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+              {item.escola?.nome || 'Escola não informada'}
+            </Text>
+          </View>
         </View>
-
+        <Chip
+          label={ativo ? `Com transporte · ${ativo.motoristaNome || 'motorista'}` : pendente ? 'Solicitação pendente' : 'Sem transporte'}
+          tone={ativo ? 'success' : pendente ? 'warning' : 'neutral'}
+          size="sm"
+          style={styles.chip}
+        />
         <View style={styles.actions}>
           <Button
-            label="Editar Informações"
+            label="Editar"
             icon="edit-2"
             variant="secondary"
             size="md"
-            accessibilityLabel={`Editar informações de ${item.nome}`}
+            accessibilityLabel={`Editar dados de ${item.nome}`}
             onPress={() => navigation.navigate('GuardianDependentForm', { dependentId: item.id })}
+            style={styles.flex}
+          />
+          {ativo ? (
+            <Button
+              label="Acompanhar"
+              icon="navigation"
+              size="md"
+              onPress={() => navigation.navigate('GuardianMonitoring', { dependenteId: item.id })}
+              style={styles.flex}
+            />
+          ) : (
+            <Button label="Achar motorista" icon="search" size="md" onPress={() => navigation.navigate('GuardianSearchDriver')} style={styles.flex} />
+          )}
+        </View>
+        {ativo && (
+          <Button
+            label="Avisar falta"
+            icon="calendar"
+            variant="tertiary"
+            size="md"
+            accessibilityLabel={`Avisar que ${item.nome} não vai no transporte`}
+            onPress={() => setAusenciaDe(item)}
             fullWidth
           />
-        </View>
-      </View>
+        )}
+      </Card>
     );
   };
 
   return (
     <GuardianLayout>
       <View style={styles.container}>
-        <ScreenHeader
-          title="Meus Dependentes"
-          right={
-            <Button
-              label="Novo"
-              icon="plus"
-              size="md"
-              accessibilityLabel="Novo dependente"
-              onPress={() => navigation.navigate('GuardianDependentForm')}
-              disabled={loading}
-            />
-          }
-        />
-
-        {loading && <StateView kind="loading" style={styles.loading} />}
-
         <FlatList
           data={guardian?.dependentes || []}
-          keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+          keyExtractor={(item) => String(item.id)}
           contentContainerStyle={styles.list}
           renderItem={renderItem}
+          ListHeaderComponent={
+            <ScreenHeader
+              title="Alunos"
+              subtitle="Quem você acompanha no transporte"
+              right={<Button label="Novo" icon="plus" size="md" accessibilityLabel="Cadastrar aluno" onPress={() => navigation.navigate('GuardianDependentForm')} />}
+            />
+          }
           ListEmptyComponent={
-            !loading ? <StateView kind="empty" icon="users" title="Nenhum dependente cadastrado." /> : undefined
+            loading ? (
+              <StateView kind="loading" title="Carregando..." />
+            ) : (
+              <StateView kind="empty" icon="users" title="Nenhum aluno cadastrado." message="Toque em Novo para cadastrar seu primeiro aluno." />
+            )
           }
         />
       </View>
+      {ausenciaDe?.id ? (
+        <AbsenceModal
+          visible
+          dependenteId={ausenciaDe.id}
+          dependenteNome={ausenciaDe.nome}
+          onClose={() => setAusenciaDe(null)}
+        />
+      ) : null}
     </GuardianLayout>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   container: { flex: 1, padding: layout.screenMargin, width: '100%', maxWidth: 800, alignSelf: 'center' },
-  loading: { paddingVertical: spacing.md },
-  list: { paddingBottom: spacing.xl },
-  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: layout.cardPadding, marginBottom: spacing.lg, borderWidth: borders.hairline, borderColor: colors.border },
-  cardInfo: { marginBottom: spacing.md, gap: spacing.xs },
-  studentName: { ...typography.heading, color: colors.ink },
-  schoolName: { ...typography.body, color: colors.slate500 },
-  statusBadge: { marginTop: spacing.sm },
-  actions: { borderTopWidth: borders.hairline, borderTopColor: colors.border, paddingTop: spacing.md },
+  list: { paddingBottom: spacing.xl, gap: spacing.md },
+  card: { gap: spacing.md },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  avatar: { width: layout.iconSlot, height: layout.iconSlot, borderRadius: radius.pill, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { ...typography.label, color: colors.ink },
+  name: { ...typography.label, fontSize: 18, lineHeight: 24, color: colors.ink },
+  caption: { ...typography.caption, color: colors.slate500 },
+  chip: { alignSelf: 'flex-start' },
+  actions: { flexDirection: 'row', gap: layout.buttonGap },
 });

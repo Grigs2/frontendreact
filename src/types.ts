@@ -46,6 +46,8 @@ export interface AutenticacaoResponseDTO {
   /** segundos */
   refreshTokenExpiresIn: number;
   perfil: PerfilAutenticadoDTO;
+  /** true quando a versão vigente dos termos é diferente da que o usuário aceitou (pedir novo aceite). */
+  termosPendentes?: boolean;
 }
 
 export interface VeiculoDTO {
@@ -113,6 +115,65 @@ export interface NotificacaoDTO {
   dataCriacao: string;
   visto: boolean;
   remetente: UsuarioResumoDTO;
+  /** Preenchidos pelo servidor nos avisos automáticos (ausentes em backends antigos). */
+  tipo?: TipoNotificacao;
+  prioridade?: 'NORMAL' | 'ALTA';
+  viagemDiaId?: number | null;
+  dependenteId?: number | null;
+  lidaEm?: string | null;
+}
+
+export type TipoNotificacao =
+  | 'MOTORISTA_A_CAMINHO' | 'EMBARQUE' | 'DESEMBARQUE' | 'VIAGEM_FINALIZADA'
+  | 'AUSENCIA' | 'AUSENCIA_INFORMADA' | 'ATRASO' | 'VIAGEM_CANCELADA' | 'VIAGEM_INTERROMPIDA' | 'TROCA_VEICULO'
+  | 'SOLICITACAO' | 'MANUAL' | 'GERAL';
+
+/** Grupos dos filtros da central de notificações. */
+export type GrupoNotificacao = 'VIAGEM' | 'ALERTA' | 'SOLICITACAO' | 'AVISO';
+
+/** Viagem do dia no histórico do motorista (GET /Viagem/Historico/{id}). */
+export interface ViagemDiaResumoDTO {
+  id: number;
+  data: string;
+  status: 'PLANEJADA' | 'EM_ANDAMENTO' | 'FINALIZADA' | 'CANCELADA';
+  dataUltimaAlteracaoStatus?: string | null;
+  viagemId?: number | null;
+  viagemNome?: string | null;
+  periodo?: string | null;
+  totalAlunos: number;
+  embarcados: number;
+  desembarcados: number;
+  faltas: number;
+  inicio?: string | null;
+  fim?: string | null;
+  motivo?: string | null;
+}
+
+/** Uma viagem do dia na visão do responsável (GET /Responsavel/Dependente/{id}/Historico). */
+export interface HistoricoAlunoDTO {
+  viagemDiaId: number;
+  data: string;
+  viagemNome?: string | null;
+  periodo?: string | null;
+  motoristaNome?: string | null;
+  placa?: string | null;
+  statusPresenca?: 'ESPERANDO' | 'EMBARCADO' | 'DESEMBARCADO' | 'FALTOU' | null;
+  horarioEmbarque?: string | null;
+  horarioDesembarque?: string | null;
+  statusViagem?: string | null;
+  motivo?: string | null;
+}
+
+export type TrechoAusencia = 'TODOS' | 'IDA' | 'VOLTA';
+
+/** Ausência avisada pelo responsável ("meu filho não vai amanhã"). */
+export interface AusenciaDTO {
+  id?: number;
+  dependenteId?: number;
+  /** yyyy-MM-dd */
+  data: string;
+  trecho: TrechoAusencia;
+  motivo?: string | null;
 }
 
 export interface NotificacaoCreateDTO {
@@ -132,6 +193,12 @@ export interface SolicitacaoDTO {
   aceito: boolean;
   dataInicio: string;
   dataFim?: string | null;
+  /** Quem pediu: o motorista convida (o responsável responde) ou o responsável pede vaga (o motorista responde). */
+  origem?: 'MOTORISTA' | 'RESPONSAVEL';
+  viagemNome?: string | null;
+  viagemPeriodo?: string | null;
+  motoristaId?: number | null;
+  responsavelNome?: string | null;
   // Enriched fields
   motoristaNome?: string;
   motoristaTelefone?: string;
@@ -148,6 +215,42 @@ export interface ViagemDTO {
   motoristaNome?: string;
   dependentes?: DependenteDTO[];
   ativo: boolean;
+  /** Escola de destino; o servidor monta o nome "Viagem para <escola>". */
+  escolaId?: number | null;
+  escolaNome?: string | null;
+  nome?: string | null;
+}
+
+export interface EscolaBuscaDTO {
+  id: number;
+  nome: string;
+  cnpj: string;
+}
+
+/** Motorista na busca do responsável (dados públicos do serviço). */
+export interface MotoristaDisponivelDTO {
+  id: number;
+  nome: string;
+  veiculoModelo?: string | null;
+  veiculoCor?: string | null;
+  veiculoCapacidade?: number | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+  proximidade: 'MESMO_BAIRRO' | 'MESMA_CIDADE' | 'OUTRA_CIDADE' | 'SEM_REFERENCIA';
+  viagens: ViagemDTO[];
+}
+
+export interface EnderecoDependenteDTO {
+  id?: number;
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento?: string | null;
+  bairro: string;
+  cidade: string;
+  uf: string;
+  finalidade: 'EMBARQUE' | 'DESEMBARQUE' | 'AMBOS';
 }
 
 export interface MotoristaViagemDTO {

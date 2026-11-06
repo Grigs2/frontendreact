@@ -130,6 +130,53 @@ export const validateBirthDate = (value: string, minAge = 18) => {
 export const validateUF = (value: string) =>
   /^[A-Za-z]{2}$/.test((value || '').trim()) ? null : 'UF deve ter 2 letras.';
 
+/** Idade de um aluno do transporte escolar: entre 1 e 25 anos. */
+export const DEPENDENT_AGE = { min: 1, max: 25 } as const;
+
+export const validateDependentBirthDate = (value: string) => {
+  const base = validateBirthDate(value, 0);
+  if (base) return base;
+  const age = ageOn(parseBrDate(value)!);
+  if (age < DEPENDENT_AGE.min) return `O aluno precisa ter ao menos ${DEPENDENT_AGE.min} ano.`;
+  if (age > DEPENDENT_AGE.max) return `Confira a data: o aluno teria ${age} anos.`;
+  return null;
+};
+
+/** "9 anos" / "1 ano" a partir de DD/MM/AAAA válida; vazio enquanto a data estiver incompleta. */
+export const ageLabel = (value: string) => {
+  const date = value?.length === 10 ? parseBrDate(value) : null;
+  if (!date || date > new Date()) return '';
+  const age = ageOn(date);
+  return age === 1 ? '1 ano' : `${age} anos`;
+};
+
+// ---------------------------------------------------------------------------------------------
+// Veículo
+// ---------------------------------------------------------------------------------------------
+
+/** Placa antiga (ABC1234) ou Mercosul (ABC1D23). Aceita hífen e minúsculas. */
+export const isValidPlate = (value: string) => /^[A-Z]{3}\d[A-Z0-9]\d{2}$/.test((value || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase());
+
+export const validatePlate = (value: string) => {
+  if (!(value || '').trim()) return 'Informe a placa.';
+  return isValidPlate(value) ? null : 'Placa inválida. Use ABC-1234 ou ABC1D23.';
+};
+
+export const validateVehicleYear = (value: string) => {
+  const year = Number(onlyDigits(value));
+  const max = new Date().getFullYear() + 1;
+  if (!value) return 'Informe o ano.';
+  if (String(year).length !== 4 || year < 1980 || year > max) return `Ano deve estar entre 1980 e ${max}.`;
+  return null;
+};
+
+export const validateCapacity = (value: string) => {
+  const n = Number(onlyDigits(value));
+  if (!value) return 'Informe a capacidade.';
+  if (!n || n < 1 || n > 60) return 'Capacidade entre 1 e 60 passageiros.';
+  return null;
+};
+
 // ---------------------------------------------------------------------------------------------
 // Senha
 // ---------------------------------------------------------------------------------------------

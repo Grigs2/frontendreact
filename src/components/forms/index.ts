@@ -4,4 +4,5 @@ export { default as PasswordStrength } from './PasswordStrength';
 export { default as StepIndicator } from './StepIndicator';
 export { default as Checkbox } from './Checkbox';
 export { default as RadioCardGroup } from './RadioCardGroup';
+export { default as TermsModal } from './TermsModal';
 export type { RadioCardOption } from './RadioCardGroup';
