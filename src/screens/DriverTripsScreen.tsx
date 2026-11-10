@@ -29,8 +29,9 @@ export default function DriverTripsScreen() {
   const [schoolQuery, setSchoolQuery] = useState('');
   const [schoolResults, setSchoolResults] = useState<EscolaBuscaDTO[]>([]);
   const [searchingSchools, setSearchingSchools] = useState(false);
-  const [school, setSchool] = useState<EscolaBuscaDTO | null>(null);
+  const [schools, setSchools] = useState<EscolaBuscaDTO[]>([]);
   const [period, setPeriod] = useState<string>(PERIODOS[0]);
+  const [nome, setNome] = useState('');
 
   const loadTrips = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -54,7 +55,7 @@ export default function DriverTripsScreen() {
   // Busca de escolas com atraso curto enquanto o motorista digita (mín. 2 letras, regra da API).
   useEffect(() => {
     const termo = schoolQuery.trim();
-    if (termo.length < 2 || school?.nome === termo) {
+    if (termo.length < 2) {
       setSchoolResults([]);
       return;
     }
@@ -71,25 +72,30 @@ export default function DriverTripsScreen() {
       active = false;
       clearTimeout(timer);
     };
-  }, [schoolQuery, school]);
+  }, [schoolQuery]);
 
   const openCreate = () => {
-    setSchool(null);
+    setSchools([]);
     setSchoolQuery('');
     setSchoolResults([]);
     setPeriod(PERIODOS[0]);
+    setNome('');
     setShowCreateModal(true);
+  };
+
+  const toggleSchool = (s: EscolaBuscaDTO) => {
+    setSchools((atual) => (atual.some((e) => e.id === s.id) ? atual.filter((e) => e.id !== s.id) : [...atual, s]));
   };
 
   const usedPeriods = new Set(trips.filter((t) => t.ativo).map((t) => t.periodo));
 
   const handleCreateTrip = async () => {
-    if (!currentUser?.id || !school) return;
+    if (!currentUser?.id || schools.length === 0) return;
     setCreating(true);
     try {
-      await viagemService.criar(currentUser.id, period, school.id);
+      await viagemService.criar(currentUser.id, period, schools.map((s) => s.id), nome);
       setShowCreateModal(false);
-      showToast(`Viagem para ${school.nome} criada.`, 'success');
+      showToast('Viagem criada.', 'success');
       loadTrips();
     } catch (error) {
       showToast(getApiErrorMessage(error, 'Não foi possível criar a viagem.'), 'error');
@@ -161,35 +167,35 @@ export default function DriverTripsScreen() {
                   Nova viagem
                 </Text>
 
-                <Text style={styles.label} maxFontSizeMultiplier={maxFontSizeMultiplier}>1. Escola de destino</Text>
-                {school ? (
-                  <Card variant="selected">
+                <Text style={styles.label} maxFontSizeMultiplier={maxFontSizeMultiplier}>1. Escolas de destino</Text>
+                <Text style={styles.hint} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                  Você pode atender mais de uma escola na mesma viagem. Somente alunos dessas escolas poderão entrar nela.
+                </Text>
+                {schools.map((s) => (
+                  <Card key={s.id} variant="selected">
                     <ListRow
                       icon="book-open"
-                      title={school.nome}
-                      caption="Somente alunos desta escola poderão entrar na viagem"
-                      right={<Button label="Trocar" variant="tertiary" size="md" onPress={() => setSchool(null)} />}
+                      title={s.nome}
+                      right={<Button label="Remover" variant="tertiary" size="md" onPress={() => toggleSchool(s)} />}
                     />
                   </Card>
-                ) : (
-                  <>
-                    <TextField
-                      label="Buscar escola"
-                      value={schoolQuery}
-                      onChangeText={setSchoolQuery}
-                      placeholder="Digite o nome ou o CNPJ"
-                      leftIcon="search"
-                      autoFocus
-                    />
-                    {searchingSchools && <StateView kind="loading" title="Buscando..." style={styles.inlineState} />}
-                    {!searchingSchools && schoolQuery.trim().length >= 2 && schoolResults.length === 0 && (
-                      <Text style={styles.hint} maxFontSizeMultiplier={maxFontSizeMultiplier}>Nenhuma escola encontrada com esse nome.</Text>
-                    )}
-                    {schoolResults.map((s, i) => (
-                      <ListRow key={s.id} icon="book-open" title={s.nome} divider={i > 0} onPress={() => setSchool(s)} />
-                    ))}
-                  </>
+                ))}
+                <TextField
+                  label="Buscar escola"
+                  value={schoolQuery}
+                  onChangeText={setSchoolQuery}
+                  placeholder="Digite o nome ou o CNPJ"
+                  leftIcon="search"
+                />
+                {searchingSchools && <StateView kind="loading" title="Buscando..." style={styles.inlineState} />}
+                {!searchingSchools && schoolQuery.trim().length >= 2 && schoolResults.length === 0 && (
+                  <Text style={styles.hint} maxFontSizeMultiplier={maxFontSizeMultiplier}>Nenhuma escola encontrada com esse nome.</Text>
                 )}
+                {schoolResults
+                  .filter((s) => !schools.some((e) => e.id === s.id))
+                  .map((s, i) => (
+                    <ListRow key={s.id} icon="book-open" title={s.nome} divider={i > 0} onPress={() => toggleSchool(s)} />
+                  ))}
 
                 <Text style={styles.label} maxFontSizeMultiplier={maxFontSizeMultiplier}>2. Período</Text>
                 <View style={styles.periodGrid} accessibilityRole="radiogroup">
@@ -215,10 +221,24 @@ export default function DriverTripsScreen() {
                   })}
                 </View>
 
-                {!!school && (
+                <Text style={styles.label} maxFontSizeMultiplier={maxFontSizeMultiplier}>3. Nome da viagem</Text>
+                <TextField
+                  label="Nome"
+                  value={nome}
+                  onChangeText={setNome}
+                  placeholder={viagemNome({ periodo: period, escolas: schools.map((s) => ({ id: s.id, nome: s.nome })) })}
+                  maxLength={200}
+                />
+                <Text style={styles.hint} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                  Se deixar em branco, o nome padrão será usado. Você pode alterá-lo depois.
+                </Text>
+
+                {schools.length > 0 && (
                   <Card variant="muted">
                     <Text style={styles.previewLabel} maxFontSizeMultiplier={maxFontSizeMultiplier}>Será criada</Text>
-                    <Text style={styles.previewTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>Viagem para {school.nome}</Text>
+                    <Text style={styles.previewTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                      {nome.trim() || viagemNome({ periodo: period, escolas: schools.map((s) => ({ id: s.id, nome: s.nome })) })}
+                    </Text>
                     <Text style={styles.tripCaption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{periodoLabel(period)}</Text>
                   </Card>
                 )}
@@ -229,7 +249,7 @@ export default function DriverTripsScreen() {
                     icon="check"
                     onPress={handleCreateTrip}
                     loading={creating}
-                    disabled={!school || usedPeriods.has(period)}
+                    disabled={schools.length === 0 || usedPeriods.has(period)}
                     fullWidth
                   />
                   <Button label="Cancelar" variant="tertiary" onPress={() => setShowCreateModal(false)} disabled={creating} fullWidth />

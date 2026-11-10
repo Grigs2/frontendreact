@@ -35,9 +35,16 @@ export const motoristaService = {
     return response.data;
   },
 
-  /** Aceita ou recusa um pedido de vaga feito pelo responsável. */
-  responderSolicitacao: async (idSolicitacao: number, aceito: boolean): Promise<SolicitacaoDTO> => {
-    const response = await api.post(API_ENDPOINTS.responderSolicitacaoMotorista(idSolicitacao), { aceito });
+  /** Aceita ou recusa um pedido. Ao aceitar, o motorista precisa confirmar o compartilhamento dos dados. */
+  responderSolicitacao: async (
+    idSolicitacao: number,
+    aceito: boolean,
+    compartilhamentoAutorizado = false,
+  ): Promise<SolicitacaoDTO> => {
+    const response = await api.post(API_ENDPOINTS.responderSolicitacaoMotorista(idSolicitacao), {
+      aceito,
+      compartilhamentoAutorizado: aceito ? compartilhamentoAutorizado : undefined,
+    });
     return response.data;
   },
 };

@@ -30,6 +30,7 @@ export default function GuardianInvitesScreen() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [unlinkId, setUnlinkId] = useState<number | null>(null);
+  const [pendingAccept, setPendingAccept] = useState<SolicitacaoDTO | null>(null);
 
   const load = useCallback(async () => {
     if (!guardian?.id) return;
@@ -58,11 +59,11 @@ export default function GuardianInvitesScreen() {
   const alunoNome = (s: SolicitacaoDTO) =>
     s.dependenteNome || guardian?.dependentes?.find((d) => d.id === s.dependenteId)?.nome || `Aluno #${s.dependenteId}`;
 
-  const respond = async (item: SolicitacaoDTO, aceito: boolean) => {
+  const respond = async (item: SolicitacaoDTO, aceito: boolean, compartilhamentoAutorizado = false) => {
     if (!item.id) return;
     setBusyId(item.id);
     try {
-      await responsavelService.responderSolicitacao(item.id, aceito);
+      await responsavelService.responderSolicitacao(item.id, aceito, compartilhamentoAutorizado);
       showToast(aceito ? `${alunoNome(item)} entrou na viagem.` : 'Convite recusado.', aceito ? 'success' : 'info');
       load();
     } catch (error) {
@@ -70,6 +71,12 @@ export default function GuardianInvitesScreen() {
     } finally {
       setBusyId(null);
     }
+  };
+
+  const confirmAccept = async () => {
+    const item = pendingAccept;
+    setPendingAccept(null);
+    if (item) await respond(item, true, true);
   };
 
   const unlink = async () => {
@@ -105,7 +112,7 @@ export default function GuardianInvitesScreen() {
       {tab === 'CONVITES' && (
         <View style={styles.actions}>
           <Button label="Recusar" variant="secondary" size="md" onPress={() => respond(item, false)} disabled={busyId !== null} style={styles.flex} />
-          <Button label="Aceitar" icon="check" size="md" onPress={() => respond(item, true)} loading={busyId === item.id} disabled={busyId !== null} style={styles.flex} />
+          <Button label="Aceitar" icon="check" size="md" onPress={() => setPendingAccept(item)} loading={busyId === item.id} disabled={busyId !== null} style={styles.flex} />
         </View>
       )}
       {tab === 'ATIVOS' && (
@@ -164,6 +171,18 @@ export default function GuardianInvitesScreen() {
               </View>
             )
           }
+        />
+
+        <ConfirmDialog
+          visible={pendingAccept !== null}
+          title="Aceitar e compartilhar dados?"
+          message="Ao aceitar, as informações dos seus dependentes e do responsável serão compartilhadas com o motorista e o acordo de transporte será fechado."
+          confirmLabel="Aceitar"
+          cancelLabel="Cancelar"
+          onConfirm={confirmAccept}
+          onCancel={() => setPendingAccept(null)}
+          destructive={false}
+          loading={busyId !== null}
         />
 
         <ConfirmDialog

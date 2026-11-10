@@ -184,6 +184,16 @@ export interface NotificacaoCreateDTO {
   destinatarioId: number;
 }
 
+/** Aluno visto pelo motorista antes do acordo: sem nome completo, CPF ou endereço. */
+export interface DependenteAnonimoDTO {
+  id: number;
+  iniciais: string;
+  idade?: number | null;
+  periodo?: string | null;
+  escola?: { id: number; nome: string } | null;
+  responsavelNome?: string | null;
+}
+
 export interface SolicitacaoDTO {
   id?: number;
   viagemId: number;
@@ -195,6 +205,11 @@ export interface SolicitacaoDTO {
   dataFim?: string | null;
   /** Quem pediu: o motorista convida (o responsável responde) ou o responsável pede vaga (o motorista responde). */
   origem?: 'MOTORISTA' | 'RESPONSAVEL';
+  /** PENDENTE, ACEITA, RECUSADA ou EXPIRADA (vence em 3 dias). */
+  status?: 'PENDENTE' | 'ACEITA' | 'RECUSADA' | 'EXPIRADA';
+  dataExpiracao?: string | null;
+  /** Confirmação de que os dados do aluno/responsável serão compartilhados se aceita. */
+  compartilhamentoAutorizado?: boolean | null;
   viagemNome?: string | null;
   viagemPeriodo?: string | null;
   motoristaId?: number | null;
@@ -205,7 +220,6 @@ export interface SolicitacaoDTO {
   dependenteNome?: string;
   escolaNome?: string;
   periodo?: string;
-  status?: string;
 }
 
 export interface ViagemDTO {
@@ -215,10 +229,15 @@ export interface ViagemDTO {
   motoristaNome?: string;
   dependentes?: DependenteDTO[];
   ativo: boolean;
-  /** Escola de destino; o servidor monta o nome "Viagem para <escola>". */
-  escolaId?: number | null;
-  escolaNome?: string | null;
+  /** Escolas atendidas pela viagem (ida ou volta). */
+  escolas?: EscolaResumoDTO[] | null;
+  /** Nome editável; se vazio, o servidor devolve o padrão de ida/volta com as escolas. */
   nome?: string | null;
+}
+
+export interface EscolaResumoDTO {
+  id: number;
+  nome: string;
 }
 
 export interface EscolaBuscaDTO {

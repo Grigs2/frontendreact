@@ -9,6 +9,7 @@ import { motoristaService } from '../services/motoristaService';
 import { periodoLabel } from '../services/viagemService';
 import { SolicitacaoDTO } from '../types';
 import { Button, Card, Chip, ScreenHeader, SegmentedControl, StateView } from '../components/ui';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { getApiErrorMessage } from '../utils/apiError';
 import { colors, layout, maxFontSizeMultiplier, spacing, typography } from '../theme';
 
@@ -27,6 +28,7 @@ export default function DriverInvitesScreen({ navigation }: Props) {
   const [items, setItems] = useState<SolicitacaoDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [answering, setAnswering] = useState<number | null>(null);
+  const [pendingAccept, setPendingAccept] = useState<SolicitacaoDTO | null>(null);
 
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -51,11 +53,11 @@ export default function DriverInvitesScreen({ navigation }: Props) {
   const sent = items.filter((s) => s.origem !== 'RESPONSAVEL');
   const data = tab === 'RECEBIDOS' ? received : sent;
 
-  const answer = async (item: SolicitacaoDTO, aceito: boolean) => {
+  const answer = async (item: SolicitacaoDTO, aceito: boolean, compartilhamentoAutorizado = false) => {
     if (!item.id) return;
     setAnswering(item.id);
     try {
-      await motoristaService.responderSolicitacao(item.id, aceito);
+      await motoristaService.responderSolicitacao(item.id, aceito, compartilhamentoAutorizado);
       showToast(aceito ? `${item.dependenteNome || 'Aluno'} entrou na viagem.` : 'Pedido recusado.', aceito ? 'success' : 'info');
       load();
     } catch (error) {
@@ -63,6 +65,13 @@ export default function DriverInvitesScreen({ navigation }: Props) {
     } finally {
       setAnswering(null);
     }
+  };
+
+  const confirmAccept = async () => {
+    if (!pendingAccept) return;
+    const item = pendingAccept;
+    setPendingAccept(null);
+    await answer(item, true, true);
   };
 
   const renderItem = ({ item }: { item: SolicitacaoDTO }) => {
@@ -97,7 +106,7 @@ export default function DriverInvitesScreen({ navigation }: Props) {
               label="Aceitar"
               icon="check"
               size="md"
-              onPress={() => answer(item, true)}
+              onPress={() => setPendingAccept(item)}
               loading={answering === item.id}
               disabled={answering !== null}
               style={styles.flex}
@@ -149,6 +158,16 @@ export default function DriverInvitesScreen({ navigation }: Props) {
               />
             )
           }
+        />
+        <ConfirmDialog
+          visible={!!pendingAccept}
+          title="Aceitar pedido?"
+          message="Ao aceitar, os dados completos do aluno e do responsável serão compartilhados com você e o acordo de transporte será fechado."
+          confirmLabel="Aceitar"
+          destructive={false}
+          loading={answering !== null}
+          onConfirm={confirmAccept}
+          onCancel={() => setPendingAccept(null)}
         />
       </View>
     </DriverLayout>

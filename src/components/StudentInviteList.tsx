@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { useAppContext } from '../context/AppContext';
-import { viagemService } from '../services/viagemService';
-import { DependenteDTO } from '../types';
-import { Button, Card, Chip, StateView, TextField } from './ui';
-import { isoToBrDate } from '../utils/masks';
-import { ageLabel } from '../utils/validators';
+import { viagemService, periodoLabel } from '../services/viagemService';
+import { DependenteAnonimoDTO } from '../types';
+import { Button, Card, Chip, StateView } from './ui';
+import ConfirmDialog from './ConfirmDialog';
 import { getApiErrorMessage } from '../utils/apiError';
 import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
@@ -16,61 +15,44 @@ interface Props {
   header?: React.ReactElement;
 }
 
-const initials = (nome: string) =>
-  nome
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join('');
-
-/** Bairro aproximado a partir do endereço em texto "Rua X, 120 - Bairro, Cidade/UF - CEP ...". */
-const bairroDe = (endereco?: string | null) => {
-  if (!endereco) return '';
-  const parte = endereco.split(' - ')[1];
-  return parte ? parte.split(',')[0].trim() : '';
-};
-
 /**
- * Alunos que o motorista pode convidar para a viagem (mesma escola da viagem, ainda fora dela),
- * com busca por nome. O convite vai para o responsável, que aceita ou recusa.
+ * Alunos que o motorista pode convidar para a viagem (mesma escola da viagem, ainda fora dela).
+ * Os dados são anonimizados (iniciais e idade); o convite vai para o responsável, que aceita ou recusa
+ * e só então os dados completos são compartilhados.
  */
 export default function StudentInviteList({ viagemId, escolaNome, header }: Props) {
   const { showToast } = useAppContext();
-  const [query, setQuery] = useState('');
-  const [students, setStudents] = useState<DependenteDTO[]>([]);
+  const [students, setStudents] = useState<DependenteAnonimoDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [sendingId, setSendingId] = useState<number | null>(null);
   const [invited, setInvited] = useState<number[]>([]);
+  const [pendingInvite, setPendingInvite] = useState<DependenteAnonimoDTO | null>(null);
 
-  const load = useCallback(
-    async (nome: string) => {
-      setLoading(true);
-      try {
-        setStudents(await viagemService.listarDependentesDisponiveis(viagemId, nome));
-      } catch (error) {
-        showToast(getApiErrorMessage(error, 'Não foi possível carregar os alunos.'), 'error');
-      } finally {
-        setLoading(false);
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [viagemId],
-  );
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setStudents(await viagemService.listarDependentesDisponiveis(viagemId));
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Não foi possível carregar os alunos.'), 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [viagemId, showToast]);
 
   useEffect(() => {
     setInvited([]);
-    const timer = setTimeout(() => load(query), query ? 350 : 0);
-    return () => clearTimeout(timer);
-  }, [query, load]);
+    load();
+  }, [load]);
 
-  const invite = async (aluno: DependenteDTO) => {
-    if (!aluno.id) return;
+  const confirmInvite = async () => {
+    const aluno = pendingInvite;
+    if (!aluno) return;
     setSendingId(aluno.id);
     try {
       await viagemService.solicitarDependente(viagemId, aluno.id);
-      setInvited((ids) => [...ids, aluno.id!]);
-      showToast(`Convite enviado ao responsável de ${aluno.nome.split(' ')[0]}.`, 'success');
+      setInvited((ids) => [...ids, aluno.id]);
+      showToast(`Convite enviado ao responsável de ${aluno.iniciais}.`, 'success');
+      setPendingInvite(null);
     } catch (error) {
       showToast(getApiErrorMessage(error, 'Não foi possível enviar o convite.'), 'error');
     } finally {
@@ -78,23 +60,24 @@ export default function StudentInviteList({ viagemId, escolaNome, header }: Prop
     }
   };
 
-  const renderItem = ({ item }: { item: DependenteDTO }) => {
-    const idade = ageLabel(isoToBrDate(item.dataNascimento));
-    const bairro = bairroDe(item.endereco);
-    const sent = invited.includes(item.id!);
+  const renderItem = ({ item }: { item: DependenteAnonimoDTO }) => {
+    const sent = invited.includes(item.id);
+    const detalhes = [item.idade != null ? `${item.idade} anos` : null, periodoLabel(item.periodo), item.escola?.nome]
+      .filter(Boolean)
+      .join(' · ');
     return (
       <Card style={styles.card}>
         <View style={styles.row}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText} maxFontSizeMultiplier={maxFontSizeMultiplier}>{initials(item.nome)}</Text>
+            <Text style={styles.avatarText} maxFontSizeMultiplier={maxFontSizeMultiplier}>{item.iniciais}</Text>
           </View>
           <View style={styles.info}>
-            <Text style={styles.name} maxFontSizeMultiplier={maxFontSizeMultiplier}>{item.nome}</Text>
-            <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-              {[idade, item.escola?.nome].filter(Boolean).join(' · ')}
-            </Text>
-            {!!bairro && (
-              <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>Bairro: {bairro}</Text>
+            <Text style={styles.name} maxFontSizeMultiplier={maxFontSizeMultiplier}>{item.iniciais}</Text>
+            {!!detalhes && <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{detalhes}</Text>}
+            {!!item.responsavelNome && (
+              <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                Responsável: {item.responsavelNome}
+              </Text>
             )}
           </View>
         </View>
@@ -106,8 +89,8 @@ export default function StudentInviteList({ viagemId, escolaNome, header }: Prop
             icon="send"
             variant="secondary"
             size="md"
-            accessibilityLabel={`Convidar ${item.nome} para a viagem`}
-            onPress={() => invite(item)}
+            accessibilityLabel={`Convidar o aluno ${item.iniciais} para a viagem`}
+            onPress={() => setPendingInvite(item)}
             loading={sendingId === item.id}
             disabled={sendingId !== null}
             fullWidth
@@ -118,41 +101,45 @@ export default function StudentInviteList({ viagemId, escolaNome, header }: Prop
   };
 
   return (
-    <FlatList
-      data={students}
-      keyExtractor={(item) => String(item.id)}
-      renderItem={renderItem}
-      contentContainerStyle={styles.list}
-      keyboardShouldPersistTaps="handled"
-      ListHeaderComponent={
-        <View style={styles.header}>
-          {header}
-          <TextField
-            label="Buscar aluno"
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Digite o nome do aluno"
-            leftIcon="search"
-            autoCapitalize="words"
-          />
-          {loading && <StateView kind="loading" title="Buscando alunos..." style={styles.loading} />}
-        </View>
-      }
-      ListEmptyComponent={
-        loading ? undefined : (
-          <StateView
-            kind="empty"
-            icon="users"
-            title={query ? 'Nenhum aluno com esse nome.' : 'Nenhum aluno disponível.'}
-            message={
-              escolaNome
-                ? `Aparecem alunos de ${escolaNome} que ainda não estão nesta viagem.`
-                : 'Aparecem alunos com escola cadastrada que ainda não estão nesta viagem.'
-            }
-          />
-        )
-      }
-    />
+    <>
+      <FlatList
+        data={students}
+        keyExtractor={(item) => String(item.id)}
+        renderItem={renderItem}
+        contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          <View style={styles.header}>
+            {header}
+            {loading && <StateView kind="loading" title="Buscando alunos..." style={styles.loading} />}
+          </View>
+        }
+        ListEmptyComponent={
+          loading ? undefined : (
+            <StateView
+              kind="empty"
+              icon="users"
+              title="Nenhum aluno disponível."
+              message={
+                escolaNome
+                  ? `Aparecem alunos de ${escolaNome} que ainda não estão nesta viagem.`
+                  : 'Aparecem alunos com escola cadastrada que ainda não estão nesta viagem.'
+              }
+            />
+          )
+        }
+      />
+      <ConfirmDialog
+        visible={!!pendingInvite}
+        title="Convidar aluno?"
+        message="Se o responsável aceitar, os dados completos do aluno e do responsável serão compartilhados com você."
+        confirmLabel="Convidar"
+        destructive={false}
+        loading={sendingId !== null}
+        onConfirm={confirmInvite}
+        onCancel={() => setPendingInvite(null)}
+      />
+    </>
   );
 }
 

@@ -1,5 +1,5 @@
 import { api, API_ENDPOINTS } from './api';
-import { ViagemDTO, DependenteDTO, SolicitacaoDTO, ViagemDiaDTO, ParadaViagemDTO, ViagemDiaResumoDTO } from '../types';
+import { ViagemDTO, DependenteAnonimoDTO, SolicitacaoDTO, ViagemDiaDTO, ParadaViagemDTO, ViagemDiaResumoDTO } from '../types';
 
 /** Períodos aceitos pelo backend (enum Periodo). */
 export const PERIODOS = ['MANHA_IDA', 'MANHA_VOLTA', 'TARDE_IDA', 'TARDE_VOLTA', 'NOITE_IDA', 'NOITE_VOLTA'] as const;
@@ -19,13 +19,29 @@ const PERIODO_LABEL: Record<string, string> = {
 
 export const periodoLabel = (periodo?: string | null) => (periodo ? PERIODO_LABEL[periodo] ?? periodo.replace('_', ' ') : '');
 
-/** "Viagem para <escola>" (nome vindo do servidor); viagens antigas, sem escola, usam o período. */
-export const viagemNome = (viagem?: Pick<ViagemDTO, 'nome' | 'escolaNome' | 'periodo'> | null) =>
-  viagem?.nome || (viagem?.escolaNome ? `Viagem para ${viagem.escolaNome}` : `Viagem ${periodoLabel(viagem?.periodo)}`);
+/** Nome exibido da viagem: o editado, ou o padrão de ida/volta com as escolas atendidas. */
+export const escolasNomes = (viagem?: Pick<ViagemDTO, 'escolas'> | null) =>
+  (viagem?.escolas ?? []).map((e) => e.nome).join(', ');
+
+export const viagemNome = (viagem?: Pick<ViagemDTO, 'nome' | 'escolas' | 'periodo'> | null) => {
+  if (viagem?.nome) return viagem.nome;
+  const nomes = escolasNomes(viagem);
+  if (!nomes) return `Viagem ${periodoLabel(viagem?.periodo)}`;
+  return viagem?.periodo?.endsWith('_VOLTA')
+    ? `Viagem de volta das escola(s): ${nomes}`
+    : `Viagem para escola(s): ${nomes}`;
+};
 
 export const viagemService = {
-  criar: async (idMotorista: number, periodo: string, escolaId?: number): Promise<ViagemDTO> => {
-    const response = await api.post(API_ENDPOINTS.criarViagem(idMotorista), { periodo, escolaId });
+  criar: async (idMotorista: number, periodo: string, escolaIds: number[], nome?: string): Promise<ViagemDTO> => {
+    const escolas = escolaIds.map((id) => ({ id, nome: '' }));
+    const response = await api.post(API_ENDPOINTS.criarViagem(idMotorista), { periodo, escolas, nome: nome?.trim() || null });
+    return response.data;
+  },
+
+  /** Nome vazio volta ao padrão de ida/volta. */
+  atualizarNome: async (idViagem: number, nome: string): Promise<ViagemDTO> => {
+    const response = await api.put(API_ENDPOINTS.atualizarNomeViagem(idViagem), { nome: nome.trim() || null });
     return response.data;
   },
 
@@ -34,10 +50,8 @@ export const viagemService = {
     return response.data;
   },
 
-  listarDependentesDisponiveis: async (idViagem: number, nome?: string): Promise<DependenteDTO[]> => {
-    const response = await api.get(API_ENDPOINTS.dependentesDisponiveis(idViagem), {
-      params: nome?.trim() ? { nome: nome.trim() } : undefined,
-    });
+  listarDependentesDisponiveis: async (idViagem: number): Promise<DependenteAnonimoDTO[]> => {
+    const response = await api.get(API_ENDPOINTS.dependentesDisponiveis(idViagem));
     return response.data;
   },
 

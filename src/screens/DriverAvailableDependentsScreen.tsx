@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
-import { viagemNome, viagemService } from '../services/viagemService';
+import { escolasNomes, viagemNome, viagemService } from '../services/viagemService';
 import { ViagemDTO } from '../types';
 import DriverLayout from '../components/DriverLayout';
 import StudentInviteList from '../components/StudentInviteList';
@@ -25,7 +25,7 @@ export default function DriverAvailableDependentsScreen({ route, navigation }: P
       <View style={styles.container}>
         <StudentInviteList
           viagemId={viagemId}
-          escolaNome={viagem?.escolaNome}
+          escolaNome={viagem ? escolasNomes(viagem) : undefined}
           header={
             <ScreenHeader
               title="Convidar alunos"

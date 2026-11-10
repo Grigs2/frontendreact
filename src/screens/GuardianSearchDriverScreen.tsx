@@ -9,6 +9,7 @@ import { responsavelService } from '../services/responsavelService';
 import { periodoLabel, viagemNome } from '../services/viagemService';
 import { DependenteDTO, MotoristaDisponivelDTO, ResponsavelDTO, ViagemDTO } from '../types';
 import { Button, Card, Chip, ScreenHeader, SegmentedControl, StateView, TextField } from '../components/ui';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { getApiErrorMessage } from '../utils/apiError';
 import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
@@ -41,6 +42,7 @@ export default function GuardianSearchDriverScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState<number | null>(null);
   const [requested, setRequested] = useState<number[]>([]);
+  const [pendingSeat, setPendingSeat] = useState<ViagemDTO | null>(null);
 
   const search = useCallback(async () => {
     if (!guardian?.id) return;
@@ -77,6 +79,7 @@ export default function GuardianSearchDriverScreen({ navigation }: Props) {
       await responsavelService.solicitarTransporte(viagem.id, aluno.id);
       setRequested((ids) => [...ids, viagem.id!]);
       showToast('Pedido enviado. O motorista vai aceitar ou recusar.', 'success');
+      setPendingSeat(null);
     } catch (error) {
       showToast(getApiErrorMessage(error, 'Não foi possível enviar o pedido.'), 'error');
     } finally {
@@ -84,8 +87,12 @@ export default function GuardianSearchDriverScreen({ navigation }: Props) {
     }
   };
 
+  const confirmRequest = () => {
+    if (pendingSeat) requestSeat(pendingSeat);
+  };
+
   const renderTrip = (viagem: ViagemDTO, motoristaNome: string) => {
-    const outraEscola = !!viagem.escolaId && !!aluno?.escola?.id && viagem.escolaId !== aluno.escola.id;
+    const outraEscola = !!viagem.escolas?.length && !!aluno?.escola?.id && !viagem.escolas.some((e) => e.id === aluno.escola?.id);
     const sent = requested.includes(viagem.id!);
     return (
       <View key={viagem.id} style={styles.trip}>
@@ -104,7 +111,7 @@ export default function GuardianSearchDriverScreen({ navigation }: Props) {
             variant={outraEscola ? 'secondary' : 'primary'}
             disabled={outraEscola || !aluno || sending !== null}
             loading={sending === viagem.id}
-            onPress={() => requestSeat(viagem)}
+            onPress={() => setPendingSeat(viagem)}
             accessibilityLabel={`Pedir vaga para ${aluno?.nome ?? 'o aluno'} na ${viagemNome(viagem)}, ${periodoLabel(viagem.periodo)}, com ${motoristaNome}`}
           />
         )}
@@ -229,6 +236,16 @@ export default function GuardianSearchDriverScreen({ navigation }: Props) {
               />
             )
           }
+        />
+        <ConfirmDialog
+          visible={!!pendingSeat}
+          title="Pedir vaga?"
+          message={`Se o motorista aceitar, os dados de ${aluno?.nome ?? 'seu aluno'} e os seus serão compartilhados com ele e o acordo de transporte será fechado.`}
+          confirmLabel="Pedir vaga"
+          destructive={false}
+          loading={sending !== null}
+          onConfirm={confirmRequest}
+          onCancel={() => setPendingSeat(null)}
         />
       </View>
     </GuardianLayout>

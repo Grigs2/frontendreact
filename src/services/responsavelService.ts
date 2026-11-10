@@ -37,10 +37,15 @@ export const responsavelService = {
     return response.data;
   },
 
-  responderSolicitacao: async (idSolicitacao: number, aceito: boolean): Promise<SolicitacaoDTO> => {
+  responderSolicitacao: async (
+    idSolicitacao: number,
+    aceito: boolean,
+    compartilhamentoAutorizado = false,
+  ): Promise<SolicitacaoDTO> => {
     const response = await api.post(API_ENDPOINTS.responderSolicitacao(idSolicitacao), {
       respondido: true,
       aceito,
+      compartilhamentoAutorizado: aceito ? compartilhamentoAutorizado : undefined,
     });
     return response.data;
   },
@@ -76,8 +81,11 @@ export const responsavelService = {
   },
 
   /** Pede vaga para o aluno em uma viagem; o motorista aceita ou recusa. */
+  /** Exige a confirmação de que os dados do aluno serão compartilhados se o motorista aceitar. */
   solicitarTransporte: async (idViagem: number, idDependente: number): Promise<SolicitacaoDTO> => {
-    const response = await api.post(API_ENDPOINTS.solicitarTransporte(idViagem, idDependente));
+    const response = await api.post(API_ENDPOINTS.solicitarTransporte(idViagem, idDependente), {
+      compartilhamentoAutorizado: true,
+    });
     return response.data;
   },
 

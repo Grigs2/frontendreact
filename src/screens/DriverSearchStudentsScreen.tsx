@@ -4,7 +4,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppContext } from '../context/AppContext';
 import DriverLayout from '../components/DriverLayout';
 import StudentInviteList from '../components/StudentInviteList';
-import { periodoLabel, viagemNome, viagemService } from '../services/viagemService';
+import { escolasNomes, periodoLabel, viagemNome, viagemService } from '../services/viagemService';
 import { ViagemDTO } from '../types';
 import { Button, Chip, ScreenHeader, StateView } from '../components/ui';
 import { getApiErrorMessage } from '../utils/apiError';
@@ -59,7 +59,7 @@ export default function DriverSearchStudentsScreen() {
           );
         })}
       </ScrollView>
-      {!!selected && !selected.escolaId && (
+      {!!selected && !selected.escolas?.length && (
         <Chip label="Viagem antiga, sem escola: aparecem alunos de todas as escolas" tone="warning" icon="info" size="sm" style={styles.legacy} />
       )}
     </View>
@@ -82,7 +82,7 @@ export default function DriverSearchStudentsScreen() {
             <Button label="Ir para Rotas" icon="map" onPress={() => navigation.navigate('DriverTrips')} fullWidth />
           </View>
         ) : selected ? (
-          <StudentInviteList key={selected.id} viagemId={selected.id!} escolaNome={selected.escolaNome} header={tripPicker} />
+          <StudentInviteList key={selected.id} viagemId={selected.id!} escolaNome={escolasNomes(selected)} header={tripPicker} />
         ) : null}
       </View>
     </DriverLayout>

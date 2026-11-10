@@ -4,12 +4,12 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
-import { periodoLabel, viagemNome, viagemService } from '../services/viagemService';
+import { escolasNomes, periodoLabel, viagemNome, viagemService } from '../services/viagemService';
 import { ViagemDTO, DependenteDTO } from '../types';
 import DriverLayout from '../components/DriverLayout';
 
 import ConfirmDialog from '../components/ConfirmDialog';
-import { Button, Card, Chip, ScreenHeader, StateView } from '../components/ui';
+import { Button, Card, Chip, ScreenHeader, StateView, TextField } from '../components/ui';
 import { borders, colors, layout, radius, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DriverTripDetails'>;
@@ -20,12 +20,15 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
   const [viagem, setViagem] = useState<ViagemDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [showConfirmDeactivate, setShowConfirmDeactivate] = useState(false);
+  const [nomeEdit, setNomeEdit] = useState('');
+  const [savingNome, setSavingNome] = useState(false);
 
   const loadViagem = useCallback(async () => {
     setLoading(true);
     try {
       const data = await viagemService.visualizar(viagemId);
       setViagem(data);
+      setNomeEdit(data?.nome ?? '');
     } catch (error) {
       console.error('Error loading trip details:', error);
       showToast('Não foi possível carregar os detalhes da viagem.', 'error');
@@ -33,6 +36,21 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
       setLoading(false);
     }
   }, [viagemId, showToast]);
+
+  const handleSalvarNome = async () => {
+    setSavingNome(true);
+    try {
+      const atualizada = await viagemService.atualizarNome(viagemId, nomeEdit);
+      setViagem((atual) => (atual ? { ...atual, nome: atualizada.nome } : atualizada));
+      setNomeEdit(atualizada.nome ?? '');
+      showToast('Nome da viagem atualizado.', 'success');
+    } catch (error) {
+      console.error('Error renaming trip:', error);
+      showToast('Não foi possível alterar o nome da viagem.', 'error');
+    } finally {
+      setSavingNome(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -94,6 +112,18 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
           <Text style={styles.cardSubtitle}>
             {periodoLabel(viagem.periodo)} · {viagem.dependentes?.length || 0} aluno(s) na viagem
           </Text>
+          {!!escolasNomes(viagem) && (
+            <Text style={styles.cardSubtitle}>Escolas: {escolasNomes(viagem)}</Text>
+          )}
+          <TextField
+            label="Nome da viagem"
+            value={nomeEdit}
+            onChangeText={setNomeEdit}
+            placeholder={viagemNome({ ...viagem, nome: null })}
+            maxLength={200}
+          />
+          <Text style={styles.cardSubtitle}>Deixe em branco para voltar ao nome padrão.</Text>
+          <Button label="Salvar nome" variant="secondary" onPress={handleSalvarNome} loading={savingNome} disabled={nomeEdit.trim() === (viagem.nome ?? '')} fullWidth />
         </Card>
 
         <View style={styles.section}>
