@@ -96,7 +96,18 @@ export const responsavelService = {
 
   /** Cria ou atualiza o endereço estruturado (CEP) usado como parada do aluno. */
   salvarEnderecoDependente: async (idDependente: number, endereco: EnderecoDependenteDTO): Promise<EnderecoDependenteDTO> => {
-    const { id, ...body } = endereco;
+    const { id } = endereco;
+    // Só os campos do EnderecoDependenteRequestDTO (os demais são de resposta).
+    const body = {
+      cep: endereco.cep,
+      logradouro: endereco.logradouro,
+      numero: endereco.numero,
+      complemento: endereco.complemento || null,
+      bairro: endereco.bairro,
+      cidade: endereco.cidade,
+      uf: endereco.uf,
+      finalidade: endereco.finalidade,
+    };
     const response = id
       ? await api.put(API_ENDPOINTS.enderecoDependente(idDependente, id), body)
       : await api.post(API_ENDPOINTS.enderecosDependente(idDependente), body);
@@ -129,4 +140,9 @@ export const responsavelService = {
   cancelarAusencia: async (idDependente: number, idAusencia: number): Promise<void> => {
     await api.delete(API_ENDPOINTS.cancelarAusencia(idDependente, idAusencia));
   },
+/** Desativa o endereço (o histórico das viagens passadas mantém o endereço usado na data). */
+  desativarEnderecoDependente: async (idDependente: number, idEndereco: number): Promise<void> => {
+    await api.delete(API_ENDPOINTS.enderecoDependente(idDependente, idEndereco));
+  },
 };
+

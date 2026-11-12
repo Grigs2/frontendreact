@@ -231,8 +231,20 @@ export default function GuardianSearchDriverScreen({ navigation }: Props) {
               <StateView
                 kind="empty"
                 icon="truck"
-                title={mode === 'PROXIMOS' ? 'Nenhum motorista perto deste endereço.' : 'Nenhum motorista com esse nome.'}
-                message={mode === 'PROXIMOS' ? 'Tente a busca por nome.' : undefined}
+                title={
+                  !aluno?.escola
+                    ? 'Informe a escola do aluno.'
+                    : mode === 'PROXIMOS'
+                      ? 'Nenhum motorista perto deste endereço.'
+                      : 'Nenhum motorista com esse nome.'
+                }
+                message={
+                  !aluno?.escola
+                    ? 'A busca mostra apenas motoristas vinculados à escola do aluno. Edite o cadastro do aluno e escolha a escola.'
+                    : `Aparecem apenas motoristas com vínculo ativo com ${aluno.escola.nome || 'a escola do aluno'} e veículo cadastrado.${
+                        mode === 'PROXIMOS' ? ' Tente também a busca por nome.' : ''
+                      }`
+                }
               />
             )
           }

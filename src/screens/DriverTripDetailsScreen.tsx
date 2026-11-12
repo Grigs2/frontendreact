@@ -5,7 +5,9 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { escolasNomes, periodoLabel, viagemNome, viagemService } from '../services/viagemService';
-import { ViagemDTO, DependenteDTO } from '../types';
+import { MotoristaDTO, ViagemDTO } from '../types';
+import { todayIso } from '../utils/format';
+import { Notice } from '../components/Feedback';
 import DriverLayout from '../components/DriverLayout';
 
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -16,7 +18,8 @@ type Props = NativeStackScreenProps<RootStackParamList, 'DriverTripDetails'>;
 
 export default function DriverTripDetailsScreen({ route, navigation }: Props) {
   const { viagemId } = route.params;
-  const { setActiveViagemDia, setCurrentStops, showToast } = useAppContext();
+  const { currentUser, showToast } = useAppContext();
+  const capacidade = (currentUser as MotoristaDTO)?.veiculoDTO?.capacidade ?? 0;
   const [viagem, setViagem] = useState<ViagemDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [showConfirmDeactivate, setShowConfirmDeactivate] = useState(false);
@@ -58,20 +61,9 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
     }, [loadViagem])
   );
 
-  const handleIniciarViagem = async () => {
-    setLoading(true);
-    try {
-      const viagemDia = await viagemService.iniciarViagemDia(viagemId);
-      setActiveViagemDia(viagemDia);
-      const stops = await viagemService.buscarParadasViagemDia(viagemDia.id!);
-      setCurrentStops(stops);
-      navigation.navigate('DriverAttendance', { viagemDiaId: viagemDia.id! });
-    } catch (error) {
-      console.error('Error starting trip:', error);
-      showToast('Não foi possível iniciar a viagem.', 'error');
-    } finally {
-      setLoading(false);
-    }
+  // A viagem do dia é preparada e revisada antes de iniciar (5.5): abre a tela da execução de hoje.
+  const handleIniciarViagem = () => {
+    navigation.navigate('DriverTripDay', { viagemId, data: todayIso() });
   };
 
   const handleDesativarViagem = async () => {
@@ -110,7 +102,7 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
             <Chip label={viagem.ativo === false ? 'Encerrada' : 'Ativa'} tone={viagem.ativo === false ? 'neutral' : 'success'} />
           </View>
           <Text style={styles.cardSubtitle}>
-            {periodoLabel(viagem.periodo)} · {viagem.dependentes?.length || 0} aluno(s) na viagem
+            {periodoLabel(viagem.periodo)} · {viagem.dependentes?.length || 0} de {capacidade || '?'} lugares ocupados
           </Text>
           {!!escolasNomes(viagem) && (
             <Text style={styles.cardSubtitle}>Escolas: {escolasNomes(viagem)}</Text>
@@ -136,8 +128,12 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
               size="md"
               accessibilityLabel="Adicionar dependente"
               onPress={() => navigation.navigate('DriverAvailableDependents', { viagemId })}
+              disabled={!!capacidade && (viagem.dependentes?.length || 0) >= capacidade}
             />
           </View>
+          {!!capacidade && (viagem.dependentes?.length || 0) >= capacidade && (
+            <Notice tone="warning">Veículo lotado. Não é possível adicionar mais alunos nesta viagem.</Notice>
+          )}
 
           {viagem.dependentes && viagem.dependentes.length > 0 ? (
             viagem.dependentes.map((dep) => (
@@ -154,7 +150,7 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
         </View>
 
         <View style={styles.actions}>
-          <Button label="Iniciar Viagem do Dia" icon="play" onPress={handleIniciarViagem} disabled={loading} fullWidth />
+          <Button label="Preparar viagem de hoje" icon="play" onPress={handleIniciarViagem} disabled={loading || viagem.ativo === false} fullWidth />
           <Button
             label="Desativar Viagem"
             icon="trash-2"

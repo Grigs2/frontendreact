@@ -1,88 +1,127 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Modal, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
+import { useConnectivity } from '../context/ConnectivityContext';
 import DriverLayout from '../components/DriverLayout';
-import { viagemService } from '../services/viagemService';
-import { DependenteParadaDTO, ParadaViagemDTO, ViagemDiaDTO } from '../types';
+import TripMap from '../components/TripMap';
+import ConfirmDialog from '../components/ConfirmDialog';
+import ReasonDialog from '../components/ReasonDialog';
+import ChoiceChips from '../components/ChoiceChips';
+import Timeline from '../components/Timeline';
+import { Notice, ProgressBar } from '../components/Feedback';
+import { SectionTitle } from '../components/HomeBlocks';
 import { Button, Card, Chip, ScreenHeader, StateView, TextField } from '../components/ui';
+import { viagemService } from '../services/viagemService';
+import { authSession } from '../services/authSession';
+import { offlineQueue, podeRegistrarOffline } from '../services/offlineQueue';
+import { MENSAGEM_GPS, useDriverLocation } from '../hooks/useDriverLocation';
+import {
+  DependenteParadaDTO,
+  HistoricoViagemDiaDTO,
+  HistoricoViagemPresencaDTO,
+  ParadaViagemDTO,
+  StatusViagemPresenca,
+  ViagemDiaDTO,
+} from '../types';
+import { statusInfo } from '../utils/statusLabels';
+import { formatDateTime, formatTime } from '../utils/format';
 import { getApiErrorMessage } from '../utils/apiError';
-import { StatusTone, colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
+import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DriverAttendance'>;
-type TripStatus = ViagemDiaDTO['status'] | 'INTERROMPIDA';
-type Presence = DependenteParadaDTO['statusEmbarque'];
+type Marca = 'EMBARCADO' | 'DESEMBARCADO' | 'FALTOU';
 
-const TRIP_STATUS: Record<string, { label: string; tone: StatusTone }> = {
-  PLANEJADA: { label: 'Planejada', tone: 'warning' },
-  EM_ANDAMENTO: { label: 'Em rota', tone: 'info' },
-  FINALIZADA: { label: 'Concluída', tone: 'success' },
-  CANCELADA: { label: 'Cancelada', tone: 'danger' },
-  INTERROMPIDA: { label: 'Interrompida', tone: 'danger' },
+const ACAO: Record<Marca, { titulo: string; confirmar: string; ok: string }> = {
+  EMBARCADO: { titulo: 'Confirmar embarque', confirmar: 'Confirmar embarque', ok: 'embarque registrado' },
+  DESEMBARCADO: { titulo: 'Confirmar desembarque', confirmar: 'Confirmar desembarque', ok: 'desembarque registrado' },
+  FALTOU: { titulo: 'Registrar ausência', confirmar: 'Registrar ausência', ok: 'ausência registrada' },
 };
 
-const PRESENCE: Record<Presence, { label: string; tone: StatusTone }> = {
-  ESPERANDO: { label: 'Aguardando', tone: 'neutral' },
-  EMBARCADO: { label: 'Embarcou', tone: 'success' },
-  DESEMBARCADO: { label: 'Desembarcou', tone: 'info' },
-  FALTOU: { label: 'Faltou', tone: 'danger' },
-};
+const TERMINAL = ['FINALIZADA', 'CANCELADA', 'INTERROMPIDA'];
+
+/** Aplica sobre as paradas os registros feitos sem conexão (ainda não enviados). */
+const aplicarLocais = (stops: ParadaViagemDTO[], locais: Record<number, StatusViagemPresenca>) =>
+  Object.keys(locais).length
+    ? stops.map((s) => ({
+        ...s,
+        listaDependentes: s.listaDependentes.map((d) => (locais[d.id] ? { ...d, statusEmbarque: locais[d.id] } : d)),
+      }))
+    : stops;
 
 /**
- * Chamada da viagem do dia. Cada aluno mostra só as ações válidas (regra da API):
- * Aguardando → Embarcou ou Faltou; Embarcou → Desembarcou.
+ * 5.7, 5.9, 5.10, 6.x, 7.1 e 8.2 — execução da viagem do dia.
+ * Topo fixo com mapa/status; paradas e chamada roláveis; presença registrada mesmo sem conexão.
  */
 export default function DriverAttendanceScreen({ route, navigation }: Props) {
   const { activeViagemDia, setActiveViagemDia, currentStops, setCurrentStops, showToast } = useAppContext();
+  const { online, pendentes, problemas, sincronizar, descartar, marcarFalhaDeRede } = useConnectivity();
   const viagemDiaId = route.params?.viagemDiaId || activeViagemDia?.id;
-  const status = (activeViagemDia?.status ?? 'PLANEJADA') as TripStatus;
-  const closed = status === 'FINALIZADA' || status === 'CANCELADA' || status === 'INTERROMPIDA';
+  const usuarioId = authSession.getPerfil()?.usuarioId ?? null;
 
+  const [execucao, setExecucao] = useState<ViagemDiaDTO | null>(activeViagemDia);
+  const [locais, setLocais] = useState<Record<number, StatusViagemPresenca>>({});
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState<number | null>(null);
+  const [confirmar, setConfirmar] = useState<{ aluno: DependenteParadaDTO; novo: Marca } | null>(null);
+  const [detalhe, setDetalhe] = useState<{ aluno: DependenteParadaDTO; parada: ParadaViagemDTO } | null>(null);
+  const [motivoPara, setMotivoPara] = useState<'CANCELADA' | 'INTERROMPIDA' | null>(null);
+  const [confirmarFim, setConfirmarFim] = useState(false);
   const [updatingTrip, setUpdatingTrip] = useState(false);
-  const [reasonFor, setReasonFor] = useState<'CANCELADA' | 'INTERROMPIDA' | null>(null);
-  const [reason, setReason] = useState('');
+  const [eventosAbertos, setEventosAbertos] = useState(false);
+  const [eventos, setEventos] = useState<{ presenca: HistoricoViagemPresencaDTO[]; status: HistoricoViagemDiaDTO[] } | null>(null);
   const [atrasoAberto, setAtrasoAberto] = useState(false);
-  const [atrasoMin, setAtrasoMin] = useState(15);
+  const [atrasoMin, setAtrasoMin] = useState('15');
   const [atrasoMotivo, setAtrasoMotivo] = useState('');
   const [enviandoAtraso, setEnviandoAtraso] = useState(false);
   const loadingRef = useRef(false);
 
-  /** Avisa os responsáveis dos alunos que ainda vão embarcar ou estão no veículo. */
-  const enviarAtraso = async () => {
-    if (!viagemDiaId) return;
-    setEnviandoAtraso(true);
-    try {
-      await viagemService.avisarAtraso(viagemDiaId, atrasoMin, atrasoMotivo);
-      showToast('Responsáveis avisados do atraso.', 'success');
-      setAtrasoAberto(false);
-      setAtrasoMotivo('');
-    } catch (error: any) {
-      showToast(getApiErrorMessage(error, 'Não foi possível avisar o atraso.'), 'error');
-    } finally {
-      setEnviandoAtraso(false);
-    }
-  };
+  const status = execucao?.status ?? 'PLANEJADA';
+  const encerrada = TERMINAL.includes(status);
+  const emAndamento = status === 'EM_ANDAMENTO';
 
-  const loadStops = useCallback(
+  // GPS só com a execução em andamento (7.1.3 / 7.1.9).
+  const gps = useDriverLocation(viagemDiaId, emAndamento);
+
+  const atualizarLocais = useCallback(async () => {
+    if (!usuarioId || !viagemDiaId) return {};
+    const mapa = await offlineQueue.statusLocal(usuarioId, viagemDiaId);
+    setLocais(mapa);
+    return mapa;
+  }, [usuarioId, viagemDiaId]);
+
+  const load = useCallback(
     async (silent = false) => {
       if (!viagemDiaId || loadingRef.current) return;
       loadingRef.current = true;
       if (!silent) setRefreshing(true);
       try {
-        setCurrentStops(await viagemService.buscarParadasViagemDia(viagemDiaId));
-      } catch (error) {
-        showToast(getApiErrorMessage(error, 'Não foi possível carregar as paradas.'), 'error');
+        const [exec, stops] = await Promise.all([
+          viagemService.visualizarViagemDia(viagemDiaId),
+          viagemService.buscarParadasViagemDia(viagemDiaId),
+        ]);
+        setExecucao(exec);
+        setActiveViagemDia({ ...activeViagemDia, ...exec });
+        const mapa = await atualizarLocais();
+        setCurrentStops(aplicarLocais(stops, mapa));
+      } catch (error: any) {
+        if (!error?.response) {
+          marcarFalhaDeRede();
+          const mapa = await atualizarLocais();
+          setCurrentStops(aplicarLocais(currentStops, mapa));
+        } else {
+          showToast(getApiErrorMessage(error, 'Não foi possível carregar a viagem.'), 'error');
+        }
       } finally {
         setRefreshing(false);
         loadingRef.current = false;
       }
     },
-    [viagemDiaId, setCurrentStops, showToast],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [viagemDiaId, atualizarLocais],
   );
 
   useFocusEffect(
@@ -92,20 +131,75 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
         navigation.navigate('DriverTrips');
         return;
       }
-      loadStops();
-    }, [viagemDiaId, loadStops, navigation, showToast]),
+      load();
+    }, [viagemDiaId, load, navigation, showToast]),
   );
 
-  const changeTrip = async (novo: TripStatus, motivo?: string) => {
-    if (!viagemDiaId || updatingTrip) return;
+  // Depois que a fila envia registros (8.3.6), recarrega o estado confirmado pelo servidor.
+  const pendentesAntes = useRef(pendentes);
+  useEffect(() => {
+    if (pendentes < pendentesAntes.current && online) load(true);
+    pendentesAntes.current = pendentes;
+  }, [pendentes, online, load]);
+
+  const registrarOffline = async (aluno: DependenteParadaDTO, novo: Marca) => {
+    if (!usuarioId || !viagemDiaId) return false;
+    if (!emAndamento || !podeRegistrarOffline(aluno.statusEmbarque, novo)) {
+      showToast('Sem conexão: este registro só pode ser feito online.', 'warning');
+      return false;
+    }
+    await offlineQueue.enfileirar(usuarioId, viagemDiaId, aluno.id, aluno.statusEmbarque, novo);
+    const mapa = await atualizarLocais();
+    setCurrentStops(aplicarLocais(currentStops, mapa));
+    // 8.2.5: não afirmar que o servidor recebeu.
+    showToast('Registro salvo neste aparelho. Será enviado quando a conexão voltar.', 'warning');
+    return true;
+  };
+
+  const marcar = async () => {
+    if (!confirmar || !viagemDiaId) return;
+    const { aluno, novo } = confirmar;
+    setSubmitting(aluno.id);
+    try {
+      if (!online || pendentes > 0) {
+        // Com eventos na fila, o novo também entra nela para manter a ordem.
+        await registrarOffline(aluno, novo);
+      } else {
+        const stops = await viagemService.alterarStatusPresenca(viagemDiaId, aluno.id, novo);
+        if (Array.isArray(stops)) setCurrentStops(aplicarLocais(stops, locais));
+        showToast(`${aluno.nomeDependente.split(' ')[0]}: ${ACAO[novo].ok}. Responsáveis avisados.`, 'success');
+      }
+      setConfirmar(null);
+    } catch (error: any) {
+      if (!error?.response) {
+        marcarFalhaDeRede();
+        if (await registrarOffline(aluno, novo)) setConfirmar(null);
+      } else {
+        showToast(getApiErrorMessage(error, 'Não foi possível registrar. Nada foi alterado.'), 'error');
+        setConfirmar(null);
+        load(true);
+      }
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
+  const alterarViagem = async (novo: 'FINALIZADA' | 'CANCELADA' | 'INTERROMPIDA', motivo?: string) => {
+    if (!viagemDiaId) return;
     setUpdatingTrip(true);
     try {
+      if (novo === 'FINALIZADA' && pendentes > 0) {
+        // 5.9: envia os registros guardados antes de encerrar.
+        await sincronizar();
+      }
       const updated = await viagemService.alterarStatusViagemDia(viagemDiaId, novo, motivo);
-      setActiveViagemDia(updated);
-      showToast(`Viagem ${TRIP_STATUS[novo].label.toLowerCase()}.`, 'success');
-      setReasonFor(null);
-      setReason('');
-      loadStops(true);
+      setExecucao(updated);
+      setActiveViagemDia(null);
+      setMotivoPara(null);
+      setConfirmarFim(false);
+      showToast(`Viagem ${statusInfo('viagemDia', novo).label.toLowerCase()}. Os responsáveis foram avisados.`, 'success');
+      if (novo === 'FINALIZADA') navigation.navigate('DriverTrips');
+      else load(true);
     } catch (error) {
       showToast(getApiErrorMessage(error, 'Não foi possível alterar a viagem.'), 'error');
     } finally {
@@ -113,181 +207,379 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
     }
   };
 
-  const mark = async (aluno: DependenteParadaDTO, novo: 'EMBARCADO' | 'DESEMBARCADO' | 'FALTOU') => {
-    if (!viagemDiaId || closed || submitting !== null) return;
-    setSubmitting(aluno.id);
+  const abrirEventos = async () => {
+    if (eventosAbertos) {
+      setEventosAbertos(false);
+      return;
+    }
+    setEventosAbertos(true);
+    if (!viagemDiaId) return;
+    const [presenca, statusHist] = await Promise.all([
+      viagemService.historicoPresenca(viagemDiaId).catch(() => [] as HistoricoViagemPresencaDTO[]),
+      viagemService.historicoStatus(viagemDiaId).catch(() => [] as HistoricoViagemDiaDTO[]),
+    ]);
+    setEventos({ presenca, status: statusHist });
+  };
+
+  const enviarAtraso = async () => {
+    if (!viagemDiaId) return;
+    const minutos = Number(atrasoMin);
+    setEnviandoAtraso(true);
     try {
-      const stops = await viagemService.alterarStatusPresenca(viagemDiaId, aluno.id, novo);
-      if (Array.isArray(stops)) setCurrentStops(stops);
-      showToast(`${aluno.nomeDependente.split(' ')[0]}: ${PRESENCE[novo].label.toLowerCase()}. Responsável avisado.`, 'success');
+      await viagemService.avisarAtraso(viagemDiaId, minutos, atrasoMotivo);
+      showToast('Responsáveis avisados do atraso.', 'success');
+      setAtrasoAberto(false);
+      setAtrasoMotivo('');
     } catch (error) {
-      showToast(getApiErrorMessage(error, 'Não foi possível registrar a presença.'), 'error');
+      showToast(getApiErrorMessage(error, 'Não foi possível avisar o atraso.'), 'error');
     } finally {
-      setSubmitting(null);
+      setEnviandoAtraso(false);
     }
   };
 
-  // Resumo e próxima parada com aluno aguardando
-  const alunos = currentStops.flatMap((s) => s.listaDependentes);
-  const unique = Array.from(new Map(alunos.map((a) => [a.id, a])).values());
-  const count = (st: Presence) => unique.filter((a) => a.statusEmbarque === st).length;
-  const nextStop = currentStops.find((s) => s.listaDependentes.some((d) => d.statusEmbarque === 'ESPERANDO'));
-  const waiting = nextStop?.listaDependentes.filter((d) => d.statusEmbarque === 'ESPERANDO') ?? [];
+  // Resumo, progresso e próxima parada (5.7.2, 5.7.9)
+  const alunos = Array.from(new Map(currentStops.flatMap((s) => s.listaDependentes).map((a) => [a.id, a])).values());
+  const concluidos = alunos.filter((a) => a.statusEmbarque === 'DESEMBARCADO' || a.statusEmbarque === 'FALTOU').length;
+  const pendentesFim = alunos.filter((a) => a.statusEmbarque === 'ESPERANDO' || a.statusEmbarque === 'EMBARCADO');
+  const proxima = currentStops.find((s) =>
+    s.listaDependentes.some((d) =>
+      s.tipoParada === 'ESCOLA' ? d.statusEmbarque === 'EMBARCADO' : d.statusEmbarque === 'ESPERANDO',
+    ),
+  );
+  const nomeAluno = (id: number) => alunos.find((a) => a.id === id)?.nomeDependente ?? `Aluno ${id}`;
 
-  const renderStudent = (aluno: DependenteParadaDTO, stop: ParadaViagemDTO) => {
+  const renderAluno = (aluno: DependenteParadaDTO, parada: ParadaViagemDTO) => {
     const st = aluno.statusEmbarque;
+    const info = statusInfo('presenca', st);
+    const local = locais[aluno.id];
     const busy = submitting === aluno.id;
+    const pode = !encerrada && (emAndamento || status === 'PLANEJADA');
     return (
-      <View key={`${stop.ordem}-${aluno.id}`} style={styles.student}>
+      <View key={`${parada.ordem}-${aluno.id}`} style={styles.student}>
         <View style={styles.studentHead}>
           <View style={styles.flex}>
-            <Text style={styles.studentName} maxFontSizeMultiplier={maxFontSizeMultiplier}>{aluno.nomeDependente}</Text>
+            <Text
+              style={styles.studentName}
+              onPress={() => setDetalhe({ aluno, parada })}
+              accessibilityRole="button"
+              accessibilityLabel={`Ver detalhes de ${aluno.nomeDependente}`}
+              maxFontSizeMultiplier={maxFontSizeMultiplier}
+            >
+              {aluno.nomeDependente}
+            </Text>
             <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>Responsável: {aluno.nomeResponsavel}</Text>
           </View>
-          <Chip label={PRESENCE[st].label} tone={PRESENCE[st].tone} size="sm" />
+          <View style={styles.chips}>
+            <Chip label={info.label} tone={info.tone} size="sm" />
+            {local && <Chip label="Salvo no aparelho" tone="warning" size="sm" icon="smartphone" />}
+          </View>
         </View>
-        {!closed && status === 'EM_ANDAMENTO' && st === 'ESPERANDO' && (
+        {pode && st === 'ESPERANDO' && (
           <View style={styles.actions}>
-            <Button label="Embarcou" icon="log-in" size="md" onPress={() => mark(aluno, 'EMBARCADO')} loading={busy} disabled={submitting !== null} style={styles.flex} accessibilityLabel={`${aluno.nomeDependente} embarcou`} />
-            <Button label="Faltou" icon="x" size="md" variant="secondary" onPress={() => mark(aluno, 'FALTOU')} disabled={submitting !== null} style={styles.flex} accessibilityLabel={`${aluno.nomeDependente} faltou`} />
+            <Button label="Embarcou" icon="log-in" size="md" onPress={() => setConfirmar({ aluno, novo: 'EMBARCADO' })} loading={busy} disabled={submitting !== null} style={styles.flex} accessibilityLabel={`${aluno.nomeDependente} embarcou`} />
+            <Button label="Ausente" icon="x" size="md" variant="secondary" onPress={() => setConfirmar({ aluno, novo: 'FALTOU' })} disabled={submitting !== null} style={styles.flex} accessibilityLabel={`Registrar ausência de ${aluno.nomeDependente}`} />
           </View>
         )}
-        {!closed && status === 'EM_ANDAMENTO' && st === 'EMBARCADO' && (
-          <Button label="Desembarcou" icon="log-out" size="md" variant="secondary" onPress={() => mark(aluno, 'DESEMBARCADO')} loading={busy} disabled={submitting !== null} fullWidth accessibilityLabel={`${aluno.nomeDependente} desembarcou`} />
+        {pode && st === 'EMBARCADO' && (
+          <Button label="Desembarcou" icon="log-out" size="md" variant="secondary" onPress={() => setConfirmar({ aluno, novo: 'DESEMBARCADO' })} loading={busy} disabled={submitting !== null} fullWidth accessibilityLabel={`${aluno.nomeDependente} desembarcou`} />
         )}
       </View>
     );
   };
 
+  const statusExec = statusInfo('viagemDia', status);
+
   return (
     <DriverLayout>
+      {/* Topo fixo: mapa e status (fora do ScrollView) */}
+      {emAndamento && (
+        <View>
+          <TripMap
+            posicao={gps.posicao}
+            ultimaAtualizacao={gps.ultimoEnvio?.toISOString()}
+            desatualizada={gps.estado === 'sem_sinal'}
+            mensagem={MENSAGEM_GPS[gps.estado]}
+            altura={180}
+          />
+          <Card style={styles.statusCard}>
+            <View style={styles.rowBetween}>
+              <Chip label={statusExec.label} tone={statusExec.tone} size="sm" />
+              {gps.estado !== 'ativo' && <Chip label={gps.estado === 'bloqueado' ? 'Sem GPS' : 'GPS'} tone="warning" size="sm" icon="navigation" />}
+            </View>
+            <Text style={styles.statusTitle} numberOfLines={1} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+              {proxima ? `Próxima parada: ${proxima.nomeLocal}` : 'Todas as paradas concluídas'}
+            </Text>
+            {!!proxima?.endereco && (
+              <Text style={styles.caption} numberOfLines={1} maxFontSizeMultiplier={maxFontSizeMultiplier}>{proxima.endereco}</Text>
+            )}
+          </Card>
+        </View>
+      )}
+
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadStops()} colors={[colors.ink]} tintColor={colors.ink} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load()} colors={[colors.ink]} tintColor={colors.ink} />}
       >
         <ScreenHeader
           title="Chamada"
-          subtitle="Registre embarque e desembarque em cada parada"
+          subtitle="Embarque, desembarque e ausência em cada parada"
           onBack={() => navigation.goBack()}
-          right={<Chip label={TRIP_STATUS[status]?.label ?? status} tone={TRIP_STATUS[status]?.tone ?? 'neutral'} />}
+          right={!emAndamento ? <Chip label={statusExec.label} tone={statusExec.tone} /> : undefined}
         />
 
-        <Card>
-          <View style={styles.summary}>
-            {(['EMBARCADO', 'ESPERANDO', 'DESEMBARCADO', 'FALTOU'] as Presence[]).map((st) => (
-              <View key={st} style={styles.summaryItem}>
-                <Text style={styles.summaryValue} maxFontSizeMultiplier={maxFontSizeMultiplier}>{count(st)}</Text>
-                <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{PRESENCE[st].label}</Text>
+        {/* Avisos do GPS (7.1.8) */}
+        {emAndamento && (gps.estado === 'negado' || gps.estado === 'desligado' || gps.estado === 'bloqueado' || gps.estado === 'sem_sinal') && (
+          <Notice
+            tone={gps.estado === 'bloqueado' ? 'info' : 'warning'}
+            title="Localização"
+            action={
+              gps.estado === 'negado' ? (
+                <Button label="Abrir configurações" variant="secondary" size="md" onPress={gps.abrirConfiguracoes} />
+              ) : gps.estado === 'desligado' || gps.estado === 'sem_sinal' ? (
+                <Button label="Tentar novamente" variant="secondary" size="md" onPress={gps.tentarNovamente} />
+              ) : undefined
+            }
+          >
+            {gps.mensagem ?? MENSAGEM_GPS[gps.estado]}
+          </Notice>
+        )}
+
+        {/* Problemas de sincronização (5.7.10 / 8.3.5) */}
+        {problemas.length > 0 && (
+          <Card variant="alert" style={styles.card}>
+            <Text style={styles.cardTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>Registros não aplicados</Text>
+            {problemas.map((p) => (
+              <View key={p.idEvento} style={styles.problem}>
+                <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                  {nomeAluno(p.idDependente)}: {statusInfo('presenca', p.statusNovo).label.toLowerCase()} às {formatTime(p.ocorridoEm)}
+                  {p.statusServidor ? ` — no servidor está "${statusInfo('presenca', p.statusServidor).label}"` : ''}.
+                </Text>
+                {!!p.mensagem && <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{p.mensagem}</Text>}
+                <Button label="Entendi" variant="tertiary" size="md" onPress={() => descartar(p.idEvento).then(() => load(true))} />
               </View>
             ))}
-          </View>
-          {status === 'PLANEJADA' && (
-            <View style={styles.tripActions}>
-              <Button label="Iniciar viagem" icon="play" onPress={() => changeTrip('EM_ANDAMENTO')} loading={updatingTrip} fullWidth />
-              <Button label="Avisar atraso" icon="clock" variant="secondary" onPress={() => setAtrasoAberto(true)} disabled={updatingTrip} fullWidth />
-              <Button label="Cancelar viagem de hoje" variant="tertiary" onPress={() => setReasonFor('CANCELADA')} disabled={updatingTrip} fullWidth />
-            </View>
-          )}
-          {status === 'EM_ANDAMENTO' && (
-            <View style={styles.tripActions}>
-              <Button label="Finalizar viagem" icon="flag" onPress={() => changeTrip('FINALIZADA')} loading={updatingTrip} fullWidth />
-              <Button label="Avisar atraso" icon="clock" variant="secondary" onPress={() => setAtrasoAberto(true)} disabled={updatingTrip} fullWidth />
-              <Button label="Interromper viagem" variant="tertiary" onPress={() => setReasonFor('INTERROMPIDA')} disabled={updatingTrip} fullWidth />
-            </View>
-          )}
-        </Card>
-
-        {status === 'EM_ANDAMENTO' && waiting.length > 0 && nextStop && (
-          <Card variant="alert">
-            <Chip label="Atenção" tone="danger" size="sm" style={styles.alignStart} />
-            <Text style={styles.alertTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-              {waiting.map((w) => w.nomeDependente.split(' ')[0]).join(', ')} ainda não {waiting.length > 1 ? 'embarcaram' : 'embarcou'}
-            </Text>
-            <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-              Parada {nextStop.ordem} · {nextStop.endereco || nextStop.nomeLocal}
-            </Text>
           </Card>
         )}
 
+        {/* Progresso e ações da viagem */}
+        <Card style={styles.card}>
+          <ProgressBar value={concluidos} total={alunos.length} label={`${concluidos} de ${alunos.length} alunos concluídos`} />
+          <View style={styles.summary}>
+            {(['ESPERANDO', 'EMBARCADO', 'DESEMBARCADO', 'FALTOU'] as StatusViagemPresenca[]).map((st) => (
+              <View key={st} style={styles.summaryItem}>
+                <Text style={styles.summaryValue} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                  {alunos.filter((a) => a.statusEmbarque === st).length}
+                </Text>
+                <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{statusInfo('presenca', st).label}</Text>
+              </View>
+            ))}
+          </View>
+
+          {status === 'PLANEJADA' && (
+            <View style={styles.tripActions}>
+              <Notice tone="info">A viagem ainda não começou. Revise as pendências e inicie pela tela da viagem.</Notice>
+              {activeViagemDia?.viagemId ? (
+                <Button
+                  label="Revisar e iniciar"
+                  icon="play"
+                  onPress={() => navigation.navigate('DriverTripDay', { viagemId: activeViagemDia.viagemId!, data: execucao?.data ?? '', viagemDiaId })}
+                  fullWidth
+                />
+              ) : null}
+              <Button label="Cancelar viagem do dia" variant="tertiary" onPress={() => setMotivoPara('CANCELADA')} disabled={!online} fullWidth />
+            </View>
+          )}
+          {emAndamento && (
+            <View style={styles.tripActions}>
+              <Button
+                label="Finalizar viagem"
+                icon="flag"
+                onPress={() => setConfirmarFim(true)}
+                disabled={!online || pendentesFim.length > 0}
+                fullWidth
+              />
+              {pendentesFim.length > 0 && (
+                <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                  Registre desembarque ou ausência de todos os alunos para finalizar ({pendentesFim.length} pendente
+                  {pendentesFim.length === 1 ? '' : 's'}).
+                </Text>
+              )}
+              <Button label="Avisar atraso" icon="clock" variant="secondary" onPress={() => setAtrasoAberto(true)} disabled={!online} fullWidth />
+              <Button
+                label="Alterar ordem das paradas"
+                icon="shuffle"
+                variant="secondary"
+                onPress={() => viagemDiaId && navigation.navigate('DriverRouteOrder', { viagemDiaId, emExecucao: true })}
+                disabled={!online}
+                fullWidth
+              />
+              <Button label="Interromper viagem" variant="tertiary" onPress={() => setMotivoPara('INTERROMPIDA')} disabled={!online} fullWidth />
+              {!online && (
+                <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                  Sem conexão: só embarque, desembarque e ausência podem ser registrados.
+                </Text>
+              )}
+            </View>
+          )}
+          {encerrada && <Notice tone={status === 'FINALIZADA' ? 'success' : 'info'}>{`Viagem ${statusExec.label.toLowerCase()}.`}</Notice>}
+        </Card>
+
         {refreshing && currentStops.length === 0 && <StateView kind="loading" title="Carregando paradas..." />}
 
+        {/* Paradas (6.1) */}
         {currentStops.map((stop, index) => (
-          <Card key={`${stop.ordem}-${index}`} variant={stop === nextStop && status === 'EM_ANDAMENTO' ? 'selected' : 'default'} style={styles.stop}>
+          <Card key={`${stop.ordem}-${index}`} variant={stop === proxima && emAndamento ? 'selected' : 'default'} style={styles.stop}>
             <View style={styles.stopHead}>
               <View style={[styles.stopBadge, stop.tipoParada === 'MOTORISTA' && styles.stopBadgeDriver]}>
                 {stop.tipoParada === 'MOTORISTA' ? (
                   <Feather name="home" size={16} color={colors.surface} />
                 ) : (
-                  <Text style={styles.stopNumber} maxFontSizeMultiplier={maxFontSizeMultiplier}>{stop.ordem}</Text>
+                  <Text style={styles.stopNumber} maxFontSizeMultiplier={maxFontSizeMultiplier}>{index + 1}</Text>
                 )}
               </View>
               <View style={styles.flex}>
                 <Text style={styles.stopTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>{stop.nomeLocal}</Text>
                 {!!stop.endereco && <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{stop.endereco}</Text>}
               </View>
+              {stop === proxima && emAndamento && <Chip label="Próxima" tone="warning" size="sm" />}
             </View>
-            {stop.listaDependentes.map((aluno) => renderStudent(aluno, stop))}
+            {stop.listaDependentes.map((aluno) => renderAluno(aluno, stop))}
           </Card>
         ))}
 
         {!refreshing && currentStops.length === 0 && (
           <StateView kind="empty" icon="map-pin" title="Nenhuma parada nesta viagem." message="Convide alunos para a viagem em Rotas." />
         )}
+
+        {/* Eventos registrados (5.7.8) */}
+        <Button
+          label={eventosAbertos ? 'Ocultar eventos' : 'Ver eventos registrados'}
+          icon="list"
+          variant="tertiary"
+          onPress={abrirEventos}
+          disabled={!online && !eventos}
+          fullWidth
+        />
+        {eventosAbertos && (
+          <Card>
+            {!eventos ? (
+              <StateView kind="loading" />
+            ) : (
+              <Timeline
+                items={[
+                  ...eventos.presenca.map((e) => {
+                    const s = statusInfo('presenca', e.statusNovo);
+                    return {
+                      key: `p-${e.id}`,
+                      at: e.ocorridoEm,
+                      title: `${nomeAluno(e.idDependente)}: ${s.label.toLowerCase()}`,
+                      caption: `${formatDateTime(e.ocorridoEm)}${e.eventoClienteId ? ' · registrado sem conexão' : ''}`,
+                      tone: s.tone,
+                    };
+                  }),
+                  ...eventos.status.map((e) => {
+                    const s = statusInfo('viagemDia', e.statusNovo);
+                    return { key: `s-${e.id}`, at: e.ocorridoEm, title: `Viagem: ${s.label.toLowerCase()}`, caption: formatDateTime(e.ocorridoEm), detail: e.motivo, tone: s.tone };
+                  }),
+                ]
+                  .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+                  .map(({ at, ...item }) => item)}
+                emptyText="Nenhum evento registrado ainda."
+              />
+            )}
+          </Card>
+        )}
+        {emAndamento && (
+          <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+            A posição do GPS não confirma embarque: registre cada aluno manualmente.
+          </Text>
+        )}
       </ScrollView>
 
-      <Modal visible={reasonFor !== null} transparent animationType="slide" onRequestClose={() => setReasonFor(null)}>
+      {/* Confirmação de presença (6.2.2, 6.3.2, 6.4.3) */}
+      <ConfirmDialog
+        visible={!!confirmar}
+        title={confirmar ? ACAO[confirmar.novo].titulo : ''}
+        message={
+          confirmar
+            ? `${confirmar.aluno.nomeDependente}. O horário e o seu usuário ficam registrados e os responsáveis são avisados.${
+                !online ? ' Sem conexão: o registro fica salvo no aparelho até ser enviado.' : ''
+              }`
+            : ''
+        }
+        confirmLabel={confirmar ? ACAO[confirmar.novo].confirmar : 'Confirmar'}
+        cancelLabel="Voltar"
+        destructive={confirmar?.novo === 'FALTOU'}
+        loading={submitting !== null}
+        onConfirm={marcar}
+        onCancel={() => setConfirmar(null)}
+      />
+
+      {/* Finalizar (5.9) */}
+      <ConfirmDialog
+        visible={confirmarFim}
+        title="Finalizar viagem?"
+        message={`O horário de término será registrado, o GPS será desligado e os responsáveis serão avisados.${
+          pendentes ? ` Antes, ${pendentes} registro(s) salvo(s) no aparelho serão enviados.` : ''
+        }`}
+        confirmLabel="Finalizar viagem"
+        cancelLabel="Voltar"
+        destructive={false}
+        loading={updatingTrip}
+        onConfirm={() => alterarViagem('FINALIZADA')}
+        onCancel={() => setConfirmarFim(false)}
+      />
+
+      {/* Cancelar ou interromper (5.10) */}
+      <ReasonDialog
+        visible={motivoPara !== null}
+        title={motivoPara === 'CANCELADA' ? 'Cancelar a viagem do dia?' : 'Interromper a viagem?'}
+        message={
+          motivoPara === 'CANCELADA'
+            ? 'Cancelar: a viagem não vai acontecer nesta data.'
+            : 'Interromper: a viagem começou e não será concluída. O GPS será desligado e os responsáveis avisados.'
+        }
+        confirmLabel={motivoPara === 'CANCELADA' ? 'Cancelar viagem' : 'Interromper viagem'}
+        loading={updatingTrip}
+        onConfirm={(motivo) => motivoPara && alterarViagem(motivoPara, motivo)}
+        onCancel={() => setMotivoPara(null)}
+      />
+
+      {/* Detalhe do aluno (6.1.4: só o que o backend informa nesta tela) */}
+      <Modal visible={!!detalhe} transparent animationType="slide" onRequestClose={() => setDetalhe(null)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent} accessibilityViewIsModal>
-            <Text style={styles.modalTitle} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
-              {reasonFor === 'CANCELADA' ? 'Cancelar viagem de hoje' : 'Interromper viagem'}
-            </Text>
-            <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-              Os responsáveis serão avisados. Informe o motivo.
-            </Text>
-            <TextField label="Motivo" value={reason} onChangeText={setReason} placeholder="Ex.: pneu furado, feriado" multiline maxLength={1000} />
-            <Button
-              label="Confirmar"
-              variant="destructive"
-              onPress={() => reasonFor && changeTrip(reasonFor, reason)}
-              loading={updatingTrip}
-              disabled={!reason.trim()}
-              fullWidth
-            />
-            <Button label="Voltar" variant="tertiary" onPress={() => setReasonFor(null)} disabled={updatingTrip} fullWidth />
+            {detalhe && (
+              <>
+                <Text style={styles.modalTitle} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                  {detalhe.aluno.nomeDependente}
+                </Text>
+                <Chip label={statusInfo('presenca', detalhe.aluno.statusEmbarque).label} tone={statusInfo('presenca', detalhe.aluno.statusEmbarque).tone} style={styles.alignStart} />
+                <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>Responsável: {detalhe.aluno.nomeResponsavel}</Text>
+                <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>Parada: {detalhe.parada.nomeLocal}</Text>
+                {!!detalhe.parada.endereco && <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{detalhe.parada.endereco}</Text>}
+                <Button label="Fechar" variant="tertiary" onPress={() => setDetalhe(null)} fullWidth />
+              </>
+            )}
           </View>
         </View>
       </Modal>
 
+      {/* Atraso */}
       <Modal visible={atrasoAberto} transparent animationType="fade" onRequestClose={() => setAtrasoAberto(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent} accessibilityViewIsModal>
-            <Text style={styles.modalTitle} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
-              Avisar atraso
-            </Text>
+            <Text style={styles.modalTitle} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>Avisar atraso</Text>
             <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
               Os responsáveis dos alunos que ainda vão embarcar ou estão no veículo recebem o aviso.
             </Text>
-            <View style={styles.atrasoOpcoes}>
-              {ATRASO_OPCOES.map((min) => (
-                <Pressable
-                  key={min}
-                  onPress={() => setAtrasoMin(min)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: atrasoMin === min }}
-                  accessibilityLabel={`${min} minutos`}
-                  style={[styles.atrasoOpcao, atrasoMin === min && styles.atrasoOpcaoAtiva]}
-                >
-                  <Text style={[styles.caption, atrasoMin === min && styles.atrasoTextoAtivo]}>{min} min</Text>
-                </Pressable>
-              ))}
-            </View>
-            <TextField
-              label="Motivo (opcional)"
-              value={atrasoMotivo}
-              onChangeText={setAtrasoMotivo}
-              placeholder="Ex.: trânsito na avenida"
-              maxLength={200}
+            <ChoiceChips
+              options={['5', '10', '15', '20', '30', '45'].map((m) => ({ value: m, label: `${m} min` }))}
+              value={atrasoMin}
+              onChange={setAtrasoMin}
+              accessibilityLabel="Minutos de atraso"
             />
+            <TextField label="Motivo (opcional)" value={atrasoMotivo} onChangeText={setAtrasoMotivo} placeholder="Ex.: trânsito na avenida" maxLength={200} />
             <Button label="Enviar aviso" icon="send" onPress={enviarAtraso} loading={enviandoAtraso} fullWidth />
             <Button label="Voltar" variant="tertiary" onPress={() => setAtrasoAberto(false)} disabled={enviandoAtraso} fullWidth />
           </View>
@@ -297,42 +589,32 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
   );
 }
 
-/** Opções rápidas de atraso (o backend aceita de 5 a 180 minutos). */
-const ATRASO_OPCOES = [5, 10, 15, 20, 30, 45];
-
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   alignStart: { alignSelf: 'flex-start' },
   content: { padding: layout.screenMargin, paddingBottom: spacing.xxl, gap: spacing.lg, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  statusCard: { marginHorizontal: layout.screenMargin, marginTop: -spacing.xl, gap: spacing.xs },
+  statusTitle: { ...typography.heading, color: colors.ink },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  card: { gap: spacing.md },
+  cardTitle: { ...typography.heading, color: colors.ink },
+  problem: { gap: spacing.xs, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
   summary: { flexDirection: 'row', gap: spacing.sm },
   summaryItem: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: radius.md, backgroundColor: colors.background },
   summaryValue: { ...typography.title, color: colors.ink },
-  tripActions: { gap: layout.buttonGap, marginTop: spacing.sm },
-  atrasoOpcoes: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  atrasoOpcao: {
-    minHeight: 40,
-    minWidth: 64,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  atrasoOpcaoAtiva: { backgroundColor: colors.ink, borderColor: colors.ink },
-  atrasoTextoAtivo: { color: colors.surface, fontWeight: '700' },
-  alertTitle: { ...typography.label, fontSize: 18, lineHeight: 24, color: colors.ink },
+  tripActions: { gap: layout.buttonGap },
   body: { ...typography.body, color: colors.slate700 },
   caption: { ...typography.caption, color: colors.slate500 },
   stop: { gap: spacing.md },
   stopHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  stopBadge: { width: 32, height: 32, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  stopBadge: { width: 32, height: 32, borderRadius: radius.pill, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
   stopBadgeDriver: { backgroundColor: colors.slate500 },
-  stopNumber: { ...typography.captionBold, color: colors.onPrimary },
+  stopNumber: { ...typography.captionBold, color: colors.surface },
   stopTitle: { ...typography.label, color: colors.ink },
   student: { gap: spacing.sm, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
   studentHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  studentName: { ...typography.label, fontSize: 18, lineHeight: 24, color: colors.ink },
+  studentName: { ...typography.label, fontSize: 18, lineHeight: 24, color: colors.ink, textDecorationLine: 'underline' },
+  chips: { alignItems: 'flex-end', gap: spacing.xs },
   actions: { flexDirection: 'row', gap: layout.buttonGap },
   modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
   modalContent: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.xl, gap: spacing.md, width: '100%', maxWidth: 600, alignSelf: 'center' },

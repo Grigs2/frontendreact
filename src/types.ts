@@ -1,6 +1,6 @@
 // src/types.ts
 
-export type UserRole = 'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA' | null;
+export type UserRole = 'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA' | 'ADMIN' | null;
 
 export interface UsuarioDTO {
   id?: number;
@@ -135,7 +135,7 @@ export type GrupoNotificacao = 'VIAGEM' | 'ALERTA' | 'SOLICITACAO' | 'AVISO';
 export interface ViagemDiaResumoDTO {
   id: number;
   data: string;
-  status: 'PLANEJADA' | 'EM_ANDAMENTO' | 'FINALIZADA' | 'CANCELADA';
+  status: 'PLANEJADA' | 'EM_ANDAMENTO' | 'FINALIZADA' | 'CANCELADA' | 'INTERROMPIDA';
   dataUltimaAlteracaoStatus?: string | null;
   viagemId?: number | null;
   viagemNome?: string | null;
@@ -262,6 +262,11 @@ export interface MotoristaDisponivelDTO {
 
 export interface EnderecoDependenteDTO {
   id?: number;
+  dependenteId?: number;
+  statusValidacao?: StatusValidacaoEndereco | null;
+  ativo?: boolean;
+  criadoEm?: string;
+  atualizadoEm?: string;
   cep: string;
   logradouro: string;
   numero: string;
@@ -284,7 +289,7 @@ export interface MotoristaViagemDTO {
 export interface ViagemDiaDTO {
   id?: number;
   data: string;
-  status: 'PLANEJADA' | 'EM_ANDAMENTO' | 'FINALIZADA' | 'CANCELADA';
+  status: 'PLANEJADA' | 'EM_ANDAMENTO' | 'FINALIZADA' | 'CANCELADA' | 'INTERROMPIDA';
   dataUltimaAlteracaoStatus?: string | null;
   ultimaAlteracao?: string | null;
   viagemId?: number;
@@ -334,6 +339,8 @@ export interface DependenteParadaDTO {
 }
 
 export interface ParadaViagemDTO {
+  /** Necessário para reordenar a rota (PUT /Viagem/ReordenarParadasViagemDia). */
+  id?: number | null;
   ordem: number;
   tipoParada: 'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA';
   nomeLocal: string;
@@ -343,3 +350,272 @@ export interface ParadaViagemDTO {
 
 // Keep some legacy types if they are used and not yet migrated, but ideally we should migrate everything.
 // For now, let's keep it clean and only have DTOs.
+
+// ---------------------------------------------------------------------------
+// Implementação 1111 — contratos das fases 2, 4, 5, 6, 8, 9 e 11 do backend
+// ---------------------------------------------------------------------------
+
+export type StatusViagemDia = 'PLANEJADA' | 'EM_ANDAMENTO' | 'FINALIZADA' | 'CANCELADA' | 'INTERROMPIDA';
+export type StatusViagemPresenca = 'ESPERANDO' | 'EMBARCADO' | 'DESEMBARCADO' | 'FALTOU';
+
+/** Página do Spring Data (endpoints /Admin e histórico de localização). */
+export interface Page<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+  last?: boolean;
+  first?: boolean;
+}
+
+// Documentos do motorista (CNH, vistoria, licenciamento) — só metadados, sem upload.
+export type TipoDocumento = 'CNH' | 'VISTORIA' | 'LICENCIAMENTO';
+export type StatusDocumento = 'PENDENTE' | 'APROVADO' | 'RECUSADO' | 'VENCIDO';
+
+export interface DocumentoMotoristaDTO {
+  id: number;
+  tipo: TipoDocumento;
+  numero: string;
+  categoria?: string | null;
+  /** yyyy-MM-dd */
+  dataRealizacao?: string | null;
+  /** yyyy-MM-dd */
+  dataValidade: string;
+  status: StatusDocumento;
+  submetidoEm: string;
+  substituidoEm?: string | null;
+  revisadoEm?: string | null;
+  revisadoPorId?: number | null;
+  motivoRecusa?: string | null;
+}
+
+export interface SubmeterDocumentoDTO {
+  tipo: TipoDocumento;
+  numero: string;
+  categoria?: string | null;
+  dataRealizacao?: string | null;
+  dataValidade: string;
+}
+
+// Vínculo motorista–escola
+export type StatusVinculoEscola =
+  | 'PENDENTE_ESCOLA'
+  | 'PENDENTE_MOTORISTA'
+  | 'ATIVO'
+  | 'RECUSADO'
+  | 'SUSPENSO'
+  | 'ENCERRADO';
+
+export interface VinculoEscolaDTO {
+  id: number;
+  escolaId: number;
+  escolaNome: string;
+  escolaCnpj: string;
+  motoristaId: number;
+  motoristaNome: string;
+  status: StatusVinculoEscola;
+  criadoEm: string;
+  atualizadoEm: string;
+}
+
+export interface HistoricoVinculoEscolaDTO {
+  id: number;
+  vinculoId: number;
+  statusAnterior: StatusVinculoEscola | null;
+  statusNovo: StatusVinculoEscola;
+  atorUsuarioId: number;
+  perfilAtor: string;
+  motivo?: string | null;
+  ocorridoEm: string;
+}
+
+export interface MotoristaBuscaDTO {
+  id: number;
+  nome: string;
+}
+
+// Rede de responsáveis do dependente
+export type CategoriaVinculoResponsavel = 'PAI' | 'MAE' | 'RESPONSAVEL_LEGAL' | 'OUTRO';
+export type StatusConviteResponsavel = 'PENDENTE' | 'ACEITO' | 'RECUSADO' | 'EXPIRADO' | 'REVOGADO';
+
+export interface ConviteResponsavelDTO {
+  id: number;
+  dependenteId: number;
+  dependenteNome: string;
+  convidadoId: number;
+  convidadoNome: string;
+  convidadoEmail: string;
+  convidadorId?: number | null;
+  convidadorNome?: string | null;
+  categoria: CategoriaVinculoResponsavel | null;
+  status: StatusConviteResponsavel;
+  criadoEm: string;
+  expiraEm: string;
+  respondidoEm?: string | null;
+  revogadoEm?: string | null;
+}
+
+export interface VinculoResponsavelDTO {
+  responsavelId: number;
+  nome: string;
+  email?: string | null;
+  categoria?: CategoriaVinculoResponsavel | null;
+  responsavelCriador: boolean;
+  vinculadoEm?: string | null;
+}
+
+// Planejamento e execução
+export interface AgendaViagemDTO {
+  idViagem: number;
+  periodo: string;
+  /** yyyy-MM-dd */
+  data: string;
+  idViagemDia: number | null;
+  status: StatusViagemDia | null;
+  materializada: boolean;
+}
+
+export interface ProntidaoViagemDTO {
+  idViagem: number;
+  pronta: boolean;
+  bloqueios: string[];
+}
+
+export interface HistoricoViagemDiaDTO {
+  id: number;
+  statusAnterior: StatusViagemDia | null;
+  statusNovo: StatusViagemDia;
+  atorUsuarioId: number;
+  ocorridoEm: string;
+  motivo?: string | null;
+}
+
+export interface HistoricoOrdemParadaDTO {
+  id: number;
+  idParada: number;
+  ordemAnterior: number;
+  ordemNova: number;
+  atorUsuarioId: number;
+  ocorridoEm: string;
+}
+
+export interface HistoricoViagemPresencaDTO {
+  id: number;
+  idPresenca: number;
+  idDependente: number;
+  statusAnterior: StatusViagemPresenca;
+  statusNovo: StatusViagemPresenca;
+  atorUsuarioId: number;
+  ocorridoEm: string;
+  eventoClienteId?: string | null;
+  instanteDispositivo?: string | null;
+  recebidoEm?: string | null;
+}
+
+// Localização (GPS) e consentimento
+export interface ConsentimentoLocalizacaoDTO {
+  aceito: boolean;
+  versaoPolitica: string | null;
+  ocorridoEm: string | null;
+}
+
+export interface EstadoConsentimentoLocalizacaoDTO {
+  idViagemDia: number;
+  versaoPolitica: string | null;
+  motoristaConsentiu: boolean;
+  dependentesPendentes: number[];
+  gpsSuspenso: boolean;
+  podeAtualizar: boolean;
+}
+
+export interface LocalizacaoViagemDTO {
+  idViagemDia: number;
+  latitude: number;
+  longitude: number;
+  instanteDispositivo: string;
+  recebidoEm: string;
+  desatualizada: boolean;
+}
+
+export interface AtualizarLocalizacaoDTO {
+  idViagemDia: number;
+  latitude: number;
+  longitude: number;
+  /** ISO-8601 UTC */
+  instanteDispositivo: string;
+}
+
+// Sincronização offline de presença
+export type StatusEventoSincronizacao = 'APLICADO' | 'DUPLICADO' | 'CONFLITO' | 'REJEITADO';
+
+export interface EventoPresencaOfflineDTO {
+  /** UUID v4 gerado no aparelho */
+  idEvento: string;
+  idViagemDia: number;
+  idDependente: number;
+  statusEsperado: StatusViagemPresenca;
+  statusNovo: StatusViagemPresenca;
+  /** ISO-8601 UTC */
+  ocorridoEm: string;
+}
+
+export interface ResultadoEventoPresencaDTO {
+  idEvento: string;
+  idViagemDia: number;
+  idDependente: number;
+  resultado: StatusEventoSincronizacao;
+  statusAtual: StatusViagemPresenca | null;
+  mensagem?: string | null;
+}
+
+// Administração
+export interface AdminUsuarioResumoDTO {
+  id: number;
+  tipoPerfil: TipoPerfil;
+  suspensa: boolean;
+  emailMascarado: string;
+}
+
+export interface AdminEscolaResumoDTO {
+  id: number;
+  nome: string;
+  cnpj: string;
+  usuarioId: number;
+  contaSuspensa: boolean;
+}
+
+export interface AdminVinculoMotoristaEscolaDTO {
+  id: number;
+  escolaId: number;
+  motoristaId: number;
+  status: StatusVinculoEscola;
+  criadoEm: string;
+  atualizadoEm: string;
+}
+
+export interface AdminVinculoResponsavelDTO {
+  dependenteId: number;
+  responsavelId: number;
+  status: string;
+  categoria: string | null;
+  responsavelCriador: boolean;
+  vinculadoEm: string | null;
+}
+
+export interface AdminAuditoriaDTO {
+  id: number;
+  atorUsuarioId: number;
+  acao: string;
+  tipoAlvo: string;
+  alvoId: number | null;
+  resultado: string;
+  motivo?: string | null;
+  ocorridoEm: string;
+}
+
+export interface DependenteResponsavelCriadorPendenteDTO {
+  dependenteId: number;
+  dependenteNome: string;
+  responsaveis: { id: number; nome: string; telefone?: string | null }[];
+}

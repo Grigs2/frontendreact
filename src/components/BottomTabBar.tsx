@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconPillActive: {
-    backgroundColor: colors.primaryTint,
+    backgroundColor: colors.primary,
   },
   label: {
     ...typography.caption,

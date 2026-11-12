@@ -9,15 +9,12 @@ import { View, Platform } from 'react-native';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import DriverMainScreen from './src/screens/DriverMainScreen';
-import PlaceholderScreen from './src/screens/PlaceholderScreen';
 import DriverVehicleScreen from './src/screens/DriverVehicleScreen';
 import DriverInvitesScreen from './src/screens/DriverInvitesScreen';
-import DriverRouteViewScreen from './src/screens/DriverRouteViewScreen';
 import DriverAttendanceDetailScreen from './src/screens/DriverAttendanceDetailScreen';
 import DriverStudentsScreen from './src/screens/DriverStudentsScreen';
 import DriverSearchStudentsScreen from './src/screens/DriverSearchStudentsScreen';
 import GuardianInvitesScreen from './src/screens/GuardianInvitesScreen';
-import DriverLayout from './src/components/DriverLayout';
 import GuardianMainScreen from './src/screens/GuardianMainScreen';
 import GuardianDependentsScreen from './src/screens/GuardianDependentsScreen';
 import GuardianDependentFormScreen from './src/screens/GuardianDependentFormScreen';
@@ -25,7 +22,6 @@ import GuardianSearchDriverScreen from './src/screens/GuardianSearchDriverScreen
 import GuardianMonitoringScreen from './src/screens/GuardianMonitoringScreen';
 import NotificationListScreen from './src/screens/NotificationListScreen';
 import NotificationCreateScreen from './src/screens/NotificationCreateScreen';
-import GuardianLayout from './src/components/GuardianLayout';
 import ProfileScreen from './src/screens/ProfileScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import { UserRole } from './src/types';
@@ -48,6 +44,24 @@ import DriverTripDetailsScreen from './src/screens/DriverTripDetailsScreen';
 import DriverAvailableDependentsScreen from './src/screens/DriverAvailableDependentsScreen';
 import DriverHistoryScreen from './src/screens/DriverHistoryScreen';
 import GuardianPlansScreen from './src/screens/GuardianPlansScreen';
+// Implementação 1111
+import DriverDocumentsScreen from './src/screens/DriverDocumentsScreen';
+import DriverSchoolsScreen from './src/screens/DriverSchoolsScreen';
+import SchoolLinkDetailScreen from './src/screens/SchoolLinkDetailScreen';
+import DriverTripDayScreen from './src/screens/DriverTripDayScreen';
+import DriverRouteOrderScreen from './src/screens/DriverRouteOrderScreen';
+import GuardianDependentDetailScreen from './src/screens/GuardianDependentDetailScreen';
+import GuardianDependentAddressesScreen from './src/screens/GuardianDependentAddressesScreen';
+import GuardianDependentGuardiansScreen from './src/screens/GuardianDependentGuardiansScreen';
+import SchoolDriversScreen from './src/screens/SchoolDriversScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import AdminMainScreen from './src/screens/AdminMainScreen';
+import AdminDocumentsScreen from './src/screens/AdminDocumentsScreen';
+import AdminUsersScreen from './src/screens/AdminUsersScreen';
+import AdminSchoolsScreen from './src/screens/AdminSchoolsScreen';
+import AdminLinksScreen from './src/screens/AdminLinksScreen';
+import AdminAuditScreen from './src/screens/AdminAuditScreen';
+import { ConnectivityProvider } from './src/context/ConnectivityContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -80,6 +94,7 @@ export default function App() {
 
   return (
       <AppProvider>
+        <ConnectivityProvider>
         <View style={{ flex: 1, backgroundColor: colors.background }}>
           <NavigationContainer ref={navigationRef}>
             <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
@@ -102,9 +117,12 @@ export default function App() {
               <Stack.Screen name="DriverProfile" component={ProfileScreen} />
               <Stack.Screen name="DriverVehicle" component={DriverVehicleScreen} />
               <Stack.Screen name="DriverHistory" component={DriverHistoryScreen} />
-              <Stack.Screen name="DriverHelp">
-                {() => <DriverLayout><PlaceholderScreen /></DriverLayout>}
-              </Stack.Screen>
+              <Stack.Screen name="DriverHelp" component={SettingsScreen as any} />
+              <Stack.Screen name="DriverDocuments" component={DriverDocumentsScreen} />
+              <Stack.Screen name="DriverSchools" component={DriverSchoolsScreen} />
+              <Stack.Screen name="DriverSchoolLinkDetail" component={SchoolLinkDetailScreen} />
+              <Stack.Screen name="DriverTripDay" component={DriverTripDayScreen} />
+              <Stack.Screen name="DriverRouteOrder" component={DriverRouteOrderScreen} />
               <Stack.Screen name="GuardianMain" component={GuardianMainScreen} />
               <Stack.Screen name="GuardianTracking" component={GuardianMonitoringScreen} />
               <Stack.Screen name="GuardianInvites" component={GuardianInvitesScreen} />
@@ -117,11 +135,21 @@ export default function App() {
               <Stack.Screen name="GuardianPlans" component={GuardianPlansScreen} />
               <Stack.Screen name="GuardianProfile" component={ProfileScreen} />
               <Stack.Screen name="GuardianHistory" component={HistoryScreen} />
-              <Stack.Screen name="GuardianHelp">
-                {() => <GuardianLayout><PlaceholderScreen /></GuardianLayout>}
-              </Stack.Screen>
+              <Stack.Screen name="GuardianHelp" component={SettingsScreen as any} />
+              <Stack.Screen name="GuardianDependentDetail" component={GuardianDependentDetailScreen} />
+              <Stack.Screen name="GuardianDependentAddresses" component={GuardianDependentAddressesScreen} />
+              <Stack.Screen name="GuardianDependentGuardians" component={GuardianDependentGuardiansScreen} />
               <Stack.Screen name="SchoolMain" component={SchoolMainScreen} />
               <Stack.Screen name="SchoolProfile" component={ProfileScreen} />
+              <Stack.Screen name="SchoolDrivers" component={SchoolDriversScreen} />
+              <Stack.Screen name="SchoolDriverLinkDetail" component={SchoolLinkDetailScreen} />
+              <Stack.Screen name="Settings" component={SettingsScreen} />
+              <Stack.Screen name="AdminMain" component={AdminMainScreen} />
+              <Stack.Screen name="AdminDocuments" component={AdminDocumentsScreen} />
+              <Stack.Screen name="AdminUsers" component={AdminUsersScreen} />
+              <Stack.Screen name="AdminSchools" component={AdminSchoolsScreen} />
+              <Stack.Screen name="AdminLinks" component={AdminLinksScreen} />
+              <Stack.Screen name="AdminAudit" component={AdminAuditScreen} />
             </Stack.Navigator>
           </NavigationContainer>
           <SessionExpiryHandler />
@@ -130,6 +158,7 @@ export default function App() {
           <Toast />
           <StatusBar style="dark" />
         </View>
+        </ConnectivityProvider>
       </AppProvider>
   );
 }

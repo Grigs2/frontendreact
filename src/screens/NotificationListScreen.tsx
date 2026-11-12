@@ -12,6 +12,7 @@ import GuardianLayout from '../components/GuardianLayout';
 import SchoolLayout from '../components/SchoolLayout';
 import { Button, ScreenHeader, SegmentedControl, StateView } from '../components/ui';
 import { borders, colors, layout, radius, spacing, typography } from '../theme';
+import { destinoNotificacao } from '../utils/notificationRouting';
 
 type Aba = 'NAO_LIDAS' | 'TODAS';
 type FeatherName = React.ComponentProps<typeof Feather>['name'];
@@ -110,18 +111,8 @@ export default function NotificationListScreen() {
 
   /** Para onde levar o usuário ao tocar no aviso. */
   const destino = (n: NotificacaoDTO): (() => void) | null => {
-    const tipo = n.tipo ?? 'GERAL';
-    if (tipo === 'SOLICITACAO') {
-      return () => navigation.navigate(userRole === 'MOTORISTA' ? 'DriverInvites' : 'GuardianInvites');
-    }
-    if (userRole === 'RESPONSAVEL') {
-      if (n.dependenteId) return () => navigation.navigate('GuardianMonitoring', { dependenteId: n.dependenteId! });
-      if (n.viagemDiaId) return () => navigation.navigate('GuardianMain');
-    }
-    if (userRole === 'MOTORISTA' && (n.viagemDiaId || tipo === 'AUSENCIA_INFORMADA')) {
-      return () => navigation.navigate('DriverTrips');
-    }
-    return null;
+    const d = destinoNotificacao(userRole, n);
+    return d ? () => (navigation as any).navigate(d.route, d.params) : null;
   };
 
   const marcarLida = async (n: NotificacaoDTO) => {

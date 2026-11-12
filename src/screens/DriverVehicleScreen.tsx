@@ -8,6 +8,7 @@ import { useAppContext } from '../context/AppContext';
 import { motoristaService } from '../services/motoristaService';
 import { MotoristaDTO } from '../types';
 import { Button, Card, Chip, ScreenHeader, TextField } from '../components/ui';
+import { Notice } from '../components/Feedback';
 import { maskPlate, onlyDigits } from '../utils/masks';
 import { validateCapacity, validatePlate, validateRequired, validateVehicleYear } from '../utils/validators';
 import { getApiErrorMessage } from '../utils/apiError';
@@ -106,6 +107,13 @@ export default function DriverVehicleScreen({ navigation }: Props) {
                 </View>
               </View>
               <Button label="Editar veículo" icon="edit-2" variant="secondary" onPress={() => setEditing(true)} fullWidth />
+              <Button
+                label="Vistoria e licenciamento"
+                icon="file-text"
+                variant="tertiary"
+                onPress={() => navigation.navigate('DriverDocuments')}
+                fullWidth
+              />
             </Card>
           )}
 
@@ -178,6 +186,13 @@ export default function DriverVehicleScreen({ navigation }: Props) {
                   containerStyle={styles.rowItem}
                 />
               </View>
+              {hasVehicle ? (
+                <Notice tone="warning">
+                  Alterar os dados do veículo exige reenviar a vistoria e o licenciamento para nova análise.
+                </Notice>
+              ) : (
+                <Notice tone="info">Depois de cadastrar, envie a vistoria e o licenciamento em Documentos.</Notice>
+              )}
               <View style={styles.actions}>
                 <Button label={hasVehicle ? 'Salvar alterações' : 'Cadastrar veículo'} icon="check" onPress={handleSave} loading={loading} fullWidth />
                 {hasVehicle && (

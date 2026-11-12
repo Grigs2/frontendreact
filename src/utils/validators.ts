@@ -225,3 +225,56 @@ export const validatePasswordConfirmation = (password: string, confirmation: str
   if (!confirmation) return 'Confirme a senha.';
   return password === confirmation ? null : 'As senhas não coincidem.';
 };
+
+// ---------------------------------------------------------------------------------------------
+// Documentos do motorista, datas de validade e motivos
+// ---------------------------------------------------------------------------------------------
+
+/** RENAVAM: 11 dígitos. */
+export const validateRenavam = (value: string) => {
+  const renavam = onlyDigits(value);
+  if (!renavam) return 'Informe o RENAVAM.';
+  if (renavam.length !== 11) return 'O RENAVAM deve ter 11 dígitos.';
+  if (allSameDigits(renavam)) return 'RENAVAM inválido.';
+  return null;
+};
+
+const startOfToday = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+/** Data DD/MM/AAAA válida e que não esteja no futuro. */
+export const validatePastDate = (value: string, label: string) => {
+  if (!value) return `Informe ${label}.`;
+  const date = parseBrDate(value);
+  if (!date) return 'Data inválida. Use DD/MM/AAAA.';
+  if (date.getTime() > startOfToday().getTime()) return `A ${label} não pode estar no futuro.`;
+  return null;
+};
+
+/** Data de validade DD/MM/AAAA; opcionalmente não anterior a outra data. */
+export const validateExpiryDate = (value: string, after?: string) => {
+  if (!value) return 'Informe a data de validade.';
+  const date = parseBrDate(value);
+  if (!date) return 'Data inválida. Use DD/MM/AAAA.';
+  const base = after ? parseBrDate(after) : null;
+  if (base && date.getTime() < base.getTime()) return 'A validade não pode ser anterior à data de realização.';
+  return null;
+};
+
+/** true quando a data (DD/MM/AAAA ou yyyy-MM-dd) já passou. */
+export const isExpired = (value?: string | null) => {
+  if (!value) return false;
+  const date = /^\d{4}-/.test(value) ? new Date(`${value.slice(0, 10)}T00:00:00`) : parseBrDate(value);
+  return !!date && date.getTime() < startOfToday().getTime();
+};
+
+/** Motivo com limite de caracteres (obrigatório por padrão). */
+export const validateReason = (value: string, max: number, required = true) => {
+  const text = (value || '').trim();
+  if (required && !text) return 'Informe o motivo.';
+  if (text.length > max) return `O motivo deve ter no máximo ${max} caracteres.`;
+  return null;
+};

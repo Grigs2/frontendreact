@@ -7,7 +7,11 @@ import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { PERIODOS, periodoLabel, viagemNome, viagemService } from '../services/viagemService';
 import { motoristaService } from '../services/motoristaService';
-import { EscolaBuscaDTO, MotoristaDTO, ViagemDTO } from '../types';
+import { AgendaViagemDTO, EscolaBuscaDTO, MotoristaDTO, ViagemDTO } from '../types';
+import ChoiceChips from '../components/ChoiceChips';
+import { SectionTitle } from '../components/HomeBlocks';
+import { formatDayShort, nextSevenDays, todayIso } from '../utils/format';
+import { statusExecucao } from '../utils/statusLabels';
 import DriverLayout from '../components/DriverLayout';
 import { Button, Card, Chip, ListRow, ScreenHeader, StateView, TextField } from '../components/ui';
 import { getApiErrorMessage } from '../utils/apiError';
@@ -33,11 +37,25 @@ export default function DriverTripsScreen() {
   const [period, setPeriod] = useState<string>(PERIODOS[0]);
   const [nome, setNome] = useState('');
 
+  // Agenda: janela de 7 dias (5.1.2–5.1.4, 5.1.7)
+  const [agenda, setAgenda] = useState<AgendaViagemDTO[]>([]);
+  const [prontas, setProntas] = useState<Record<number, boolean>>({});
+  const [dia, setDia] = useState(todayIso());
+  const [sentido, setSentido] = useState<'TODOS' | 'IDA' | 'VOLTA'>('TODOS');
+
   const loadTrips = useCallback(async () => {
     if (!currentUser?.id) return;
     setLoading(true);
     try {
-      setTrips(await viagemService.listarViagens(currentUser.id));
+      const lista = await viagemService.listarViagens(currentUser.id);
+      setTrips(lista);
+      viagemService.agenda(currentUser.id).then(setAgenda).catch(() => setAgenda([]));
+      // Prontidão de cada itinerário ativo: separa "Pronta para iniciar" de "Com pendências".
+      Promise.all(
+        lista.filter((t) => t.ativo && t.id).map((t) =>
+          viagemService.prontidao(t.id!).then((p) => [t.id!, p.pronta] as const).catch(() => null),
+        ),
+      ).then((res) => setProntas(Object.fromEntries(res.filter(Boolean) as (readonly [number, boolean])[])));
     } catch (error) {
       showToast(getApiErrorMessage(error, 'Não foi possível carregar as viagens.'), 'error');
     } finally {
@@ -104,6 +122,62 @@ export default function DriverTripsScreen() {
     }
   };
 
+  const dias = nextSevenDays();
+  const agendaDoDia = agenda
+    .filter((a) => a.data === dia)
+    .filter((a) => sentido === 'TODOS' || a.periodo.endsWith(sentido === 'IDA' ? '_IDA' : '_VOLTA'));
+
+  const agendaHeader = (
+    <View style={styles.agenda}>
+      <SectionTitle>Agenda</SectionTitle>
+      <ChoiceChips
+        scroll
+        options={dias.map((d, i) => ({ value: d, label: i === 0 ? 'Hoje' : String(Number(d.slice(8, 10))), caption: formatDayShort(d).split(',')[0] }))}
+        value={dia}
+        onChange={setDia}
+        accessibilityLabel="Data da viagem"
+      />
+      <ChoiceChips
+        options={[
+          { value: 'TODOS', label: 'Todas' },
+          { value: 'IDA', label: 'Ida' },
+          { value: 'VOLTA', label: 'Volta' },
+        ]}
+        value={sentido}
+        onChange={setSentido}
+        accessibilityLabel="Período"
+      />
+      {agendaDoDia.length ? (
+        agendaDoDia.map((a) => {
+          const trip = trips.find((t) => t.id === a.idViagem);
+          const info = statusExecucao(a.status, { materializada: a.materializada, pronta: prontas[a.idViagem] });
+          return (
+            <Card
+              key={`${a.idViagem}-${a.data}`}
+              onPress={() => navigation.navigate('DriverTripDay', { viagemId: a.idViagem, data: a.data, viagemDiaId: a.idViagemDia })}
+              accessibilityLabel={`${trip ? viagemNome(trip) : 'Viagem'}, ${periodoLabel(a.periodo)}, ${info.label}`}
+            >
+              <View style={styles.tripRow}>
+                <View style={styles.flex}>
+                  <Text style={styles.tripTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>{trip ? viagemNome(trip) : 'Viagem'}</Text>
+                  <Text style={styles.tripCaption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                    {periodoLabel(a.periodo)} · {formatDayShort(a.data)}
+                  </Text>
+                </View>
+                <Chip label={info.label} tone={info.tone} size="sm" />
+              </View>
+            </Card>
+          );
+        })
+      ) : (
+        <Text style={styles.hint} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+          {trips.some((t) => t.ativo) ? 'Nenhuma viagem neste filtro.' : 'Crie uma viagem para vê-la na agenda.'}
+        </Text>
+      )}
+      <SectionTitle>Itinerários</SectionTitle>
+    </View>
+  );
+
   const renderTrip = ({ item }: { item: ViagemDTO }) => (
     <Card
       onPress={() => navigation.navigate('DriverTripDetails', { viagemId: item.id! })}
@@ -128,7 +202,7 @@ export default function DriverTripsScreen() {
       <View style={styles.container}>
         <ScreenHeader
           title="Rotas"
-          subtitle="Uma viagem por escola e período"
+          subtitle="Agenda da semana e itinerários"
           right={<Button label="Nova" icon="plus" size="md" accessibilityLabel="Nova viagem" onPress={openCreate} disabled={!hasVehicle} />}
         />
 
@@ -151,6 +225,7 @@ export default function DriverTripsScreen() {
             keyExtractor={(item) => String(item.id)}
             renderItem={renderTrip}
             contentContainerStyle={styles.list}
+            ListHeaderComponent={agendaHeader}
             ListEmptyComponent={
               <StateView kind="empty" icon="map" title="Nenhuma viagem criada." message="Toque em Nova para criar a viagem de uma escola." />
             }
@@ -220,6 +295,10 @@ export default function DriverTripsScreen() {
                     );
                   })}
                 </View>
+
+                <Text style={styles.hint} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                  Veículo: {driver?.veiculoDTO?.modelo || '—'} · {driver?.veiculoDTO?.capacidade ?? '?'} lugares. A data é escolhida ao preparar cada viagem na agenda.
+                </Text>
 
                 <Text style={styles.label} maxFontSizeMultiplier={maxFontSizeMultiplier}>3. Nome da viagem</Text>
                 <TextField
@@ -305,4 +384,5 @@ const styles = StyleSheet.create({
   previewLabel: { ...typography.captionBold, color: colors.slate500 },
   previewTitle: { ...typography.label, color: colors.ink },
   modalActions: { gap: layout.buttonGap, marginTop: spacing.sm },
+  agenda: { gap: spacing.md, marginBottom: spacing.sm },
 });

@@ -7,7 +7,14 @@ import { Greeting, Grid, HighlightCard, HomeScroll, SectionTitle, homeStyles } f
 import { Button, ShortcutCard } from '../components/ui';
 import { motoristaService } from '../services/motoristaService';
 import { periodoLabel, viagemNome, viagemService } from '../services/viagemService';
-import { MotoristaDTO, SolicitacaoDTO, ViagemDTO } from '../types';
+import { AgendaViagemDTO, DocumentoMotoristaDTO, MotoristaDTO, SolicitacaoDTO, VinculoEscolaDTO, ViagemDTO } from '../types';
+import { documentoService, pendenciasDocumentais } from '../services/documentoService';
+import { vinculoEscolaService } from '../services/vinculoEscolaService';
+import { Card, Chip } from '../components/ui';
+import { StyleSheet, Text } from 'react-native';
+import { TIPO_DOCUMENTO_LABEL, statusExecucao } from '../utils/statusLabels';
+import { formatDayRelative } from '../utils/format';
+import { colors, maxFontSizeMultiplier, spacing, typography } from '../theme';
 import { maskPlate } from '../utils/masks';
 
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
@@ -21,12 +28,18 @@ export default function DriverMainScreen() {
 
   const [trips, setTrips] = useState<ViagemDTO[]>([]);
   const [requests, setRequests] = useState<SolicitacaoDTO[]>([]);
+  const [agenda, setAgenda] = useState<AgendaViagemDTO[]>([]);
+  const [documentos, setDocumentos] = useState<DocumentoMotoristaDTO[] | null>(null);
+  const [escolas, setEscolas] = useState<VinculoEscolaDTO[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       if (!driver?.id) return;
       viagemService.listarViagens(driver.id).then(setTrips).catch(() => setTrips([]));
       motoristaService.listarSolicitacoes(driver.id).then(setRequests).catch(() => setRequests([]));
+      viagemService.agenda(driver.id).then(setAgenda).catch(() => setAgenda([]));
+      documentoService.listar(driver.id).then(setDocumentos).catch(() => setDocumentos(null));
+      vinculoEscolaService.listarMotorista().then(setEscolas).catch(() => setEscolas([]));
     }, [driver?.id]),
   );
 
@@ -37,9 +50,20 @@ export default function DriverMainScreen() {
     (s) => s.tipoParada !== 'MOTORISTA' && s.listaDependentes.some((d) => d.statusEmbarque === 'ESPERANDO' || d.statusEmbarque === 'EMBARCADO'),
   );
 
+  // Próximas viagens (2.5.1): hoje e amanhã, ainda não encerradas.
+  const proximas = agenda
+    .filter((a) => !a.status || a.status === 'PLANEJADA' || a.status === 'EM_ANDAMENTO')
+    .slice(0, 3);
+  const docsPendentes = documentos ? pendenciasDocumentais(documentos) : [];
+  const escolasAtivas = escolas.filter((e) => e.status === 'ATIVO').length;
+  const convitesEscola = escolas.filter((e) => e.status === 'PENDENTE_MOTORISTA').length;
+
   const startRoute = () => {
     if (inRoute && activeViagemDia?.id) navigation.navigate('DriverAttendance', { viagemDiaId: activeViagemDia.id });
-    else navigation.navigate('DriverTrips');
+    else if (proximas[0]) {
+      const a = proximas[0];
+      navigation.navigate('DriverTripDay', { viagemId: a.idViagem, data: a.data, viagemDiaId: a.idViagemDia });
+    } else navigation.navigate('DriverTrips');
   };
 
   return (
@@ -83,6 +107,43 @@ export default function DriverMainScreen() {
             </HighlightCard>
           )}
 
+          {docsPendentes.length > 0 && (
+            <HighlightCard
+              chip="Pendência"
+              chipTone="danger"
+              variant="alert"
+              icon="file-text"
+              title="Documentos impedem o início das viagens"
+              lines={[docsPendentes.map((t) => TIPO_DOCUMENTO_LABEL[t]).join(', ') + ': ausente, recusado ou vencido.']}
+            >
+              <Button label="Ver documentos" variant="secondary" onPress={() => navigation.navigate('DriverDocuments')} fullWidth />
+            </HighlightCard>
+          )}
+
+          {proximas.length > 0 && (
+            <Card style={styles.agenda}>
+              <Text style={styles.agendaTitle} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>Próximas viagens</Text>
+              {proximas.map((a) => {
+                const trip = trips.find((t) => t.id === a.idViagem);
+                const info = statusExecucao(a.status, { materializada: a.materializada });
+                return (
+                  <Card
+                    key={`${a.idViagem}-${a.data}`}
+                    variant="muted"
+                    onPress={() => navigation.navigate('DriverTripDay', { viagemId: a.idViagem, data: a.data, viagemDiaId: a.idViagemDia })}
+                    accessibilityLabel={`${trip ? viagemNome(trip) : 'Viagem'}, ${formatDayRelative(a.data)}, ${info.label}`}
+                  >
+                    <Text style={styles.agendaItem} maxFontSizeMultiplier={maxFontSizeMultiplier}>{trip ? viagemNome(trip) : 'Viagem'}</Text>
+                    <Text style={styles.agendaCaption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                      {formatDayRelative(a.data)} · {periodoLabel(a.periodo)}
+                    </Text>
+                    <Chip label={info.label} tone={info.tone} size="sm" style={styles.alignStart} />
+                  </Card>
+                );
+              })}
+            </Card>
+          )}
+
           {received.length > 0 && (
             <HighlightCard
               chip="Atenção"
@@ -108,7 +169,20 @@ export default function DriverMainScreen() {
               caption={hasVehicle ? maskPlate(driver.veiculoDTO!.placa) : 'Cadastrar'}
               onPress={() => navigation.navigate('DriverVehicle')}
             />
+            <ShortcutCard
+              label="Escolas"
+              icon="book"
+              caption={convitesEscola ? plural(convitesEscola, 'convite', 'convites') : plural(escolasAtivas, 'vinculada', 'vinculadas')}
+              onPress={() => navigation.navigate('DriverSchools')}
+            />
+            <ShortcutCard
+              label="Documentos"
+              icon="file-text"
+              caption={documentos ? (docsPendentes.length ? plural(docsPendentes.length, 'pendência', 'pendências') : 'Em dia') : 'CNH e veículo'}
+              onPress={() => navigation.navigate('DriverDocuments')}
+            />
             <ShortcutCard label="Avisos" icon="bell" caption="Notificações" onPress={() => navigation.navigate('NotificationList')} />
+            <ShortcutCard label="Perfil" icon="settings" caption="Conta e configurações" onPress={() => navigation.navigate('DriverProfile')} />
           </Grid>
 
           <Button label={inRoute ? 'Continuar chamada' : 'Iniciar rota'} icon={inRoute ? 'clipboard' : 'play'} onPress={startRoute} fullWidth />
@@ -117,3 +191,11 @@ export default function DriverMainScreen() {
     </DriverLayout>
   );
 }
+
+const styles = StyleSheet.create({
+  agenda: { gap: spacing.md },
+  agendaTitle: { ...typography.heading, color: colors.ink },
+  agendaItem: { ...typography.label, color: colors.ink },
+  agendaCaption: { ...typography.caption, color: colors.slate500, marginBottom: spacing.xs },
+  alignStart: { alignSelf: 'flex-start' },
+});

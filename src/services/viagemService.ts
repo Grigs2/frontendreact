@@ -1,5 +1,17 @@
 import { api, API_ENDPOINTS } from './api';
-import { ViagemDTO, DependenteAnonimoDTO, SolicitacaoDTO, ViagemDiaDTO, ParadaViagemDTO, ViagemDiaResumoDTO } from '../types';
+import {
+  AgendaViagemDTO,
+  DependenteAnonimoDTO,
+  HistoricoOrdemParadaDTO,
+  HistoricoViagemDiaDTO,
+  HistoricoViagemPresencaDTO,
+  ParadaViagemDTO,
+  ProntidaoViagemDTO,
+  SolicitacaoDTO,
+  ViagemDTO,
+  ViagemDiaDTO,
+  ViagemDiaResumoDTO,
+} from '../types';
 
 /** Períodos aceitos pelo backend (enum Periodo). */
 export const PERIODOS = ['MANHA_IDA', 'MANHA_VOLTA', 'TARDE_IDA', 'TARDE_VOLTA', 'NOITE_IDA', 'NOITE_VOLTA'] as const;
@@ -110,4 +122,43 @@ export const viagemService = {
     const response = await api.get(API_ENDPOINTS.consultarMotoristaViagem(idViagemDia));
     return response.data;
   },
+/** Janela móvel de 7 dias (hoje + 6) com as execuções já preparadas e as ainda não materializadas. */
+  agenda: async (idMotorista: number): Promise<AgendaViagemDTO[]> => {
+    const response = await api.get(API_ENDPOINTS.agendaMotorista(idMotorista));
+    return response.data ?? [];
+  },
+
+  /** Bloqueios que impedem iniciar a viagem (documentos, veículo, capacidade, endereços, vínculo com escola). */
+  prontidao: async (idViagem: number): Promise<ProntidaoViagemDTO> => {
+    const response = await api.get(API_ENDPOINTS.prontidaoViagem(idViagem));
+    return { ...response.data, bloqueios: response.data?.bloqueios ?? [] };
+  },
+
+  /** Cria (ou devolve, se já existir) a execução da data informada — de hoje até 6 dias à frente. */
+  prepararViagemDia: async (idViagem: number, data: string): Promise<ViagemDiaDTO> => {
+    const response = await api.post(API_ENDPOINTS.prepararViagemDia(idViagem), { data });
+    return response.data;
+  },
+
+  /** Nova ordem com TODAS as paradas da execução, cada uma exatamente uma vez. */
+  reordenarParadas: async (idViagemDia: number, idsParadas: number[]): Promise<ParadaViagemDTO[]> => {
+    const response = await api.put(API_ENDPOINTS.reordenarParadas(idViagemDia), { idsParadas });
+    return response.data ?? [];
+  },
+
+  historicoStatus: async (idViagemDia: number): Promise<HistoricoViagemDiaDTO[]> => {
+    const response = await api.get(API_ENDPOINTS.historicoStatusViagemDia(idViagemDia));
+    return response.data ?? [];
+  },
+
+  historicoOrdem: async (idViagemDia: number): Promise<HistoricoOrdemParadaDTO[]> => {
+    const response = await api.get(API_ENDPOINTS.historicoOrdemParadas(idViagemDia));
+    return response.data ?? [];
+  },
+
+  historicoPresenca: async (idViagemDia: number): Promise<HistoricoViagemPresencaDTO[]> => {
+    const response = await api.get(API_ENDPOINTS.historicoPresencaViagemDia(idViagemDia));
+    return response.data ?? [];
+  },
 };
+

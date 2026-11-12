@@ -65,12 +65,12 @@ export default function GuardianDependentsScreen() {
         />
         <View style={styles.actions}>
           <Button
-            label="Editar"
-            icon="edit-2"
+            label="Detalhes"
+            icon="user"
             variant="secondary"
             size="md"
-            accessibilityLabel={`Editar dados de ${item.nome}`}
-            onPress={() => navigation.navigate('GuardianDependentForm', { dependentId: item.id })}
+            accessibilityLabel={`Ver detalhes de ${item.nome}`}
+            onPress={() => navigation.navigate('GuardianDependentDetail', { dependenteId: item.id })}
             style={styles.flex}
           />
           {ativo ? (

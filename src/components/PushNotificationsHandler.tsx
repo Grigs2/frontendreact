@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications';
 import { useAppContext } from '../context/AppContext';
 import { navigationRef } from '../navigation';
 import { pushService } from '../services/pushService';
+import { destinoNotificacao } from '../utils/notificationRouting';
 
 /**
  * Registra o aparelho para push depois do login e trata o toque no aviso:
@@ -14,22 +15,20 @@ export default function PushNotificationsHandler() {
   const { currentUser, userRole, refreshUnreadCount } = useAppContext();
 
   useEffect(() => {
-    if (currentUser && Platform.OS !== 'web') pushService.registrar();
-  }, [currentUser]);
+    if (currentUser && userRole !== 'ADMIN' && Platform.OS !== 'web') pushService.registrar();
+  }, [currentUser, userRole]);
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const abrir = (data: Record<string, unknown> | undefined) => {
       if (!navigationRef.isReady() || !userRole) return;
-      const tipo = String(data?.tipo ?? '');
-      const dependenteId = Number(data?.dependenteId) || null;
-      if (tipo === 'SOLICITACAO') {
-        navigationRef.navigate(userRole === 'MOTORISTA' ? 'DriverInvites' : 'GuardianInvites');
-      } else if (userRole === 'RESPONSAVEL' && dependenteId) {
-        navigationRef.navigate('GuardianMonitoring', { dependenteId });
-      } else {
-        navigationRef.navigate('NotificationList');
-      }
+      const destino = destinoNotificacao(userRole, {
+        tipo: data?.tipo ? String(data.tipo) : null,
+        dependenteId: Number(data?.dependenteId) || null,
+        viagemDiaId: Number(data?.viagemDiaId) || null,
+      });
+      if (destino) (navigationRef as any).navigate(destino.route, destino.params);
+      else navigationRef.navigate('NotificationList');
     };
 
     // Aviso recebido com o app aberto: atualiza o contador do sino.

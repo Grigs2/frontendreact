@@ -161,4 +161,60 @@ export const API_ENDPOINTS = {
 
   termosVigente: '/Termos/vigente',
   aceitarTermos: '/Autenticacao/AceitarTermos',
+
+  // Documentos do motorista (CNH, vistoria, licenciamento)
+  documentosMotorista: (idMotorista: number) => `/Motorista/${idMotorista}/Documentos`,
+
+  // Vínculo motorista–escola
+  solicitarVinculoEscola: '/Motorista/Escolas/Vinculos',
+  vinculosMotorista: '/Motorista/Vinculos',
+  vinculosMotoristaPendentes: '/Motorista/Vinculos/Pendentes',
+  historicoVinculoMotorista: (id: number) => `/Motorista/Vinculos/${id}/Historico`,
+  acaoVinculoMotorista: (id: number, acao: 'Aceitar' | 'Recusar' | 'Encerrar') => `/Motorista/Vinculos/${id}/${acao}`,
+  buscarMotoristaEscola: '/Escola/Vinculos/Motoristas/Buscar',
+  vinculosEscola: '/Escola/Vinculos',
+  vinculosEscolaPendentes: '/Escola/Vinculos/Pendentes',
+  historicoVinculoEscola: (id: number) => `/Escola/Vinculos/${id}/Historico`,
+  acaoVinculoEscola: (id: number, acao: 'Aprovar' | 'Recusar' | 'Suspender' | 'Reativar' | 'Encerrar') =>
+    `/Escola/Vinculos/${id}/${acao}`,
+
+  // Rede de responsáveis do dependente
+  convitesDependente: (idDependente: number) => `/Responsavel/Dependente/${idDependente}/Convites`,
+  convitesPendentes: '/Responsavel/Convites/Pendentes',
+  responderConvite: (idConvite: number, acao: 'Aceitar' | 'Recusar') => `/Responsavel/Convites/${idConvite}/${acao}`,
+  responsaveisDependente: (idDependente: number) => `/Responsavel/Dependente/${idDependente}/Responsaveis`,
+  revogarResponsavel: (idDependente: number, idResponsavel: number) =>
+    `/Responsavel/Dependente/${idDependente}/Responsaveis/${idResponsavel}`,
+
+  // Planejamento e execução da viagem
+  agendaMotorista: (idMotorista: number) => `/Viagem/Agenda/${idMotorista}`,
+  prontidaoViagem: (idViagem: number) => `/Viagem/Prontidao/${idViagem}`,
+  prepararViagemDia: (idViagem: number) => `/Viagem/PrepararViagemDia/${idViagem}`,
+  reordenarParadas: (idViagemDia: number) => `/Viagem/ReordenarParadasViagemDia/${idViagemDia}`,
+  historicoStatusViagemDia: (idViagemDia: number) => `/Viagem/HistoricoStatusViagemDia/${idViagemDia}`,
+  historicoOrdemParadas: (idViagemDia: number) => `/Viagem/HistoricoOrdemParadas/${idViagemDia}`,
+
+  // Localização (GPS) e consentimento
+  consentimentoMotorista: '/Viagem/Localizacao/Consentimento/Motorista',
+  consentimentoDependente: (idDependente: number) => `/Viagem/Localizacao/Consentimento/Dependente/${idDependente}`,
+  consentimentoExecucao: (idViagemDia: number) => `/Viagem/Localizacao/Consentimento/Execucao/${idViagemDia}`,
+  atualizarLocalizacao: '/Viagem/Localizacao',
+  localizacaoAtual: (idViagemDia: number) => `/Viagem/Localizacao/Atual/${idViagemDia}`,
+  historicoLocalizacao: (idViagemDia: number) => `/Viagem/Localizacao/Historico/${idViagemDia}`,
+
+  // Sincronização offline de presença
+  sincronizarPresencasOffline: '/Viagem/SincronizarPresencasOffline',
+
+  // Administração
+  adminDocumentosPendentes: '/Admin/Documentos/Pendentes',
+  adminRevisarDocumento: (id: number) => `/Admin/Documentos/${id}/Revisar`,
+  adminCriadorPendentes: '/Admin/Dependentes/ResponsavelCriadorPendentes',
+  adminAtribuirCriador: (idDependente: number) => `/Admin/Dependentes/${idDependente}/ResponsavelCriador`,
+  adminUsuarios: '/Admin/Usuarios',
+  adminEscolas: '/Admin/Escolas',
+  adminVinculosMotoristaEscola: '/Admin/Vinculos/MotoristaEscola',
+  adminVinculosResponsavel: '/Admin/Vinculos/ResponsavelDependente',
+  adminAuditoria: '/Admin/Auditoria',
+  adminSuspender: (idUsuario: number) => `/Admin/Usuarios/${idUsuario}/Suspender`,
+  adminReativar: (idUsuario: number) => `/Admin/Usuarios/${idUsuario}/Reativar`,
 };

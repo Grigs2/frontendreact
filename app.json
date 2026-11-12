@@ -33,6 +33,12 @@
       "expo-splash-screen",
       "expo-status-bar",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "O Tio da Perua usa sua localização somente durante uma viagem em andamento, para que os responsáveis acompanhem o trajeto."
+        }
+      ],
+      [
         "expo-notifications",
         {
           "color": "#FFC400"

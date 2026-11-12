@@ -10,6 +10,7 @@ import {
   ParadaViagemDTO
 } from '../types';
 import { notificacaoService } from '../services/notificacaoService';
+import type { AppRole, AppUser } from '../services/authService';
 
 export interface ToastConfig {
   message: string;
@@ -19,8 +20,8 @@ export interface ToastConfig {
 
 interface AppContextType {
   // Global State (Synced with API)
-  currentUser: MotoristaDTO | ResponsavelDTO | EscolaDTO | null;
-  userRole: 'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA' | null;
+  currentUser: AppUser | null;
+  userRole: AppRole | null;
   
   // Specific Data for active role
   activeTrips: ViagemDTO[];
@@ -38,7 +39,7 @@ interface AppContextType {
   toast: ToastConfig;
 
   // Actions (State setters)
-  setCurrentUser: (user: MotoristaDTO | ResponsavelDTO | EscolaDTO | null, role: 'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA' | null) => void;
+  setCurrentUser: (user: AppUser | null, role: AppRole | null) => void;
   setActiveViagemDia: (viagemDia: ViagemDiaDTO | null) => void;
   setCurrentStops: (stops: ParadaViagemDTO[]) => void;
   updateNotifications: (notifs: NotificacaoDTO[]) => void;
@@ -52,8 +53,8 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUserInternal] = useState<MotoristaDTO | ResponsavelDTO | EscolaDTO | null>(null);
-  const [userRole, setUserRole] = useState<'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA' | null>(null);
+  const [currentUser, setCurrentUserInternal] = useState<AppUser | null>(null);
+  const [userRole, setUserRole] = useState<AppRole | null>(null);
   
   const [activeTrips, setActiveTrips] = useState<ViagemDTO[]>([]);
   const [pendingSolicitations, setPendingSolicitations] = useState<SolicitacaoDTO[]>([]);
@@ -65,7 +66,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [toast, setToast] = useState<ToastConfig>({ message: '', type: 'info', visible: false });
 
-  const setCurrentUser = useCallback((user: MotoristaDTO | ResponsavelDTO | EscolaDTO | null, role: 'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA' | null) => {
+  const setCurrentUser = useCallback((user: AppUser | null, role: AppRole | null) => {
     setCurrentUserInternal(user);
     setUserRole(role);
     if (!user) setUnreadCount(0);

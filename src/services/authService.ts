@@ -5,8 +5,17 @@ import { pushService } from './pushService';
 import { BASE_URL, REQUEST_TIMEOUT_MS } from './config';
 import { AutenticacaoResponseDTO, EscolaDTO, MotoristaDTO, ResponsavelDTO, TipoPerfil } from '../types';
 
-export type AppRole = 'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA';
-export type AppUser = MotoristaDTO | ResponsavelDTO | EscolaDTO;
+export type AppRole = 'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA' | 'ADMIN';
+
+/** O ADMIN não tem endpoint de perfil: usa o perfil devolvido pelo login/renovação. */
+export interface AdminUser {
+  id: number;
+  usuarioId: number;
+  nome: string;
+  tipoPerfil: 'ADMIN';
+}
+
+export type AppUser = MotoristaDTO | ResponsavelDTO | EscolaDTO | AdminUser;
 
 export interface SessaoCarregada {
   user: AppUser;
@@ -20,18 +29,26 @@ export class PerfilNaoSuportadoError extends Error {
   }
 }
 
-const PERFIL_ENDPOINT: Record<AppRole, string> = {
+const PERFIL_ENDPOINT: Record<Exclude<AppRole, 'ADMIN'>, string> = {
   MOTORISTA: API_ENDPOINTS.perfilMotorista,
   RESPONSAVEL: API_ENDPOINTS.perfilResponsavel,
   ESCOLA: API_ENDPOINTS.perfilEscola,
 };
 
-const isAppRole = (tipo: TipoPerfil | string): tipo is AppRole => tipo in PERFIL_ENDPOINT;
+const isAppRole = (tipo: TipoPerfil | string): tipo is AppRole => tipo === 'ADMIN' || tipo in PERFIL_ENDPOINT;
 
 export const authService = {
   /** Carrega o perfil completo do usuário autenticado (GET /{Perfil}/Perfil). */
   carregarPerfil: async (tipoPerfil: TipoPerfil | string): Promise<SessaoCarregada> => {
     if (!isAppRole(tipoPerfil)) throw new PerfilNaoSuportadoError(tipoPerfil);
+    if (tipoPerfil === 'ADMIN') {
+      const perfil = authSession.getPerfil();
+      if (!perfil) throw new Error('Sessão administrativa sem perfil.');
+      return {
+        user: { id: perfil.id, usuarioId: perfil.usuarioId, nome: perfil.nome, tipoPerfil: 'ADMIN' },
+        role: 'ADMIN',
+      };
+    }
     const response = await api.get<AppUser>(PERFIL_ENDPOINT[tipoPerfil]);
     return { user: response.data, role: tipoPerfil };
   },

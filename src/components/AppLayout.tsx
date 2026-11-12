@@ -6,11 +6,12 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Logo from './Logo';
 import BottomTabBar, { BottomTab } from './BottomTabBar';
+import ConnectivityBanner from './ConnectivityBanner';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { borders, colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
-export type LayoutRole = 'driver' | 'guardian' | 'school';
+export type LayoutRole = 'driver' | 'guardian' | 'school' | 'admin';
 
 /**
  * Navegação principal: só a barra inferior (o menu lateral foi removido).
@@ -33,8 +34,16 @@ export const BOTTOM_TABS: Record<LayoutRole, BottomTab[]> = {
   ],
   school: [
     { key: 'SchoolMain', label: 'Início', icon: 'home' },
+    { key: 'SchoolDrivers', label: 'Motoristas', icon: 'truck' },
     { key: 'NotificationList', label: 'Avisos', icon: 'bell' },
     { key: 'SchoolProfile', label: 'Perfil', icon: 'user' },
+  ],
+  admin: [
+    { key: 'AdminMain', label: 'Painel', icon: 'grid' },
+    { key: 'AdminDocuments', label: 'Documentos', icon: 'file-text' },
+    { key: 'AdminUsers', label: 'Contas', icon: 'users' },
+    { key: 'AdminLinks', label: 'Vínculos', icon: 'link' },
+    { key: 'AdminAudit', label: 'Auditoria', icon: 'shield' },
   ],
 };
 
@@ -54,6 +63,16 @@ const PARENT_TAB: Record<string, string> = {
   GuardianHistory: 'GuardianMain',
   GuardianPlans: 'GuardianProfile',
   GuardianHelp: 'GuardianProfile',
+  DriverDocuments: 'DriverProfile',
+  DriverSchools: 'DriverProfile',
+  DriverSchoolLinkDetail: 'DriverProfile',
+  DriverTripDay: 'DriverTrips',
+  DriverRouteOrder: 'DriverTrips',
+  GuardianDependentDetail: 'GuardianDependents',
+  GuardianDependentAddresses: 'GuardianDependents',
+  GuardianDependentGuardians: 'GuardianDependents',
+  SchoolDriverLinkDetail: 'SchoolDrivers',
+  AdminSchools: 'AdminUsers',
 };
 
 /** Intervalo de atualização do contador do sino enquanto o app está aberto. */
@@ -69,15 +88,16 @@ export default function AppLayout({ role, children }: AppLayoutProps) {
   const route = useRoute();
   const insets = useSafeAreaInsets();
   const activeKey = PARENT_TAB[route.name] ?? route.name;
-  const showBell = role !== 'school' && route.name !== 'NotificationList';
+  const showBell = role !== 'admin' && route.name !== 'NotificationList';
   const { unreadCount, refreshUnreadCount } = useAppContext();
 
   // Atualiza o contador ao trocar de tela e a cada minuto.
   useEffect(() => {
+    if (role === 'admin') return undefined;
     refreshUnreadCount();
     const timer = setInterval(refreshUnreadCount, CONTADOR_INTERVALO_MS);
     return () => clearInterval(timer);
-  }, [route.name, refreshUnreadCount]);
+  }, [role, route.name, refreshUnreadCount]);
 
   const badge = unreadCount > 99 ? '99+' : String(unreadCount);
 
@@ -116,6 +136,8 @@ export default function AppLayout({ role, children }: AppLayoutProps) {
           <View style={styles.headerButton} />
         )}
       </View>
+
+      {role === 'driver' && <ConnectivityBanner />}
 
       <View style={styles.content}>{children}</View>
 

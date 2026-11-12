@@ -12,12 +12,18 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import DriverLayout from '../components/DriverLayout';
 import GuardianLayout from '../components/GuardianLayout';
 import SchoolLayout from '../components/SchoolLayout';
+import AdminLayout from '../components/AdminLayout';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { offlineQueue } from '../services/offlineQueue';
+import { authSession } from '../services/authSession';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { motoristaService } from '../services/motoristaService';
 import { responsavelService } from '../services/responsavelService';
 import { escolaService } from '../services/escolaService';
-import { authService } from '../services/authService';
+import { authService, AppRole } from '../services/authService';
+import { documentoService, documentosVigentes } from '../services/documentoService';
+import { PERFIL_LABEL, TIPO_DOCUMENTO_LABEL, statusInfo } from '../utils/statusLabels';
 import PasswordConfirmationModal from '../components/PasswordConfirmationModal';
 import { Button, Card, Chip, ListRow, StateView, TextField } from '../components/ui';
 import {
@@ -42,31 +48,39 @@ import {
   validateRequired,
 } from '../utils/validators';
 import { getApiErrorMessage, getApiStatus } from '../utils/apiError';
-import { EnderecoOperacionalDTO } from '../types';
+import { DocumentoMotoristaDTO, EnderecoOperacionalDTO } from '../types';
 import { borders, colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DriverProfile' | 'GuardianProfile' | 'SchoolProfile'>;
 
 type Section = 'pessoais' | 'contato' | 'endereco' | 'senha';
 
-const ROLE_LABEL = { MOTORISTA: 'Motorista', RESPONSAVEL: 'Responsável', ESCOLA: 'Escola' } as const;
+const ROLE_LABEL = PERFIL_LABEL;
 
 type MoreOption = { route: string; title: string; caption: string; icon: React.ComponentProps<typeof Feather>['name'] };
 
 /** Telas que saíram do menu lateral e não são abas. */
-const MORE_OPTIONS: Record<'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA', MoreOption[]> = {
+const MORE_OPTIONS: Record<AppRole, MoreOption[]> = {
   MOTORISTA: [
+    { route: 'DriverDocuments', title: 'Documentos', caption: 'CNH, vistoria e licenciamento', icon: 'file-text' },
     { route: 'DriverVehicle', title: 'Meu veículo', caption: 'Modelo, placa e capacidade', icon: 'truck' },
+    { route: 'DriverSchools', title: 'Minhas escolas', caption: 'Vínculos com escolas', icon: 'book' },
+    { route: 'DriverStudents', title: 'Alunos vinculados', caption: 'Alunos das suas viagens', icon: 'users' },
     { route: 'NotificationList', title: 'Notificações', caption: 'Avisos recebidos e enviados', icon: 'bell' },
-    { route: 'DriverHelp', title: 'Ajuda', caption: 'Dúvidas sobre o aplicativo', icon: 'help-circle' },
+    { route: 'Settings', title: 'Configurações', caption: 'Permissões, privacidade e ajuda', icon: 'settings' },
   ],
   RESPONSAVEL: [
     { route: 'GuardianHistory', title: 'Histórico de viagens', caption: 'Embarques e desembarques', icon: 'clock' },
     { route: 'NotificationList', title: 'Notificações', caption: 'Avisos recebidos e enviados', icon: 'bell' },
     { route: 'GuardianPlans', title: 'Planos', caption: 'Em breve', icon: 'credit-card' },
-    { route: 'GuardianHelp', title: 'Ajuda', caption: 'Dúvidas sobre o aplicativo', icon: 'help-circle' },
+    { route: 'Settings', title: 'Configurações', caption: 'Permissões, privacidade e ajuda', icon: 'settings' },
   ],
-  ESCOLA: [],
+  ESCOLA: [
+    { route: 'SchoolDrivers', title: 'Motoristas', caption: 'Vínculos e solicitações', icon: 'truck' },
+    { route: 'NotificationList', title: 'Notificações', caption: 'Avisos recebidos', icon: 'bell' },
+    { route: 'Settings', title: 'Configurações', caption: 'Permissões, privacidade e ajuda', icon: 'settings' },
+  ],
+  ADMIN: [{ route: 'Settings', title: 'Configurações', caption: 'Privacidade e ajuda', icon: 'settings' }],
 };
 
 export default function ProfileScreen({ navigation }: Props) {
@@ -81,6 +95,14 @@ export default function ProfileScreen({ navigation }: Props) {
   const [termsVisible, setTermsVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [documentos, setDocumentos] = useState<DocumentoMotoristaDTO[] | null>(null);
+
+  // Situação da CNH e dos documentos do veículo (2.6.3).
+  useEffect(() => {
+    if (userRole !== 'MOTORISTA' || !profile?.id) return;
+    documentoService.listar(profile.id).then(setDocumentos).catch(() => setDocumentos(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userRole, profile?.id]);
 
   // Campos editáveis
   const [nome, setNome] = useState('');
@@ -138,7 +160,18 @@ export default function ProfileScreen({ navigation }: Props) {
   }, [currentUser, editing, resetFields]);
 
   // Revoga a sessão no backend (sem bloquear a saída se a rede falhar) e volta ao login.
+  const [sairComPendentes, setSairComPendentes] = useState(0);
+
+  // Antes de sair, avisa se há registros de presença salvos no aparelho e ainda não enviados.
+  const pedirLogout = async () => {
+    const usuarioId = authSession.getPerfil()?.usuarioId;
+    const pendentes = usuarioId ? (await offlineQueue.pendentes(usuarioId)).length : 0;
+    if (pendentes > 0) setSairComPendentes(pendentes);
+    else handleLogout();
+  };
+
   const handleLogout = async () => {
+    setSairComPendentes(0);
     await authService.sair();
     setCurrentUser(null, null);
     navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
@@ -510,6 +543,27 @@ export default function ProfileScreen({ navigation }: Props) {
           )}
         </Card>
 
+        {userRole === 'MOTORISTA' && (
+          <Card style={styles.section} onPress={() => navigation.navigate('DriverDocuments')} accessibilityLabel="Documentos e habilitação. Abrir documentos">
+            <View style={styles.sectionTitleRow}>
+              <View style={styles.iconSlot}>
+                <Feather name="file-text" size={20} color={colors.ink} />
+              </View>
+              <Text style={styles.sectionTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>Documentos e habilitação</Text>
+            </View>
+            {(['CNH', 'VISTORIA', 'LICENCIAMENTO'] as const).map((tipo) => {
+              const doc = documentos ? documentosVigentes(documentos)[tipo] : undefined;
+              const info = doc ? statusInfo('documento', doc.status) : { label: documentos ? 'Não enviado' : '—', tone: 'danger' as const };
+              return (
+                <View key={tipo} style={styles.docRow}>
+                  <Text style={styles.readValue} maxFontSizeMultiplier={maxFontSizeMultiplier}>{TIPO_DOCUMENTO_LABEL[tipo]}</Text>
+                  <Chip label={info.label} tone={documentos ? info.tone : 'neutral'} size="sm" />
+                </View>
+              );
+            })}
+          </Card>
+        )}
+
         {/* Mais opções: telas que não são abas da barra inferior */}
         <Card style={styles.moreCard}>
           <Text style={styles.sectionTitle} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
@@ -532,11 +586,21 @@ export default function ProfileScreen({ navigation }: Props) {
             divider
             onPress={() => setTermsVisible(true)}
           />
-          <ListRow icon="log-out" title="Sair da conta" tone="danger" divider onPress={handleLogout} />
+          <ListRow icon="log-out" title="Sair da conta" tone="danger" divider onPress={pedirLogout} />
         </Card>
       </ScrollView>
 
       <TermsModal visible={termsVisible} onClose={() => setTermsVisible(false)} />
+
+      <ConfirmDialog
+        visible={sairComPendentes > 0}
+        title="Há registros não enviados"
+        message={`${sairComPendentes} registro(s) de presença estão salvos só neste aparelho. Eles ficam guardados e serão enviados quando você entrar de novo com esta conta. Sair mesmo assim?`}
+        confirmLabel="Sair mesmo assim"
+        cancelLabel="Continuar na conta"
+        onConfirm={handleLogout}
+        onCancel={() => setSairComPendentes(0)}
+      />
 
       <PasswordConfirmationModal
         visible={showPasswordModal}
@@ -549,6 +613,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
   if (userRole === 'MOTORISTA') return <DriverLayout>{content}</DriverLayout>;
   if (userRole === 'ESCOLA') return <SchoolLayout>{content}</SchoolLayout>;
+  if (userRole === 'ADMIN') return <AdminLayout>{content}</AdminLayout>;
   return <GuardianLayout>{content}</GuardianLayout>;
 }
 
@@ -572,4 +637,5 @@ const styles = StyleSheet.create({
   hint: { ...typography.caption, color: colors.slate500 },
   sectionActions: { gap: layout.buttonGap },
   moreCard: { gap: spacing.xs },
+  docRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
 });
