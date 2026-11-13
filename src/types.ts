@@ -258,6 +258,30 @@ export interface MotoristaDisponivelDTO {
   uf?: string | null;
   proximidade: 'MESMO_BAIRRO' | 'MESMA_CIDADE' | 'OUTRA_CIDADE' | 'SEM_REFERENCIA';
   viagens: ViagemDTO[];
+  /** Viagens em que o aluno pesquisado já está (não oferecer "Pedir vaga"). */
+  viagensComAluno?: number[];
+  /** Viagens com pedido ou convite em aberto para o aluno pesquisado. */
+  viagensComSolicitacaoPendente?: number[];
+}
+
+/** Quem está do outro lado de uma solicitação (pop-up antes de aceitar). Nome e telefone completos; CPF, e-mail e placa mascarados. */
+export interface ContraparteDTO {
+  solicitacaoId: number;
+  perfil: 'MOTORISTA' | 'RESPONSAVEL';
+  nome: string;
+  telefone?: string | null;
+  emailMascarado?: string | null;
+  cpfMascarado?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+  viagemNome?: string | null;
+  viagemPeriodo?: string | null;
+  escolasAtendidas?: string[];
+  veiculo?: { modelo?: string | null; cor?: string | null; ano?: number | null; capacidade?: number | null; placaMascarada?: string | null } | null;
+  avaliacaoMedia?: number | null;
+  totalAvaliacoes?: number | null;
+  aluno?: { nome: string; idade?: number | null; escola?: string | null; periodo?: string | null; bairro?: string | null; cidade?: string | null } | null;
 }
 
 export interface EnderecoDependenteDTO {
@@ -479,7 +503,10 @@ export interface AgendaViagemDTO {
 export interface ProntidaoViagemDTO {
   idViagem: number;
   pronta: boolean;
+  /** Impedem iniciar a viagem. */
   bloqueios: string[];
+  /** Só informam (documentos do motorista): não impedem iniciar. */
+  avisos?: string[];
 }
 
 export interface HistoricoViagemDiaDTO {

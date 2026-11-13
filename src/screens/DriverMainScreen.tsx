@@ -108,13 +108,16 @@ export default function DriverMainScreen() {
           )}
 
           {docsPendentes.length > 0 && (
+            // Documentos não bloqueiam a viagem: ainda não há quem os valide. O card só lembra de regularizar.
             <HighlightCard
-              chip="Pendência"
-              chipTone="danger"
-              variant="alert"
+              chip="Para regularizar"
+              chipTone="warning"
               icon="file-text"
-              title="Documentos impedem o início das viagens"
-              lines={[docsPendentes.map((t) => TIPO_DOCUMENTO_LABEL[t]).join(', ') + ': ausente, recusado ou vencido.']}
+              title="Documentos pendentes"
+              lines={[
+                docsPendentes.map((t) => TIPO_DOCUMENTO_LABEL[t]).join(', ') + ': ausente, recusado ou vencido.',
+                'Isso não impede iniciar as viagens.',
+              ]}
             >
               <Button label="Ver documentos" variant="secondary" onPress={() => navigation.navigate('DriverDocuments')} fullWidth />
             </HighlightCard>

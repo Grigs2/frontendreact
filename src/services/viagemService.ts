@@ -128,10 +128,10 @@ export const viagemService = {
     return response.data ?? [];
   },
 
-  /** Bloqueios que impedem iniciar a viagem (documentos, veículo, capacidade, endereços, vínculo com escola). */
+  /** Prontidão: bloqueios (veículo, capacidade, endereços, vínculo com a escola) impedem iniciar; avisos (documentos) só informam. */
   prontidao: async (idViagem: number): Promise<ProntidaoViagemDTO> => {
     const response = await api.get(API_ENDPOINTS.prontidaoViagem(idViagem));
-    return { ...response.data, bloqueios: response.data?.bloqueios ?? [] };
+    return { ...response.data, bloqueios: response.data?.bloqueios ?? [], avisos: response.data?.avisos ?? [] };
   },
 
   /** Cria (ou devolve, se já existir) a execução da data informada — de hoje até 6 dias à frente. */

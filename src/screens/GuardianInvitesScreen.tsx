@@ -10,6 +10,7 @@ import { ConviteResponsavelDTO, ResponsavelDTO, SolicitacaoDTO } from '../types'
 import { categoriaLabel, redeResponsaveisService } from '../services/redeResponsaveisService';
 import { authService } from '../services/authService';
 import { statusInfo } from '../utils/statusLabels';
+import CounterpartModal from '../components/CounterpartModal';
 import { Button, Card, Chip, ScreenHeader, SegmentedControl, StateView } from '../components/ui';
 import { getApiErrorMessage } from '../utils/apiError';
 import { colors, layout, maxFontSizeMultiplier, spacing, typography } from '../theme';
@@ -34,6 +35,8 @@ export default function GuardianInvitesScreen() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [unlinkId, setUnlinkId] = useState<number | null>(null);
   const [pendingAccept, setPendingAccept] = useState<SolicitacaoDTO | null>(null);
+  // Pop-up só para ver os dados do motorista (sem botões de resposta).
+  const [verMotorista, setVerMotorista] = useState<SolicitacaoDTO | null>(null);
   // Convites de outros responsáveis para acompanhar um aluno (3.5.4).
   const [convitesResp, setConvitesResp] = useState<ConviteResponsavelDTO[]>([]);
   const [conviteBusy, setConviteBusy] = useState<number | null>(null);
@@ -140,11 +143,29 @@ export default function GuardianInvitesScreen() {
         Motorista: {item.motoristaNome || 'não informado'}
         {item.dataInicio ? ` · desde ${formatDate(item.dataInicio)}` : ''}
       </Text>
-      {tab === 'CONVITES' && (
+      {tab === 'CONVITES' ? (
         <View style={styles.actions}>
           <Button label="Recusar" variant="secondary" size="md" onPress={() => respond(item, false)} disabled={busyId !== null} style={styles.flex} />
-          <Button label="Aceitar" icon="check" size="md" onPress={() => setPendingAccept(item)} loading={busyId === item.id} disabled={busyId !== null} style={styles.flex} />
+          <Button
+            label="Ver e aceitar"
+            icon="user-check"
+            size="md"
+            onPress={() => setPendingAccept(item)}
+            loading={busyId === item.id}
+            disabled={busyId !== null}
+            style={styles.flex}
+            accessibilityLabel={`Ver dados do motorista ${item.motoristaNome || ''} e aceitar o convite`}
+          />
         </View>
+      ) : (
+        <Button
+          label="Ver dados do motorista"
+          icon="user"
+          variant="tertiary"
+          size="md"
+          onPress={() => setVerMotorista(item)}
+          fullWidth
+        />
       )}
       {tab === 'ATIVOS' && (
         <Button
@@ -222,16 +243,21 @@ export default function GuardianInvitesScreen() {
           }
         />
 
-        <ConfirmDialog
-          visible={pendingAccept !== null}
-          title="Aceitar e compartilhar dados?"
-          message="Ao aceitar, as informações dos seus dependentes e do responsável serão compartilhadas com o motorista e o acordo de transporte será fechado."
-          confirmLabel="Aceitar"
-          cancelLabel="Cancelar"
-          onConfirm={confirmAccept}
-          onCancel={() => setPendingAccept(null)}
-          destructive={false}
+        {/* Antes de aceitar, o responsável vê os dados do motorista (telefone completo; CPF, e-mail e placa mascarados). */}
+        <CounterpartModal
+          solicitacao={pendingAccept ?? verMotorista}
+          viewer="RESPONSAVEL"
+          canAnswer={!!pendingAccept}
           loading={busyId !== null}
+          onAccept={() => confirmAccept()}
+          onRefuse={(s) => {
+            setPendingAccept(null);
+            respond(s, false);
+          }}
+          onClose={() => {
+            setPendingAccept(null);
+            setVerMotorista(null);
+          }}
         />
 
         <ConfirmDialog

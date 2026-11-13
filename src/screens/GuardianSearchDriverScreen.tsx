@@ -91,9 +91,12 @@ export default function GuardianSearchDriverScreen({ navigation }: Props) {
     if (pendingSeat) requestSeat(pendingSeat);
   };
 
-  const renderTrip = (viagem: ViagemDTO, motoristaNome: string) => {
+  const renderTrip = (viagem: ViagemDTO, motorista: MotoristaDisponivelDTO) => {
+    const motoristaNome = motorista.nome;
     const outraEscola = !!viagem.escolas?.length && !!aluno?.escola?.id && !viagem.escolas.some((e) => e.id === aluno.escola?.id);
-    const sent = requested.includes(viagem.id!);
+    // A API informa se o aluno já está nesta viagem ou se já há pedido/convite em aberto: nesses casos não há "Pedir vaga".
+    const jaNaViagem = !!motorista.viagensComAluno?.includes(viagem.id!);
+    const sent = requested.includes(viagem.id!) || !!motorista.viagensComSolicitacaoPendente?.includes(viagem.id!);
     return (
       <View key={viagem.id} style={styles.trip}>
         <View style={styles.flex}>
@@ -102,8 +105,10 @@ export default function GuardianSearchDriverScreen({ navigation }: Props) {
             {outraEscola ? 'Vai para outra escola' : periodoLabel(viagem.periodo)}
           </Text>
         </View>
-        {sent ? (
-          <Chip label="Pedido enviado" tone="success" icon="check" size="sm" />
+        {jaNaViagem ? (
+          <Chip label="Já está nesta viagem" tone="success" icon="check" size="sm" />
+        ) : sent ? (
+          <Chip label="Aguardando resposta" tone="warning" icon="clock" size="sm" />
         ) : (
           <Button
             label="Pedir vaga"
@@ -148,7 +153,7 @@ export default function GuardianSearchDriverScreen({ navigation }: Props) {
           </View>
         )}
         {item.viagens.length > 0 ? (
-          <View style={styles.trips}>{item.viagens.map((v) => renderTrip(v, item.nome))}</View>
+          <View style={styles.trips}>{item.viagens.map((v) => renderTrip(v, item))}</View>
         ) : (
           <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>Ainda sem viagens abertas.</Text>
         )}

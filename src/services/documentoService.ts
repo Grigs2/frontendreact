@@ -35,7 +35,7 @@ export const documentosVigentes = (documentos: DocumentoMotoristaDTO[]) => {
   return vigentes;
 };
 
-/** Documentos que impedem o início de viagens (ausente, recusado ou vencido). */
+/** Documentos ausentes, recusados ou vencidos (aviso; não impedem iniciar viagens). */
 export const pendenciasDocumentais = (documentos: DocumentoMotoristaDTO[]) => {
   const vigentes = documentosVigentes(documentos);
   return TIPOS_DOCUMENTO.filter((tipo) => {

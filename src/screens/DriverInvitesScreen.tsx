@@ -9,7 +9,7 @@ import { motoristaService } from '../services/motoristaService';
 import { periodoLabel } from '../services/viagemService';
 import { SolicitacaoDTO } from '../types';
 import { Button, Card, Chip, ScreenHeader, SegmentedControl, StateView } from '../components/ui';
-import ConfirmDialog from '../components/ConfirmDialog';
+import CounterpartModal from '../components/CounterpartModal';
 import { getApiErrorMessage } from '../utils/apiError';
 import { colors, layout, maxFontSizeMultiplier, spacing, typography } from '../theme';
 
@@ -29,6 +29,8 @@ export default function DriverInvitesScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [answering, setAnswering] = useState<number | null>(null);
   const [pendingAccept, setPendingAccept] = useState<SolicitacaoDTO | null>(null);
+  // Pop-up só para ver os dados do responsável (convites enviados).
+  const [verResponsavel, setVerResponsavel] = useState<SolicitacaoDTO | null>(null);
 
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -103,16 +105,26 @@ export default function DriverInvitesScreen({ navigation }: Props) {
               accessibilityLabel={`Recusar pedido de ${item.dependenteNome}`}
             />
             <Button
-              label="Aceitar"
-              icon="check"
+              label="Ver e aceitar"
+              icon="user-check"
               size="md"
               onPress={() => setPendingAccept(item)}
               loading={answering === item.id}
               disabled={answering !== null}
               style={styles.flex}
-              accessibilityLabel={`Aceitar pedido de ${item.dependenteNome}`}
+              accessibilityLabel={`Ver dados do responsável e aceitar o pedido de ${item.dependenteNome}`}
             />
           </View>
+        )}
+        {!isReceived && (
+          <Button
+            label="Ver dados do responsável"
+            icon="user"
+            variant="tertiary"
+            size="md"
+            onPress={() => setVerResponsavel(item)}
+            fullWidth
+          />
         )}
       </Card>
     );
@@ -159,15 +171,21 @@ export default function DriverInvitesScreen({ navigation }: Props) {
             )
           }
         />
-        <ConfirmDialog
-          visible={!!pendingAccept}
-          title="Aceitar pedido?"
-          message="Ao aceitar, os dados completos do aluno e do responsável serão compartilhados com você e o acordo de transporte será fechado."
-          confirmLabel="Aceitar"
-          destructive={false}
+        {/* Antes de aceitar, o motorista vê os dados do responsável e do aluno (telefone completo; CPF e e-mail mascarados). */}
+        <CounterpartModal
+          solicitacao={pendingAccept ?? verResponsavel}
+          viewer="MOTORISTA"
+          canAnswer={!!pendingAccept}
           loading={answering !== null}
-          onConfirm={confirmAccept}
-          onCancel={() => setPendingAccept(null)}
+          onAccept={() => confirmAccept()}
+          onRefuse={(s) => {
+            setPendingAccept(null);
+            answer(s, false);
+          }}
+          onClose={() => {
+            setPendingAccept(null);
+            setVerResponsavel(null);
+          }}
         />
       </View>
     </DriverLayout>

@@ -1,5 +1,5 @@
 import { api, API_ENDPOINTS } from './api';
-import { EscolaBuscaDTO, MotoristaDTO, SolicitacaoDTO, VeiculoDTO } from '../types';
+import { ContraparteDTO, EscolaBuscaDTO, MotoristaDTO, SolicitacaoDTO, VeiculoDTO } from '../types';
 
 export const motoristaService = {
   cadastrar: async (data: MotoristaDTO): Promise<MotoristaDTO> => {
@@ -32,6 +32,12 @@ export const motoristaService = {
   /** Convites enviados e pedidos de vaga recebidos, ainda sem resposta. */
   listarSolicitacoes: async (idMotorista: number): Promise<SolicitacaoDTO[]> => {
     const response = await api.get(API_ENDPOINTS.solicitacoesMotorista(idMotorista));
+    return response.data;
+  },
+
+  /** Responsável e aluno de um pedido de vaga (pop-up antes de aceitar). CPF e e-mail vêm mascarados. */
+  contraparte: async (idSolicitacao: number): Promise<ContraparteDTO> => {
+    const response = await api.get(API_ENDPOINTS.contraparteMotorista(idSolicitacao));
     return response.data;
   },
 

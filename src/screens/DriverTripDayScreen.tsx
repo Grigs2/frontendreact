@@ -110,6 +110,7 @@ export default function DriverTripDayScreen({ navigation, route }: Props) {
 
   const status = execucao?.status ?? null;
   const bloqueios = prontidao?.bloqueios ?? [];
+  const avisos = prontidao?.avisos ?? [];
   const alunos = viagem?.dependentes?.length ?? 0;
   const info = statusExecucao(status, { materializada: !!viagemDiaId, pronta: prontidao?.pronta });
   const ehHoje = data === todayIso();
@@ -249,8 +250,15 @@ export default function DriverTripDayScreen({ navigation, route }: Props) {
           bloqueios.length ? (
             <PendingIssuesList issues={toIssues(bloqueios, (r) => navigation.navigate(r as any))} />
           ) : (
-            <Notice tone="success">Nenhuma pendência: documentos, veículo, endereços e vínculos estão em ordem.</Notice>
+            <Notice tone="success">Nenhuma pendência: veículo, alunos e endereços estão em ordem.</Notice>
           )
+        )}
+        {/* Avisos que não impedem iniciar: documentos do motorista ainda não têm como ser validados. */}
+        {status !== 'FINALIZADA' && status !== 'CANCELADA' && status !== 'INTERROMPIDA' && avisos.length > 0 && (
+          <PendingIssuesList
+            title="Para regularizar (não impede iniciar)"
+            issues={toIssues(avisos, (r) => navigation.navigate(r as any))}
+          />
         )}
 
         {/* Preparação */}

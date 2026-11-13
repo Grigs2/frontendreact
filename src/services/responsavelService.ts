@@ -1,5 +1,6 @@
 import { api, API_ENDPOINTS } from './api';
 import {
+  ContraparteDTO,
   ResponsavelDTO,
   DependenteDTO,
   EscolaDTO,
@@ -34,6 +35,12 @@ export const responsavelService = {
 
   monitorar: async (idDependente: number): Promise<MonitoramentoDTO> => {
     const response = await api.get(API_ENDPOINTS.monitorarDependente(idDependente));
+    return response.data;
+  },
+
+  /** Motorista de um convite ou pedido (pop-up antes de aceitar). CPF, e-mail e placa vêm mascarados. */
+  contraparte: async (idSolicitacao: number): Promise<ContraparteDTO> => {
+    const response = await api.get(API_ENDPOINTS.contraparteResponsavel(idSolicitacao));
     return response.data;
   },
 

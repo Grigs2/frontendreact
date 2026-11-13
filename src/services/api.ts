@@ -131,6 +131,8 @@ export const API_ENDPOINTS = {
   buscarEscolasMotorista: '/Motorista/Escolas',
   solicitacoesMotorista: (idMotorista: number) => `/Motorista/${idMotorista}/Solicitacoes`,
   responderSolicitacaoMotorista: (idSolicitacao: number) => `/Motorista/Solicitacoes/${idSolicitacao}/Responder`,
+  contraparteMotorista: (idSolicitacao: number) => `/Motorista/Solicitacoes/${idSolicitacao}/Contraparte`,
+  contraparteResponsavel: (idSolicitacao: number) => `/Responsavel/Solicitacoes/${idSolicitacao}/Contraparte`,
   buscarMotoristas: (idResponsavel: number) => `/Responsavel/${idResponsavel}/Motoristas/Buscar`,
   solicitarTransporte: (idViagem: number, idDependente: number) => `/Responsavel/SolicitarTransporte/${idViagem}/${idDependente}`,
   enderecosDependente: (idDependente: number) => `/Responsavel/Dependente/${idDependente}/Enderecos`,
