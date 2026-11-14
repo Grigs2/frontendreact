@@ -7,13 +7,24 @@ import { formatTimeSeconds } from '../utils/format';
 import type { TripMapProps } from './TripMap';
 
 /** Versão web: react-native-maps não roda no navegador, então mostramos a posição e um link para o mapa. */
-export default function TripMap({ posicao, ultimaAtualizacao, desatualizada, mensagem, altura = 220 }: TripMapProps) {
+export default function TripMap({ posicao, ultimaAtualizacao, desatualizada, mensagem, altura = 220, preencher = false }: TripMapProps) {
   const h = Math.min(altura, layout.topAreaMax);
   const abrir = () => {
     if (!posicao) return;
     const { latitude, longitude } = posicao;
     Linking.openURL(`https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=17/${latitude}/${longitude}`);
   };
+
+  if (posicao && preencher) {
+    const { latitude: lat, longitude: lon } = posicao;
+    const d = 0.004;
+    const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lon - d},${lat - d},${lon + d},${lat + d}&layer=mapnik&marker=${lat},${lon}`;
+    return (
+      <View style={styles.preencher}>
+        {React.createElement('iframe', { src, title: 'Mapa com a posição do veículo', style: iframeStyle })}
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.wrap, { minHeight: Math.min(h, 200) }]}>
@@ -44,7 +55,10 @@ export default function TripMap({ posicao, ultimaAtualizacao, desatualizada, men
   );
 }
 
+const iframeStyle = { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 0 } as const;
+
 const styles = StyleSheet.create({
+  preencher: { flex: 1, width: '100%', overflow: 'hidden', backgroundColor: colors.pressedNeutral },
   wrap: {
     width: '100%',
     backgroundColor: colors.pressedNeutral,

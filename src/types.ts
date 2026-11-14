@@ -182,6 +182,9 @@ export interface NotificacaoCreateDTO {
   visto: false;
   remetenteId: number;
   destinatarioId: number;
+ /** Só para "Mensagem" sobre um aluno de uma viagem do dia. Servidor valida o vínculo. */
+ dependenteId?: number | null;
+ viagemDiaId?: number | null;
 }
 
 /** Aluno visto pelo motorista antes do acordo: sem nome completo, CPF ou endereço. */
@@ -359,6 +362,8 @@ export interface DependenteParadaDTO {
   id: number;
   nomeDependente: string;
   nomeResponsavel: string;
+  /** Usuário do responsável principal, usado para pré-preencher "Mensagem". */
+  responsavelUsuarioId?: number | null;
   statusEmbarque: 'ESPERANDO' | 'EMBARCADO' | 'DESEMBARCADO' | 'FALTOU';
 }
 

@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { useConnectivity } from '../context/ConnectivityContext';
@@ -10,26 +11,19 @@ import DriverLayout from '../components/DriverLayout';
 import TripMap from '../components/TripMap';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ReasonDialog from '../components/ReasonDialog';
-import ChoiceChips from '../components/ChoiceChips';
-import Timeline from '../components/Timeline';
+import AvisoAtrasoModal from '../components/AvisoAtrasoModal';
 import { Notice, ProgressBar } from '../components/Feedback';
-import { SectionTitle } from '../components/HomeBlocks';
-import { Button, Card, Chip, ScreenHeader, StateView, TextField } from '../components/ui';
+import { Button, Card } from '../components/ui';
 import { viagemService } from '../services/viagemService';
 import { authSession } from '../services/authSession';
 import { offlineQueue, podeRegistrarOffline } from '../services/offlineQueue';
 import { MENSAGEM_GPS, useDriverLocation } from '../hooks/useDriverLocation';
-import {
-  DependenteParadaDTO,
-  HistoricoViagemDiaDTO,
-  HistoricoViagemPresencaDTO,
-  ParadaViagemDTO,
-  StatusViagemPresenca,
-  ViagemDiaDTO,
-} from '../types';
+import { DependenteParadaDTO, ParadaViagemDTO, StatusViagemPresenca, ViagemDiaDTO } from '../types';
 import { statusInfo } from '../utils/statusLabels';
-import { formatDateTime, formatTime } from '../utils/format';
+import { formatTime } from '../utils/format';
 import { getApiErrorMessage } from '../utils/apiError';
+import { enderecoResumido } from '../utils/paradas';
+import { rotuloRota } from '../utils/periodo';
 import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DriverAttendance'>;
@@ -54,9 +48,10 @@ const aplicarLocais = (stops: ParadaViagemDTO[], locais: Record<number, StatusVi
 
 /**
  * 5.7, 5.9, 5.10, 6.x, 7.1 e 8.2 — execução da viagem do dia.
- * Topo fixo com mapa/status; paradas e chamada roláveis; presença registrada mesmo sem conexão.
+ * Sem rolagem: mapa (40%) e atendimento do destino atual (60%). Presença registrada mesmo sem conexão.
  */
 export default function DriverAttendanceScreen({ route, navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const { activeViagemDia, setActiveViagemDia, currentStops, setCurrentStops, showToast } = useAppContext();
   const { online, pendentes, problemas, sincronizar, descartar, marcarFalhaDeRede } = useConnectivity();
   const viagemDiaId = route.params?.viagemDiaId || activeViagemDia?.id;
@@ -64,19 +59,16 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
 
   const [execucao, setExecucao] = useState<ViagemDiaDTO | null>(activeViagemDia);
   const [locais, setLocais] = useState<Record<number, StatusViagemPresenca>>({});
-  const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState<number | null>(null);
   const [confirmar, setConfirmar] = useState<{ aluno: DependenteParadaDTO; novo: Marca } | null>(null);
-  const [detalhe, setDetalhe] = useState<{ aluno: DependenteParadaDTO; parada: ParadaViagemDTO } | null>(null);
-  const [motivoPara, setMotivoPara] = useState<'CANCELADA' | 'INTERROMPIDA' | null>(null);
+  const [cancelarAberto, setCancelarAberto] = useState(false);
   const [confirmarFim, setConfirmarFim] = useState(false);
   const [updatingTrip, setUpdatingTrip] = useState(false);
-  const [eventosAbertos, setEventosAbertos] = useState(false);
-  const [eventos, setEventos] = useState<{ presenca: HistoricoViagemPresencaDTO[]; status: HistoricoViagemDiaDTO[] } | null>(null);
-  const [atrasoAberto, setAtrasoAberto] = useState(false);
-  const [atrasoMin, setAtrasoMin] = useState('15');
-  const [atrasoMotivo, setAtrasoMotivo] = useState('');
-  const [enviandoAtraso, setEnviandoAtraso] = useState(false);
+  const [avisoAberto, setAvisoAberto] = useState(false);
+  const [mapaOculto, setMapaOculto] = useState(false);
+  const [telaCheia, setTelaCheia] = useState(false);
+  // null = acompanha o primeiro destino pendente; depois o motorista navega pelas setas ou pelo deslize.
+  const [indiceManual, setIndiceManual] = useState<number | null>(null);
   const loadingRef = useRef(false);
 
   const status = execucao?.status ?? 'PLANEJADA';
@@ -97,7 +89,6 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
     async (silent = false) => {
       if (!viagemDiaId || loadingRef.current) return;
       loadingRef.current = true;
-      if (!silent) setRefreshing(true);
       try {
         const [exec, stops] = await Promise.all([
           viagemService.visualizarViagemDia(viagemDiaId),
@@ -112,11 +103,10 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
           marcarFalhaDeRede();
           const mapa = await atualizarLocais();
           setCurrentStops(aplicarLocais(currentStops, mapa));
-        } else {
+        } else if (!silent) {
           showToast(getApiErrorMessage(error, 'Não foi possível carregar a viagem.'), 'error');
         }
       } finally {
-        setRefreshing(false);
         loadingRef.current = false;
       }
     },
@@ -184,7 +174,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
     }
   };
 
-  const alterarViagem = async (novo: 'FINALIZADA' | 'CANCELADA' | 'INTERROMPIDA', motivo?: string) => {
+  const alterarViagem = async (novo: 'FINALIZADA' | 'CANCELADA', motivo?: string) => {
     if (!viagemDiaId) return;
     setUpdatingTrip(true);
     try {
@@ -195,7 +185,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
       const updated = await viagemService.alterarStatusViagemDia(viagemDiaId, novo, motivo);
       setExecucao(updated);
       setActiveViagemDia(null);
-      setMotivoPara(null);
+      setCancelarAberto(false);
       setConfirmarFim(false);
       showToast(`Viagem ${statusInfo('viagemDia', novo).label.toLowerCase()}. Os responsáveis foram avisados.`, 'success');
       if (novo === 'FINALIZADA') navigation.navigate('DriverTrips');
@@ -207,177 +197,231 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
     }
   };
 
-  const abrirEventos = async () => {
-    if (eventosAbertos) {
-      setEventosAbertos(false);
-      return;
-    }
-    setEventosAbertos(true);
-    if (!viagemDiaId) return;
-    const [presenca, statusHist] = await Promise.all([
-      viagemService.historicoPresenca(viagemDiaId).catch(() => [] as HistoricoViagemPresencaDTO[]),
-      viagemService.historicoStatus(viagemDiaId).catch(() => [] as HistoricoViagemDiaDTO[]),
-    ]);
-    setEventos({ presenca, status: statusHist });
-  };
-
-  const enviarAtraso = async () => {
-    if (!viagemDiaId) return;
-    const minutos = Number(atrasoMin);
-    setEnviandoAtraso(true);
-    try {
-      await viagemService.avisarAtraso(viagemDiaId, minutos, atrasoMotivo);
-      showToast('Responsáveis avisados do atraso.', 'success');
-      setAtrasoAberto(false);
-      setAtrasoMotivo('');
-    } catch (error) {
-      showToast(getApiErrorMessage(error, 'Não foi possível avisar o atraso.'), 'error');
-    } finally {
-      setEnviandoAtraso(false);
-    }
-  };
-
-  // Resumo, progresso e próxima parada (5.7.2, 5.7.9)
+  // Destinos com alunos (a casa do motorista fica fora da navegação) e alunos sem repetição.
+  const destinos = currentStops.filter((s) => s.listaDependentes.length > 0);
   const alunos = Array.from(new Map(currentStops.flatMap((s) => s.listaDependentes).map((a) => [a.id, a])).values());
-  const concluidos = alunos.filter((a) => a.statusEmbarque === 'DESEMBARCADO' || a.statusEmbarque === 'FALTOU').length;
+  const embarcados = alunos.filter((a) => a.statusEmbarque === 'EMBARCADO' || a.statusEmbarque === 'DESEMBARCADO').length;
+  const desembarcados = alunos.filter((a) => a.statusEmbarque === 'DESEMBARCADO').length;
   const pendentesFim = alunos.filter((a) => a.statusEmbarque === 'ESPERANDO' || a.statusEmbarque === 'EMBARCADO');
-  const proxima = currentStops.find((s) =>
-    s.listaDependentes.some((d) =>
-      s.tipoParada === 'ESCOLA' ? d.statusEmbarque === 'EMBARCADO' : d.statusEmbarque === 'ESPERANDO',
-    ),
-  );
-  const nomeAluno = (id: number) => alunos.find((a) => a.id === id)?.nomeDependente ?? `Aluno ${id}`;
 
-  const renderAluno = (aluno: DependenteParadaDTO, parada: ParadaViagemDTO) => {
-    const st = aluno.statusEmbarque;
-    const info = statusInfo('presenca', st);
-    const local = locais[aluno.id];
-    const busy = submitting === aluno.id;
-    const pode = !encerrada && (emAndamento || status === 'PLANEJADA');
-    return (
-      <View key={`${parada.ordem}-${aluno.id}`} style={styles.student}>
-        <View style={styles.studentHead}>
-          <View style={styles.flex}>
-            <Text
-              style={styles.studentName}
-              onPress={() => setDetalhe({ aluno, parada })}
-              accessibilityRole="button"
-              accessibilityLabel={`Ver detalhes de ${aluno.nomeDependente}`}
-              maxFontSizeMultiplier={maxFontSizeMultiplier}
-            >
-              {aluno.nomeDependente}
-            </Text>
-            <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>Responsável: {aluno.nomeResponsavel}</Text>
-          </View>
-          <View style={styles.chips}>
-            <Chip label={info.label} tone={info.tone} size="sm" />
-            {local && <Chip label="Salvo no aparelho" tone="warning" size="sm" icon="smartphone" />}
-          </View>
-        </View>
-        {pode && st === 'ESPERANDO' && (
-          <View style={styles.actions}>
-            <Button label="Embarcou" icon="log-in" size="md" onPress={() => setConfirmar({ aluno, novo: 'EMBARCADO' })} loading={busy} disabled={submitting !== null} style={styles.flex} accessibilityLabel={`${aluno.nomeDependente} embarcou`} />
-            <Button label="Ausente" icon="x" size="md" variant="secondary" onPress={() => setConfirmar({ aluno, novo: 'FALTOU' })} disabled={submitting !== null} style={styles.flex} accessibilityLabel={`Registrar ausência de ${aluno.nomeDependente}`} />
-          </View>
-        )}
-        {pode && st === 'EMBARCADO' && (
-          <Button label="Desembarcou" icon="log-out" size="md" variant="secondary" onPress={() => setConfirmar({ aluno, novo: 'DESEMBARCADO' })} loading={busy} disabled={submitting !== null} fullWidth accessibilityLabel={`${aluno.nomeDependente} desembarcou`} />
-        )}
-      </View>
-    );
+  // Na ida o embarque é na casa do aluno e o desembarque na escola; na volta é o contrário.
+  const periodo = execucao?.periodo ?? execucao?.viagem?.periodo ?? '';
+  const ida = periodo.endsWith('IDA');
+  const tituloViagem = rotuloRota(periodo) ? `Rota da ${rotuloRota(periodo)}` : 'Rota';
+  // Diminui a fonte conforme o tamanho do nome, para caber ao lado do botão Ver mapa.
+  const tamanhoTitulo = Math.max(12, Math.min(18, Math.floor(330 / tituloViagem.length)));
+  const embarqueNaParada = (s: ParadaViagemDTO) => (ida ? s.tipoParada !== 'ESCOLA' : s.tipoParada === 'ESCOLA');
+  // Num destino de embarque falta quem está ESPERANDO; num de desembarque, quem está EMBARCADO.
+  const pendenteNaParada = (s: ParadaViagemDTO, d: DependenteParadaDTO) =>
+    embarqueNaParada(s) ? d.statusEmbarque === 'ESPERANDO' : d.statusEmbarque === 'EMBARCADO';
+
+  const primeiroPendente = Math.max(0, destinos.findIndex((s) => s.listaDependentes.some((d) => pendenteNaParada(s, d))));
+  const indice = Math.min(indiceManual ?? primeiroPendente, Math.max(destinos.length - 1, 0));
+  const destino = destinos[indice];
+  const destinoEhEmbarque = !!destino && embarqueNaParada(destino);
+  const aluno = destino?.listaDependentes.find((d) => pendenteNaParada(destino, d));
+  const progressoValor = destinoEhEmbarque ? embarcados : desembarcados;
+  const progressoRotulo = destinoEhEmbarque ? 'embarcados' : 'desembarcados';
+
+  const irPara = (novo: number) => {
+    if (destinos.length) setIndiceManual(Math.max(0, Math.min(novo, destinos.length - 1)));
   };
+  const deslize = PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 24 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+    onPanResponderRelease: (_, g) => {
+      if (g.dx < -50) irPara(indice + 1);
+      else if (g.dx > 50) irPara(indice - 1);
+    },
+  });
 
-  const statusExec = statusInfo('viagemDia', status);
+  const mensagemAoResponsavel = (dependente: DependenteParadaDTO) =>
+    navigation.navigate('NotificationCreate', {
+      destinatarioId: dependente.responsavelUsuarioId ?? undefined,
+      nomeDestinatario: dependente.nomeResponsavel,
+      dependenteId: dependente.id,
+      viagemDiaId,
+    });
+
+  const voltarInicio = () => navigation.navigate('DriverMain');
+  const mapaVisivel = emAndamento && !mapaOculto;
+  const telaCheiaAtiva = emAndamento && telaCheia;
+  const nomeAluno = (id: number) => alunos.find((a) => a.id === id)?.nomeDependente ?? `Aluno ${id}`;
 
   return (
     <DriverLayout>
-      {/* Topo fixo: mapa e status (fora do ScrollView) */}
-      {emAndamento && (
-        <View>
-          <TripMap
-            posicao={gps.posicao}
-            ultimaAtualizacao={gps.ultimoEnvio?.toISOString()}
-            desatualizada={gps.estado === 'sem_sinal'}
-            mensagem={MENSAGEM_GPS[gps.estado]}
-            altura={180}
-          />
-          <Card style={styles.statusCard}>
-            <View style={styles.rowBetween}>
-              <Chip label={statusExec.label} tone={statusExec.tone} size="sm" />
-              {gps.estado !== 'ativo' && <Chip label={gps.estado === 'bloqueado' ? 'Sem GPS' : 'GPS'} tone="warning" size="sm" icon="navigation" />}
+      <View style={[styles.tela, { paddingTop: insets.top }]}>
+        {/* Tela cheia: mapa inteiro, voltar à direita do topo e card de atendimento flutuante embaixo */}
+        {telaCheiaAtiva && (
+          <View style={styles.telaCheia}>
+            <TripMap
+              preencher
+              posicao={gps.posicao}
+              ultimaAtualizacao={gps.ultimoEnvio?.toISOString()}
+              desatualizada={gps.estado === 'sem_sinal'}
+              mensagem={MENSAGEM_GPS[gps.estado]}
+            />
+            <View style={[styles.telaCheiaTopo, { paddingTop: insets.top + spacing.sm }]} pointerEvents="box-none">
+              <Button size="icon" variant="secondary" icon="arrow-left" accessibilityLabel="Voltar para o início" onPress={voltarInicio} />
+              <ChipAcao label="Reduzir mapa" onPress={() => setTelaCheia(false)} />
             </View>
-            <Text style={styles.statusTitle} numberOfLines={1} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-              {proxima ? `Próxima parada: ${proxima.nomeLocal}` : 'Todas as paradas concluídas'}
-            </Text>
-            {!!proxima?.endereco && (
-              <Text style={styles.caption} numberOfLines={1} maxFontSizeMultiplier={maxFontSizeMultiplier}>{proxima.endereco}</Text>
-            )}
-          </Card>
-        </View>
-      )}
+            <View style={[styles.cardFlutuante, { bottom: insets.bottom + spacing.md }]} {...deslize.panHandlers}>
+              <ProgressBar value={progressoValor} total={alunos.length} label={`${progressoValor}/${alunos.length} ${progressoRotulo}`} />
+              {aluno ? (
+                <>
+                  <Text style={styles.nomeAluno} maxFontSizeMultiplier={maxFontSizeMultiplier}>{aluno.nomeDependente}</Text>
+                  <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                    {destinoEhEmbarque ? 'Embarque' : 'Desembarque'}: {enderecoResumido(destino!)}
+                  </Text>
+                </>
+              ) : null}
+              {pendentesFim.length === 0 ? (
+                <Button label="Finalizar viagem" icon="flag" disabled={!online} fullWidth onPress={() => setConfirmarFim(true)} />
+              ) : aluno ? (
+                <View style={styles.linha}>
+                  <BotaoCard
+                    label={destinoEhEmbarque ? 'Embarcou' : 'Desembarcou'}
+                    cores={CORES_CARD.positivo}
+                    onPress={() => setConfirmar({ aluno, novo: destinoEhEmbarque ? 'EMBARCADO' : 'DESEMBARCADO' })}
+                  />
+                  <BotaoCard label="Mensagem" cores={CORES_CARD.neutro} onPress={() => mensagemAoResponsavel(aluno)} />
+                  <BotaoCard label="Faltou" cores={CORES_CARD.negativo} onPress={() => setConfirmar({ aluno, novo: 'FALTOU' })} />
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load()} colors={[colors.ink]} tintColor={colors.ink} />}
-      >
-        <ScreenHeader
-          title="Chamada"
-          subtitle="Embarque, desembarque e ausência em cada parada"
-          onBack={() => navigation.goBack()}
-          right={!emAndamento ? <Chip label={statusExec.label} tone={statusExec.tone} /> : undefined}
-        />
-
-        {/* Avisos do GPS (7.1.8) */}
-        {emAndamento && (gps.estado === 'negado' || gps.estado === 'desligado' || gps.estado === 'bloqueado' || gps.estado === 'sem_sinal') && (
-          <Notice
-            tone={gps.estado === 'bloqueado' ? 'info' : 'warning'}
-            title="Localização"
-            action={
-              gps.estado === 'negado' ? (
-                <Button label="Abrir configurações" variant="secondary" size="md" onPress={gps.abrirConfiguracoes} />
-              ) : gps.estado === 'desligado' || gps.estado === 'sem_sinal' ? (
-                <Button label="Tentar novamente" variant="secondary" size="md" onPress={gps.tentarNovamente} />
-              ) : undefined
-            }
-          >
-            {gps.mensagem ?? MENSAGEM_GPS[gps.estado]}
-          </Notice>
-        )}
-
-        {/* Problemas de sincronização (5.7.10 / 8.3.5) */}
-        {problemas.length > 0 && (
-          <Card variant="alert" style={styles.card}>
-            <Text style={styles.cardTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>Registros não aplicados</Text>
-            {problemas.map((p) => (
-              <View key={p.idEvento} style={styles.problem}>
-                <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                  {nomeAluno(p.idDependente)}: {statusInfo('presenca', p.statusNovo).label.toLowerCase()} às {formatTime(p.ocorridoEm)}
-                  {p.statusServidor ? ` — no servidor está "${statusInfo('presenca', p.statusServidor).label}"` : ''}.
-                </Text>
-                {!!p.mensagem && <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{p.mensagem}</Text>}
-                <Button label="Entendi" variant="tertiary" size="md" onPress={() => descartar(p.idEvento).then(() => load(true))} />
-              </View>
-            ))}
-          </Card>
-        )}
-
-        {/* Progresso e ações da viagem */}
-        <Card style={styles.card}>
-          <ProgressBar value={concluidos} total={alunos.length} label={`${concluidos} de ${alunos.length} alunos concluídos`} />
-          <View style={styles.summary}>
-            {(['ESPERANDO', 'EMBARCADO', 'DESEMBARCADO', 'FALTOU'] as StatusViagemPresenca[]).map((st) => (
-              <View key={st} style={styles.summaryItem}>
-                <Text style={styles.summaryValue} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                  {alunos.filter((a) => a.statusEmbarque === st).length}
-                </Text>
-                <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{statusInfo('presenca', st).label}</Text>
-              </View>
-            ))}
+                </View>
+              ) : null}
+            </View>
           </View>
+        )}
 
+        {/* Mapa (40%): Ocultar mapa e Tela cheia ficam sobre ele; o voltar leva ao início */}
+        {mapaVisivel ? (
+          <View style={styles.mapa}>
+            <TripMap
+              preencher
+              posicao={gps.posicao}
+              ultimaAtualizacao={gps.ultimoEnvio?.toISOString()}
+              desatualizada={gps.estado === 'sem_sinal'}
+              mensagem={MENSAGEM_GPS[gps.estado]}
+            />
+            <View style={styles.mapaVoltar} pointerEvents="box-none">
+              <Button size="icon" variant="secondary" icon="arrow-left" accessibilityLabel="Voltar para o início" onPress={voltarInicio} />
+            </View>
+            <View style={styles.mapaChips} pointerEvents="box-none">
+              <ChipAcao label="Ocultar mapa" onPress={() => setMapaOculto(true)} />
+              <ChipAcao label="Tela cheia" onPress={() => setTelaCheia(true)} />
+            </View>
+          </View>
+        ) : null}
+
+        {/* Atendimento (60%, ou tudo quando o mapa está oculto). Deslizar nesta região troca de aluno. */}
+        <View style={[styles.conteudo, { flex: mapaVisivel ? 3 : 1, gap: mapaVisivel ? spacing.sm : spacing.md }]} {...deslize.panHandlers}>
+          {!mapaVisivel && (
+            <View style={styles.topoSemMapa}>
+              <Button size="icon" variant="secondary" icon="arrow-left" accessibilityLabel="Voltar para o início" onPress={voltarInicio} />
+              <Text style={[styles.tituloViagem, { fontSize: tamanhoTitulo, lineHeight: tamanhoTitulo + 8 }]} numberOfLines={1}>
+                {tituloViagem}
+              </Text>
+              {emAndamento && <ChipAcao label="Ver mapa" onPress={() => setMapaOculto(false)} />}
+            </View>
+          )}
+          {!mapaVisivel && (
+            <View style={styles.linha}>
+              <Button label="Aviso geral" icon="alert-triangle" variant="secondary" size="md" style={styles.flex} onPress={() => setAvisoAberto(true)} />
+              <Button
+                label="Mensagem"
+                icon="message-square"
+                variant="secondary"
+                size="md"
+                style={styles.flex}
+                onPress={() => navigation.navigate('NotificationCreate', { viagemDiaId })}
+              />
+            </View>
+          )}
+
+          {/* Problemas de sincronização (5.7.10 / 8.3.5) */}
+          {problemas.length > 0 && (
+            <Card variant="alert" style={styles.card}>
+              <Text style={styles.cardTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>Registros não aplicados</Text>
+              {problemas.map((p) => (
+                <View key={p.idEvento} style={styles.problem}>
+                  <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                    {nomeAluno(p.idDependente)}: {statusInfo('presenca', p.statusNovo).label.toLowerCase()} às {formatTime(p.ocorridoEm)}
+                    {p.statusServidor ? ` — no servidor está "${statusInfo('presenca', p.statusServidor).label}"` : ''}.
+                  </Text>
+                  {!!p.mensagem && <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{p.mensagem}</Text>}
+                  <Button label="Entendi" variant="tertiary" size="md" onPress={() => descartar(p.idEvento).then(() => load(true))} />
+                </View>
+              ))}
+            </Card>
+          )}
+
+          {emAndamento && destino && (
+            <>
+              <Card style={styles.card}>
+                <View style={styles.linha}>
+                  <Text style={[styles.nomeAluno, styles.flex]} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                    {aluno ? aluno.nomeDependente : destino.nomeLocal}
+                  </Text>
+                  {mapaVisivel && aluno && <ChipAcao label="Mensagem" onPress={() => mensagemAoResponsavel(aluno)} />}
+                </View>
+                <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                  {destinoEhEmbarque ? 'Embarque' : 'Desembarque'}: {enderecoResumido(destino)}
+                </Text>
+              </Card>
+
+              <View style={styles.direcoes}>
+                <Feather name="corner-up-right" size={28} color={colors.primary} />
+                <View style={styles.direcoesTextos}>
+                  <Text style={styles.direcoesTitulo} maxFontSizeMultiplier={maxFontSizeMultiplier}>Em 120 m, vire à direita</Text>
+                  <Text style={styles.direcoesSub} maxFontSizeMultiplier={maxFontSizeMultiplier}>Trânsito moderado · 29 °C · chega em 2 min</Text>
+                </View>
+              </View>
+
+              <ProgressBar
+                value={progressoValor}
+                total={alunos.length}
+                label={`${progressoValor}/${alunos.length} ${progressoRotulo}`}
+              />
+            </>
+          )}
+
+          {emAndamento && (
+            <View style={styles.espaco} />
+          )}
+          {emAndamento && (
+            <View style={styles.linha}>
+              <Button size="icon" variant="secondary" icon="chevron-left" accessibilityLabel="Destino anterior" disabled={indice <= 0} onPress={() => irPara(indice - 1)} />
+              <Button label="Alterar viagem" icon="shuffle" variant="secondary" size="md" style={styles.flex} disabled={!online} onPress={() => viagemDiaId && navigation.navigate('DriverRouteOrder', { viagemDiaId, emExecucao: true })} />
+              <Button size="icon" variant="secondary" icon="chevron-right" accessibilityLabel="Próximo destino" disabled={indice >= destinos.length - 1} onPress={() => irPara(indice + 1)} />
+            </View>
+          )}
+
+          {emAndamento && pendentesFim.length === 0 && (
+            <Button label="Finalizar viagem" icon="flag" disabled={!online} fullWidth onPress={() => setConfirmarFim(true)} />
+          )}
+          {emAndamento && pendentesFim.length > 0 && aluno && (
+            <View style={styles.linha}>
+              <BotaoCard
+                label={destinoEhEmbarque ? 'Embarcou' : 'Desembarcou'}
+                icone="check"
+                cores={CORES_CARD.positivo}
+                onPress={() => setConfirmar({ aluno, novo: destinoEhEmbarque ? 'EMBARCADO' : 'DESEMBARCADO' })}
+              />
+              <BotaoCard label="Faltou" icone="x" cores={CORES_CARD.negativo} onPress={() => setConfirmar({ aluno, novo: 'FALTOU' })} />
+            </View>
+          )}
+          {emAndamento && pendentesFim.length > 0 && (
+            <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+              Faltam {pendentesFim.length} aluno{pendentesFim.length === 1 ? '' : 's'} para finalizar.
+              {!online ? ' Sem conexão: só embarque, desembarque e ausência podem ser registrados.' : ''}
+            </Text>
+          )}
+
+          {!emAndamento && destinos.length === 0 && (
+            <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>Nenhuma parada nesta viagem.</Text>
+          )}
           {status === 'PLANEJADA' && (
-            <View style={styles.tripActions}>
-              <Notice tone="info">A viagem ainda não começou. Revise as pendências e inicie pela tela da viagem.</Notice>
+            <>
+              <Notice tone="info">A viagem ainda não começou. Inicie pela tela da viagem.</Notice>
               {activeViagemDia?.viagemId ? (
                 <Button
                   label="Revisar e iniciar"
@@ -386,115 +430,12 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                   fullWidth
                 />
               ) : null}
-              <Button label="Cancelar viagem do dia" variant="tertiary" onPress={() => setMotivoPara('CANCELADA')} disabled={!online} fullWidth />
-            </View>
+              <Button label="Cancelar viagem do dia" variant="tertiary" onPress={() => setCancelarAberto(true)} disabled={!online} fullWidth />
+            </>
           )}
-          {emAndamento && (
-            <View style={styles.tripActions}>
-              <Button
-                label="Finalizar viagem"
-                icon="flag"
-                onPress={() => setConfirmarFim(true)}
-                disabled={!online || pendentesFim.length > 0}
-                fullWidth
-              />
-              {pendentesFim.length > 0 && (
-                <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                  Registre desembarque ou ausência de todos os alunos para finalizar ({pendentesFim.length} pendente
-                  {pendentesFim.length === 1 ? '' : 's'}).
-                </Text>
-              )}
-              <Button label="Avisar atraso" icon="clock" variant="secondary" onPress={() => setAtrasoAberto(true)} disabled={!online} fullWidth />
-              <Button
-                label="Alterar ordem das paradas"
-                icon="shuffle"
-                variant="secondary"
-                onPress={() => viagemDiaId && navigation.navigate('DriverRouteOrder', { viagemDiaId, emExecucao: true })}
-                disabled={!online}
-                fullWidth
-              />
-              <Button label="Interromper viagem" variant="tertiary" onPress={() => setMotivoPara('INTERROMPIDA')} disabled={!online} fullWidth />
-              {!online && (
-                <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                  Sem conexão: só embarque, desembarque e ausência podem ser registrados.
-                </Text>
-              )}
-            </View>
-          )}
-          {encerrada && <Notice tone={status === 'FINALIZADA' ? 'success' : 'info'}>{`Viagem ${statusExec.label.toLowerCase()}.`}</Notice>}
-        </Card>
-
-        {refreshing && currentStops.length === 0 && <StateView kind="loading" title="Carregando paradas..." />}
-
-        {/* Paradas (6.1) */}
-        {currentStops.map((stop, index) => (
-          <Card key={`${stop.ordem}-${index}`} variant={stop === proxima && emAndamento ? 'selected' : 'default'} style={styles.stop}>
-            <View style={styles.stopHead}>
-              <View style={[styles.stopBadge, stop.tipoParada === 'MOTORISTA' && styles.stopBadgeDriver]}>
-                {stop.tipoParada === 'MOTORISTA' ? (
-                  <Feather name="home" size={16} color={colors.surface} />
-                ) : (
-                  <Text style={styles.stopNumber} maxFontSizeMultiplier={maxFontSizeMultiplier}>{index + 1}</Text>
-                )}
-              </View>
-              <View style={styles.flex}>
-                <Text style={styles.stopTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>{stop.nomeLocal}</Text>
-                {!!stop.endereco && <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{stop.endereco}</Text>}
-              </View>
-              {stop === proxima && emAndamento && <Chip label="Próxima" tone="warning" size="sm" />}
-            </View>
-            {stop.listaDependentes.map((aluno) => renderAluno(aluno, stop))}
-          </Card>
-        ))}
-
-        {!refreshing && currentStops.length === 0 && (
-          <StateView kind="empty" icon="map-pin" title="Nenhuma parada nesta viagem." message="Convide alunos para a viagem em Rotas." />
-        )}
-
-        {/* Eventos registrados (5.7.8) */}
-        <Button
-          label={eventosAbertos ? 'Ocultar eventos' : 'Ver eventos registrados'}
-          icon="list"
-          variant="tertiary"
-          onPress={abrirEventos}
-          disabled={!online && !eventos}
-          fullWidth
-        />
-        {eventosAbertos && (
-          <Card>
-            {!eventos ? (
-              <StateView kind="loading" />
-            ) : (
-              <Timeline
-                items={[
-                  ...eventos.presenca.map((e) => {
-                    const s = statusInfo('presenca', e.statusNovo);
-                    return {
-                      key: `p-${e.id}`,
-                      at: e.ocorridoEm,
-                      title: `${nomeAluno(e.idDependente)}: ${s.label.toLowerCase()}`,
-                      caption: `${formatDateTime(e.ocorridoEm)}${e.eventoClienteId ? ' · registrado sem conexão' : ''}`,
-                      tone: s.tone,
-                    };
-                  }),
-                  ...eventos.status.map((e) => {
-                    const s = statusInfo('viagemDia', e.statusNovo);
-                    return { key: `s-${e.id}`, at: e.ocorridoEm, title: `Viagem: ${s.label.toLowerCase()}`, caption: formatDateTime(e.ocorridoEm), detail: e.motivo, tone: s.tone };
-                  }),
-                ]
-                  .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-                  .map(({ at, ...item }) => item)}
-                emptyText="Nenhum evento registrado ainda."
-              />
-            )}
-          </Card>
-        )}
-        {emAndamento && (
-          <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-            A posição do GPS não confirma embarque: registre cada aluno manualmente.
-          </Text>
-        )}
-      </ScrollView>
+          {encerrada && <Notice tone={status === 'FINALIZADA' ? 'success' : 'info'}>{`Viagem ${statusInfo('viagemDia', status).label.toLowerCase()}.`}</Notice>}
+        </View>
+      </View>
 
       {/* Confirmação de presença (6.2.2, 6.3.2, 6.4.3) */}
       <ConfirmDialog
@@ -530,93 +471,159 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
         onCancel={() => setConfirmarFim(false)}
       />
 
-      {/* Cancelar ou interromper (5.10) */}
+      {/* Cancelar a viagem do dia (5.10) */}
       <ReasonDialog
-        visible={motivoPara !== null}
-        title={motivoPara === 'CANCELADA' ? 'Cancelar a viagem do dia?' : 'Interromper a viagem?'}
-        message={
-          motivoPara === 'CANCELADA'
-            ? 'Cancelar: a viagem não vai acontecer nesta data.'
-            : 'Interromper: a viagem começou e não será concluída. O GPS será desligado e os responsáveis avisados.'
-        }
-        confirmLabel={motivoPara === 'CANCELADA' ? 'Cancelar viagem' : 'Interromper viagem'}
+        visible={cancelarAberto}
+        title="Cancelar a viagem do dia?"
+        message="Cancelar: a viagem não vai acontecer nesta data."
+        confirmLabel="Cancelar viagem"
         loading={updatingTrip}
-        onConfirm={(motivo) => motivoPara && alterarViagem(motivoPara, motivo)}
-        onCancel={() => setMotivoPara(null)}
+        onConfirm={(motivo) => alterarViagem('CANCELADA', motivo)}
+        onCancel={() => setCancelarAberto(false)}
       />
 
-      {/* Detalhe do aluno (6.1.4: só o que o backend informa nesta tela) */}
-      <Modal visible={!!detalhe} transparent animationType="slide" onRequestClose={() => setDetalhe(null)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent} accessibilityViewIsModal>
-            {detalhe && (
-              <>
-                <Text style={styles.modalTitle} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                  {detalhe.aluno.nomeDependente}
-                </Text>
-                <Chip label={statusInfo('presenca', detalhe.aluno.statusEmbarque).label} tone={statusInfo('presenca', detalhe.aluno.statusEmbarque).tone} style={styles.alignStart} />
-                <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>Responsável: {detalhe.aluno.nomeResponsavel}</Text>
-                <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>Parada: {detalhe.parada.nomeLocal}</Text>
-                {!!detalhe.parada.endereco && <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{detalhe.parada.endereco}</Text>}
-                <Button label="Fechar" variant="tertiary" onPress={() => setDetalhe(null)} fullWidth />
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* Atraso */}
-      <Modal visible={atrasoAberto} transparent animationType="fade" onRequestClose={() => setAtrasoAberto(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent} accessibilityViewIsModal>
-            <Text style={styles.modalTitle} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>Avisar atraso</Text>
-            <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-              Os responsáveis dos alunos que ainda vão embarcar ou estão no veículo recebem o aviso.
-            </Text>
-            <ChoiceChips
-              options={['5', '10', '15', '20', '30', '45'].map((m) => ({ value: m, label: `${m} min` }))}
-              value={atrasoMin}
-              onChange={setAtrasoMin}
-              accessibilityLabel="Minutos de atraso"
-            />
-            <TextField label="Motivo (opcional)" value={atrasoMotivo} onChangeText={setAtrasoMotivo} placeholder="Ex.: trânsito na avenida" maxLength={200} />
-            <Button label="Enviar aviso" icon="send" onPress={enviarAtraso} loading={enviandoAtraso} fullWidth />
-            <Button label="Voltar" variant="tertiary" onPress={() => setAtrasoAberto(false)} disabled={enviandoAtraso} fullWidth />
-          </View>
-        </View>
-      </Modal>
+      <AvisoAtrasoModal
+        visible={avisoAberto}
+        viagemDiaId={viagemDiaId}
+        onClose={() => setAvisoAberto(false)}
+        onSent={() => load(true)}
+      />
     </DriverLayout>
   );
 }
 
+type CoresCard = { fundo: string; borda: string; texto: string };
+const CORES_CARD: Record<'positivo' | 'neutro' | 'negativo', CoresCard> = {
+  positivo: { fundo: colors.success, borda: colors.ink, texto: colors.surface },
+  neutro: { fundo: colors.surface, borda: colors.ink, texto: colors.ink },
+  negativo: { fundo: colors.dangerTint, borda: colors.danger, texto: colors.danger },
+};
+
+/** Botões Embarcou/Faltou (e Mensagem da tela cheia): verde, branco e vermelho, como na referência. */
+function BotaoCard({ label, icone, cores, onPress }: { label: string; icone?: 'check' | 'x'; cores: CoresCard; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={[styles.botaoCard, { backgroundColor: cores.fundo, borderColor: cores.borda }]}
+    >
+      {icone ? (
+        <View style={styles.botaoCardIcone}>
+          <Feather name={icone} size={18} color={cores.texto} />
+        </View>
+      ) : null}
+      <Text style={[styles.botaoCardTexto, { color: cores.texto }]} maxFontSizeMultiplier={maxFontSizeMultiplier} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function ChipAcao({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={styles.chip}>
+      <Text style={styles.chipTexto} maxFontSizeMultiplier={maxFontSizeMultiplier}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  tela: { flex: 1 },
   flex: { flex: 1 },
-  alignStart: { alignSelf: 'flex-start' },
-  content: { padding: layout.screenMargin, paddingBottom: spacing.xxl, gap: spacing.lg, width: '100%', maxWidth: 800, alignSelf: 'center' },
-  statusCard: { marginHorizontal: layout.screenMargin, marginTop: -spacing.xl, gap: spacing.xs },
-  statusTitle: { ...typography.heading, color: colors.ink },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  card: { gap: spacing.md },
+  telaCheia: { ...StyleSheet.absoluteFill, zIndex: 20, elevation: 20, backgroundColor: colors.surface },
+  telaCheiaTopo: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: layout.screenMargin,
+    zIndex: 30,
+    elevation: 30,
+  },
+  cardFlutuante: {
+    position: 'absolute',
+    left: layout.screenMargin,
+    right: layout.screenMargin,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.card,
+    padding: spacing.md,
+    gap: spacing.sm,
+    zIndex: 30,
+    elevation: 30,
+  },
+  botaoCard: {
+    flex: 1,
+    minHeight: 48,
+    borderWidth: 2,
+    borderRadius: radius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+  },
+  botaoCardIcone: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: spacing.sm,
+    justifyContent: 'center',
+  },
+  botaoCardTexto: { ...typography.captionBold },
+  direcoes: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.ink,
+    borderRadius: radius.card,
+    padding: spacing.sm,
+  },
+  direcoesTextos: { flex: 1, gap: 2 },
+  direcoesTitulo: { ...typography.label, color: colors.surface },
+  direcoesSub: { ...typography.caption, color: colors.slate500 },
+  mapa: { flex: 2, overflow: 'hidden', position: 'relative' },
+  mapaVoltar: { position: 'absolute', top: 0, left: 0, padding: layout.screenMargin, zIndex: 10, elevation: 10 },
+  mapaChips: {
+    position: 'absolute',
+    bottom: spacing.md,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    zIndex: 10,
+    elevation: 10,
+  },
+  chip: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.ink,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
+  chipTexto: { ...typography.captionBold, color: colors.ink },
+  topoSemMapa: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  tituloViagem: { ...typography.heading, flex: 1, minWidth: 0, color: colors.ink },
+  espaco: { flex: 1 },
+  conteudo: {
+    padding: layout.screenMargin,
+    paddingBottom: spacing.sm,
+    gap: spacing.md,
+    width: '100%',
+    maxWidth: 800,
+    alignSelf: 'center',
+    overflow: 'hidden',
+  },
+  linha: { flexDirection: 'row', alignItems: 'center', gap: layout.buttonGap },
+  card: { gap: spacing.sm },
   cardTitle: { ...typography.heading, color: colors.ink },
+  nomeAluno: { ...typography.label, fontSize: 18, lineHeight: 24, color: colors.ink },
   problem: { gap: spacing.xs, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
-  summary: { flexDirection: 'row', gap: spacing.sm },
-  summaryItem: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: radius.md, backgroundColor: colors.background },
-  summaryValue: { ...typography.title, color: colors.ink },
-  tripActions: { gap: layout.buttonGap },
   body: { ...typography.body, color: colors.slate700 },
   caption: { ...typography.caption, color: colors.slate500 },
-  stop: { gap: spacing.md },
-  stopHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  stopBadge: { width: 32, height: 32, borderRadius: radius.pill, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
-  stopBadgeDriver: { backgroundColor: colors.slate500 },
-  stopNumber: { ...typography.captionBold, color: colors.surface },
-  stopTitle: { ...typography.label, color: colors.ink },
-  student: { gap: spacing.sm, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
-  studentHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  studentName: { ...typography.label, fontSize: 18, lineHeight: 24, color: colors.ink, textDecorationLine: 'underline' },
-  chips: { alignItems: 'flex-end', gap: spacing.xs },
-  actions: { flexDirection: 'row', gap: layout.buttonGap },
-  modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.xl, gap: spacing.md, width: '100%', maxWidth: 600, alignSelf: 'center' },
-  modalTitle: { ...typography.heading, color: colors.ink },
 });

@@ -5,10 +5,11 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { escolasNomes, periodoLabel, viagemNome, viagemService } from '../services/viagemService';
-import { MotoristaDTO, ViagemDTO } from '../types';
+import { AgendaViagemDTO, MotoristaDTO, ParadaViagemDTO, ViagemDTO } from '../types';
 import { todayIso } from '../utils/format';
 import { Notice } from '../components/Feedback';
 import DriverLayout from '../components/DriverLayout';
+import AvisoAtrasoModal from '../components/AvisoAtrasoModal';
 
 import ConfirmDialog from '../components/ConfirmDialog';
 import { Button, Card, Chip, ScreenHeader, StateView, TextField } from '../components/ui';
@@ -25,6 +26,10 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
   const [showConfirmDeactivate, setShowConfirmDeactivate] = useState(false);
   const [nomeEdit, setNomeEdit] = useState('');
   const [savingNome, setSavingNome] = useState(false);
+  const [hojeDia, setHojeDia] = useState<AgendaViagemDTO | null>(null);
+  const [paradas, setParadas] = useState<ParadaViagemDTO[]>([]);
+  const [showAviso, setShowAviso] = useState(false);
+  const motoristaId = (currentUser as MotoristaDTO)?.id;
 
   const loadViagem = useCallback(async () => {
     setLoading(true);
@@ -32,13 +37,17 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
       const data = await viagemService.visualizar(viagemId);
       setViagem(data);
       setNomeEdit(data?.nome ?? '');
+      const agenda = motoristaId ? await viagemService.agenda(motoristaId).catch(() => [] as AgendaViagemDTO[]) : [];
+      const hoje = agenda.find((a) => a.idViagem === viagemId && a.data === todayIso()) ?? null;
+      setHojeDia(hoje);
+      setParadas(hoje?.idViagemDia ? await viagemService.buscarParadasViagemDia(hoje.idViagemDia).catch(() => []) : []);
     } catch (error) {
       console.error('Error loading trip details:', error);
       showToast('Não foi possível carregar os detalhes da viagem.', 'error');
     } finally {
       setLoading(false);
     }
-  }, [viagemId, showToast]);
+  }, [viagemId, showToast, motoristaId]);
 
   const handleSalvarNome = async () => {
     setSavingNome(true);
@@ -149,10 +158,35 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
           )}
         </View>
 
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Roteiro de hoje</Text>
+          {hojeDia?.idViagemDia && paradas.length > 0 ? (
+            <Card
+              onPress={() => navigation.navigate('DriverRouteOrder', { viagemDiaId: hojeDia.idViagemDia!, emExecucao: hojeDia.status === 'EM_ANDAMENTO' })}
+              accessibilityLabel="Alterar ordem das paradas"
+            >
+              {paradas.map((p, i) => (
+                <Text key={p.id ?? i} style={styles.depName}>{i + 1}. {p.nomeLocal || p.endereco}</Text>
+              ))}
+              <Text style={styles.depDetail}>Toque para alterar a ordem</Text>
+            </Card>
+          ) : (
+            <StateView kind="empty" icon="map" title="Roteiro não preparado." message="Toque em Iniciar viagem para preparar o dia e montar o roteiro." />
+          )}
+        </View>
+
         <View style={styles.actions}>
-          <Button label="Preparar viagem de hoje" icon="play" onPress={handleIniciarViagem} disabled={loading || viagem.ativo === false} fullWidth />
+          <Button label="Iniciar viagem" icon="play" onPress={handleIniciarViagem} disabled={loading || viagem.ativo === false} fullWidth />
           <Button
-            label="Desativar Viagem"
+            label="Enviar aviso"
+            icon="bell"
+            variant="secondary"
+            onPress={() => setShowAviso(true)}
+            disabled={loading || !hojeDia?.idViagemDia}
+            fullWidth
+          />
+          <Button
+            label="Cancelar viagem"
             icon="trash-2"
             variant="destructive"
             onPress={() => setShowConfirmDeactivate(true)}
@@ -161,12 +195,18 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
           />
         </View>
 
+        <AvisoAtrasoModal
+          visible={showAviso}
+          viagemDiaId={hojeDia?.idViagemDia}
+          onClose={() => setShowAviso(false)}
+        />
+
         <ConfirmDialog
           visible={showConfirmDeactivate}
-          title="Desativar Viagem"
-          message="Tem certeza que deseja desativar esta viagem permanentemente? Esta ação não pode ser desfeita."
-          confirmLabel="Desativar"
-          cancelLabel="Cancelar"
+          title="Cancelar viagem"
+          message="Tem certeza que deseja cancelar esta viagem permanentemente? Esta ação não pode ser desfeita."
+          confirmLabel="Cancelar viagem"
+          cancelLabel="Voltar"
           onConfirm={handleDesativarViagem}
           onCancel={() => setShowConfirmDeactivate(false)}
           destructive={true}
