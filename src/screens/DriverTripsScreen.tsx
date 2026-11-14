@@ -129,6 +129,7 @@ export default function DriverTripsScreen() {
 
   const agendaHeader = (
     <View style={styles.agenda}>
+      <Button label="Nova viagem" icon="plus" fullWidth onPress={openCreate} disabled={!hasVehicle} />
       <SectionTitle>Agenda</SectionTitle>
       <ChoiceChips
         scroll
@@ -145,7 +146,7 @@ export default function DriverTripsScreen() {
         ]}
         value={sentido}
         onChange={setSentido}
-        accessibilityLabel="Período"
+        accessibilityLabel="Sentido da viagem"
       />
       {agendaDoDia.length ? (
         agendaDoDia.map((a) => {
@@ -200,11 +201,7 @@ export default function DriverTripsScreen() {
   return (
     <DriverLayout>
       <View style={styles.container}>
-        <ScreenHeader
-          title="Rotas"
-          subtitle="Agenda da semana e itinerários"
-          right={<Button label="Nova" icon="plus" size="md" accessibilityLabel="Nova viagem" onPress={openCreate} disabled={!hasVehicle} />}
-        />
+        <ScreenHeader title="Rotas" subtitle="Agenda da semana e itinerários" />
 
         {!hasVehicle && (
           <Card variant="alert" style={styles.alert}>

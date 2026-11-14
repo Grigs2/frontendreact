@@ -13,10 +13,12 @@ export interface TripMapProps {
   /** Texto exibido quando não há posição (ex.: "Aguardando a primeira posição"). */
   mensagem?: string;
   altura?: number;
+  /** Ocupa todo o espaço do pai (ignora altura). */
+  preencher?: boolean;
 }
 
-/** Mapa do topo fixo (≤ 316 px). Só a posição do motorista: paradas ainda não têm coordenadas. */
-export default function TripMap({ posicao, ultimaAtualizacao, desatualizada, mensagem, altura = 220 }: TripMapProps) {
+/** Mapa da viagem. Só a posição do motorista: paradas ainda não têm coordenadas. */
+export default function TripMap({ posicao, ultimaAtualizacao, desatualizada, mensagem, altura = 220, preencher = false }: TripMapProps) {
   const ref = useRef<MapView>(null);
   const h = Math.min(altura, layout.topAreaMax);
 
@@ -27,7 +29,7 @@ export default function TripMap({ posicao, ultimaAtualizacao, desatualizada, men
   }, [posicao?.latitude, posicao?.longitude]);
 
   return (
-    <View style={[styles.wrap, { height: h }]} accessibilityLabel={posicao ? 'Mapa com a posição do veículo' : mensagem}>
+    <View style={[styles.wrap, preencher ? styles.preencher : { height: h }]} accessibilityLabel={posicao ? 'Mapa com a posição do veículo' : mensagem}>
       {posicao ? (
         <MapView
           ref={ref}
@@ -68,6 +70,7 @@ export default function TripMap({ posicao, ultimaAtualizacao, desatualizada, men
 
 const styles = StyleSheet.create({
   wrap: { width: '100%', backgroundColor: colors.pressedNeutral, overflow: 'hidden' },
+  preencher: { flex: 1, height: undefined },
   marker: {
     width: 16,
     height: 16,

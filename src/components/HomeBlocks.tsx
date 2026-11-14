@@ -44,6 +44,8 @@ interface HighlightCardProps {
   chip: string;
   chipTone?: StatusTone;
   title: string;
+  /** Segunda linha no mesmo estilo do título. */
+  tituloSecundario?: string;
   lines?: (string | false | null | undefined)[];
   icon?: FeatherIconName;
   variant?: 'default' | 'alert';
@@ -52,15 +54,16 @@ interface HighlightCardProps {
 }
 
 /** Card de destaque: selo (chip) no topo, título 18 Bold, linhas de apoio e ação opcional. */
-export function HighlightCard({ chip, chipTone = 'info', title, lines = [], icon, variant = 'default', onPress, children }: HighlightCardProps) {
+export function HighlightCard({ chip, chipTone = 'info', title, tituloSecundario, lines = [], icon, variant = 'default', onPress, children }: HighlightCardProps) {
   const visible = lines.filter(Boolean) as string[];
   return (
-    <Card variant={variant} onPress={onPress} accessibilityLabel={onPress ? [chip, title, ...visible].join('. ') : undefined}>
+    <Card variant={variant} onPress={onPress} accessibilityLabel={onPress ? [chip, title, tituloSecundario, ...visible].filter(Boolean).join('. ') : undefined}>
       <View style={styles.highlightTop}>
         <Chip label={chip} tone={chipTone} size="sm" />
         {!!icon && <Feather name={icon} size={20} color={variant === 'alert' ? colors.danger : colors.slate500} />}
       </View>
       <Text style={styles.highlightTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>{title}</Text>
+      {!!tituloSecundario && <Text style={styles.highlightTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>{tituloSecundario}</Text>}
       {visible.map((l) => (
         <Text key={l} style={styles.highlightLine} maxFontSizeMultiplier={maxFontSizeMultiplier}>{l}</Text>
       ))}

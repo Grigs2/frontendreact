@@ -3,6 +3,14 @@ import { DependenteParadaDTO, VinculoEscolaDTO } from '../types';
 
 export type RegisterRole = 'driver' | 'guardian' | 'school';
 
+/** Abre a tela de notificação; com dependenteId/viagemDiaId vira "Mensagem" ao responsável do aluno. */
+export type NotificationCreateParams = {
+  destinatarioId?: number;
+  nomeDestinatario?: string;
+  dependenteId?: number;
+  viagemDiaId?: number;
+};
+
 export type RootStackParamList = {
   Login: undefined;
   Register: { role?: RegisterRole } | undefined;
@@ -34,7 +42,7 @@ export type RootStackParamList = {
   GuardianSearchDriver: undefined;
   GuardianMonitoring: { dependenteId: number };
   NotificationList: undefined;
-  NotificationCreate: undefined;
+  NotificationCreate: NotificationCreateParams | undefined;
   SchoolMain: undefined;
   SchoolProfile: undefined;
 
@@ -44,6 +52,10 @@ export type RootStackParamList = {
   DriverSchoolLinkDetail: { vinculo: VinculoEscolaDTO };
   DriverTripDay: { viagemId: number; data: string; viagemDiaId?: number | null };
   DriverRouteOrder: { viagemDiaId: number; emExecucao?: boolean };
+  /** Modo foco (M5): instrução grande da próxima parada, aviso geral e mensagem. */
+  DriverFocus: { viagemDiaId: number };
+  /** Mapa básico (M6). Sem rota nem marcadores nesta entrega. */
+  DriverMap: { viagemDiaId?: number | null };
   // Responsável
   GuardianDependentDetail: { dependenteId: number };
   GuardianDependentAddresses: { dependenteId: number };

@@ -7,22 +7,22 @@ import { Greeting, Grid, HighlightCard, HomeScroll, SectionTitle, homeStyles } f
 import { Button, ShortcutCard } from '../components/ui';
 import { motoristaService } from '../services/motoristaService';
 import { periodoLabel, viagemNome, viagemService } from '../services/viagemService';
-import { AgendaViagemDTO, DocumentoMotoristaDTO, MotoristaDTO, SolicitacaoDTO, VinculoEscolaDTO, ViagemDTO } from '../types';
+import { AgendaViagemDTO, DocumentoMotoristaDTO, MotoristaDTO, ParadaViagemDTO, SolicitacaoDTO, ViagemDTO } from '../types';
 import { documentoService, pendenciasDocumentais } from '../services/documentoService';
-import { vinculoEscolaService } from '../services/vinculoEscolaService';
-import { Card, Chip } from '../components/ui';
-import { StyleSheet, Text } from 'react-native';
-import { TIPO_DOCUMENTO_LABEL, statusExecucao } from '../utils/statusLabels';
+import { TIPO_DOCUMENTO_LABEL } from '../utils/statusLabels';
 import { formatDayRelative } from '../utils/format';
-import { colors, maxFontSizeMultiplier, spacing, typography } from '../theme';
-import { maskPlate } from '../utils/masks';
+import { enderecoResumido } from '../utils/paradas';
+import { SENTIDO_LABEL, TURNO_LABEL, rotuloRota } from '../utils/periodo';
 
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
-/** Início do motorista: viagem em andamento (ou próxima), avisos que pedem ação, atalhos e "Iniciar rota". */
+// Ordem de prioridade da próxima viagem dentro do mesmo dia.
+const ORDEM_PERIODO = ['MANHA_IDA', 'TARDE_IDA', 'MANHA_VOLTA', 'TARDE_VOLTA'];
+
+/** Início do motorista: viagem em andamento (ou próxima), avisos que pedem ação e atalhos. */
 export default function DriverMainScreen() {
   const navigation = useNavigation<any>();
-  const { currentUser, activeViagemDia, currentStops } = useAppContext();
+  const { currentUser, activeViagemDia, currentStops, setActiveViagemDia, setCurrentStops } = useAppContext();
   const driver = currentUser as MotoristaDTO;
   const hasVehicle = !!driver?.veiculoDTO?.placa;
 
@@ -30,18 +30,33 @@ export default function DriverMainScreen() {
   const [requests, setRequests] = useState<SolicitacaoDTO[]>([]);
   const [agenda, setAgenda] = useState<AgendaViagemDTO[]>([]);
   const [documentos, setDocumentos] = useState<DocumentoMotoristaDTO[] | null>(null);
-  const [escolas, setEscolas] = useState<VinculoEscolaDTO[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       if (!driver?.id) return;
       viagemService.listarViagens(driver.id).then(setTrips).catch(() => setTrips([]));
       motoristaService.listarSolicitacoes(driver.id).then(setRequests).catch(() => setRequests([]));
-      viagemService.agenda(driver.id).then(setAgenda).catch(() => setAgenda([]));
+      viagemService.agenda(driver.id).then(restaurarViagemEmAndamento).catch(() => setAgenda([]));
       documentoService.listar(driver.id).then(setDocumentos).catch(() => setDocumentos(null));
-      vinculoEscolaService.listarMotorista().then(setEscolas).catch(() => setEscolas([]));
     }, [driver?.id]),
   );
+
+  // A viagem em andamento vive só no contexto; ao reabrir o app ela precisa ser recarregada pela agenda.
+  const restaurarViagemEmAndamento = async (lista: AgendaViagemDTO[]) => {
+    setAgenda(lista);
+    const emAndamento = lista.find((a) => a.status === 'EM_ANDAMENTO' && a.idViagemDia);
+    if (!emAndamento?.idViagemDia) {
+      if (activeViagemDia?.status === 'EM_ANDAMENTO') setActiveViagemDia(null);
+      return;
+    }
+    if (activeViagemDia?.id === emAndamento.idViagemDia) return;
+    const [exec, paradas] = await Promise.all([
+      viagemService.visualizarViagemDia(emAndamento.idViagemDia),
+      viagemService.buscarParadasViagemDia(emAndamento.idViagemDia),
+    ]);
+    setActiveViagemDia({ ...exec, viagemId: emAndamento.idViagem });
+    setCurrentStops(paradas);
+  };
 
   const activeTrips = trips.filter((t) => t.ativo);
   const received = requests.filter((s) => s.origem === 'RESPONSAVEL');
@@ -49,21 +64,24 @@ export default function DriverMainScreen() {
   const nextStop = currentStops.find(
     (s) => s.tipoParada !== 'MOTORISTA' && s.listaDependentes.some((d) => d.statusEmbarque === 'ESPERANDO' || d.statusEmbarque === 'EMBARCADO'),
   );
+  const alunosDaRota = Array.from(new Map(currentStops.flatMap((s) => s.listaDependentes).map((d) => [d.id, d])).values());
+  const embarcadosNaRota = alunosDaRota.filter((d) => d.statusEmbarque === 'EMBARCADO' || d.statusEmbarque === 'DESEMBARCADO').length;
+  const rotaAtual = rotuloRota(activeViagemDia?.periodo ?? activeViagemDia?.viagem?.periodo);
 
-  // Próximas viagens (2.5.1): hoje e amanhã, ainda não encerradas.
-  const proximas = agenda
-    .filter((a) => !a.status || a.status === 'PLANEJADA' || a.status === 'EM_ANDAMENTO')
-    .slice(0, 3);
+  // Próxima viagem: hoje ou amanhã, ainda não iniciada; hoje vem antes de amanhã e ida antes de volta.
+  const ordemProxima = (a: AgendaViagemDTO) => {
+    const dia = formatDayRelative(a.data) === 'Hoje' ? 0 : 10;
+    const turno = ORDEM_PERIODO.indexOf(a.periodo ?? '');
+    return dia + (turno < 0 ? ORDEM_PERIODO.length : turno);
+  };
+  const proximaViagem = agenda
+    .filter((a) => (!a.status || a.status === 'PLANEJADA') && ['Hoje', 'Amanhã'].includes(formatDayRelative(a.data)))
+    .sort((x, y) => ordemProxima(x) - ordemProxima(y))[0];
+  const [turnoProxima, sentidoProxima] = (proximaViagem?.periodo ?? '').split('_');
   const docsPendentes = documentos ? pendenciasDocumentais(documentos) : [];
-  const escolasAtivas = escolas.filter((e) => e.status === 'ATIVO').length;
-  const convitesEscola = escolas.filter((e) => e.status === 'PENDENTE_MOTORISTA').length;
 
-  const startRoute = () => {
-    if (inRoute && activeViagemDia?.id) navigation.navigate('DriverAttendance', { viagemDiaId: activeViagemDia.id });
-    else if (proximas[0]) {
-      const a = proximas[0];
-      navigation.navigate('DriverTripDay', { viagemId: a.idViagem, data: a.data, viagemDiaId: a.idViagemDia });
-    } else navigation.navigate('DriverTrips');
+  const openRoute = () => {
+    if (activeViagemDia?.id) navigation.navigate('DriverAttendance', { viagemDiaId: activeViagemDia.id });
   };
 
   return (
@@ -74,16 +92,17 @@ export default function DriverMainScreen() {
 
           {inRoute ? (
             <HighlightCard
-              chip="Em rota"
+              chip="Viagem atual - em rota"
               chipTone="info"
               icon="navigation"
-              title={nextStop ? `Próxima parada: ${nextStop.listaDependentes.map((d) => d.nomeDependente.split(' ')[0]).join(', ') || nextStop.nomeLocal}` : 'Todas as paradas concluídas'}
-              lines={[nextStop?.endereco]}
-              onPress={startRoute}
+              title={rotaAtual ? `Rota da ${rotaAtual}` : 'Rota'}
+              tituloSecundario={`${embarcadosNaRota}/${alunosDaRota.length} embarcados`}
+              lines={[nextStop ? `Indo para ${enderecoResumido(nextStop)}` : 'Todas as paradas concluídas']}
+              onPress={openRoute}
             />
           ) : activeTrips.length > 0 ? (
             <HighlightCard
-              chip={plural(activeTrips.length, 'viagem ativa', 'viagens ativas')}
+              chip="Próxima viagem"
               chipTone="success"
               icon="map"
               title={viagemNome(activeTrips[0])}
@@ -123,28 +142,14 @@ export default function DriverMainScreen() {
             </HighlightCard>
           )}
 
-          {proximas.length > 0 && (
-            <Card style={styles.agenda}>
-              <Text style={styles.agendaTitle} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>Próximas viagens</Text>
-              {proximas.map((a) => {
-                const trip = trips.find((t) => t.id === a.idViagem);
-                const info = statusExecucao(a.status, { materializada: a.materializada });
-                return (
-                  <Card
-                    key={`${a.idViagem}-${a.data}`}
-                    variant="muted"
-                    onPress={() => navigation.navigate('DriverTripDay', { viagemId: a.idViagem, data: a.data, viagemDiaId: a.idViagemDia })}
-                    accessibilityLabel={`${trip ? viagemNome(trip) : 'Viagem'}, ${formatDayRelative(a.data)}, ${info.label}`}
-                  >
-                    <Text style={styles.agendaItem} maxFontSizeMultiplier={maxFontSizeMultiplier}>{trip ? viagemNome(trip) : 'Viagem'}</Text>
-                    <Text style={styles.agendaCaption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                      {formatDayRelative(a.data)} · {periodoLabel(a.periodo)}
-                    </Text>
-                    <Chip label={info.label} tone={info.tone} size="sm" style={styles.alignStart} />
-                  </Card>
-                );
-              })}
-            </Card>
+          {proximaViagem && (
+            <Button
+              variant="secondary"
+              labelLines={2}
+              label={`Próxima viagem\n${formatDayRelative(proximaViagem.data)} - ${TURNO_LABEL[turnoProxima] ?? ''} - ${SENTIDO_LABEL[sentidoProxima] ?? ''}`}
+              onPress={() => navigation.navigate('DriverTripDay', { viagemId: proximaViagem.idViagem, data: proximaViagem.data, viagemDiaId: proximaViagem.idViagemDia })}
+              fullWidth
+            />
           )}
 
           {received.length > 0 && (
@@ -162,43 +167,18 @@ export default function DriverMainScreen() {
 
           <SectionTitle>Atalhos</SectionTitle>
           <Grid>
-            <ShortcutCard label="Rotas" icon="map" caption={plural(activeTrips.length, 'ativa', 'ativas')} onPress={() => navigation.navigate('DriverTrips')} />
-            <ShortcutCard label="Alunos" icon="users" caption="Buscar e convidar" onPress={() => navigation.navigate('DriverSearchStudents')} />
-            <ShortcutCard label="Vínculos" icon="link" caption={plural(requests.length, 'pendente', 'pendentes')} onPress={() => navigation.navigate('DriverInvites')} />
+            <ShortcutCard label="Perfil" icon="settings" caption="Conta e configurações" onPress={() => navigation.navigate('DriverProfile')} />
             <ShortcutCard label="Histórico" icon="clock" caption="Ver viagens" onPress={() => navigation.navigate('DriverHistory')} />
-            <ShortcutCard
-              label="Veículo"
-              icon="truck"
-              caption={hasVehicle ? maskPlate(driver.veiculoDTO!.placa) : 'Cadastrar'}
-              onPress={() => navigation.navigate('DriverVehicle')}
-            />
-            <ShortcutCard
-              label="Escolas"
-              icon="book"
-              caption={convitesEscola ? plural(convitesEscola, 'convite', 'convites') : plural(escolasAtivas, 'vinculada', 'vinculadas')}
-              onPress={() => navigation.navigate('DriverSchools')}
-            />
+            <ShortcutCard label="Alunos" icon="users" caption="Buscar e convidar" onPress={() => navigation.navigate('DriverSearchStudents')} />
             <ShortcutCard
               label="Documentos"
               icon="file-text"
               caption={documentos ? (docsPendentes.length ? plural(docsPendentes.length, 'pendência', 'pendências') : 'Em dia') : 'CNH e veículo'}
               onPress={() => navigation.navigate('DriverDocuments')}
             />
-            <ShortcutCard label="Avisos" icon="bell" caption="Notificações" onPress={() => navigation.navigate('NotificationList')} />
-            <ShortcutCard label="Perfil" icon="settings" caption="Conta e configurações" onPress={() => navigation.navigate('DriverProfile')} />
           </Grid>
-
-          <Button label={inRoute ? 'Continuar chamada' : 'Iniciar rota'} icon={inRoute ? 'clipboard' : 'play'} onPress={startRoute} fullWidth />
         </HomeScroll>
       </View>
     </DriverLayout>
   );
 }
-
-const styles = StyleSheet.create({
-  agenda: { gap: spacing.md },
-  agendaTitle: { ...typography.heading, color: colors.ink },
-  agendaItem: { ...typography.label, color: colors.ink },
-  agendaCaption: { ...typography.caption, color: colors.slate500, marginBottom: spacing.xs },
-  alignStart: { alignSelf: 'flex-start' },
-});

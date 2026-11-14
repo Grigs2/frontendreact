@@ -4,12 +4,11 @@ import { Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Logo from './Logo';
 import BottomTabBar, { BottomTab } from './BottomTabBar';
 import ConnectivityBanner from './ConnectivityBanner';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
-import { borders, colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
+import { borders, colors, layout, radius, spacing, typography } from '../theme';
 
 export type LayoutRole = 'driver' | 'guardian' | 'school' | 'admin';
 
@@ -68,12 +67,17 @@ const PARENT_TAB: Record<string, string> = {
   DriverSchoolLinkDetail: 'DriverProfile',
   DriverTripDay: 'DriverTrips',
   DriverRouteOrder: 'DriverTrips',
+  DriverFocus: 'DriverTrips',
+  DriverMap: 'DriverTrips',
   GuardianDependentDetail: 'GuardianDependents',
   GuardianDependentAddresses: 'GuardianDependents',
   GuardianDependentGuardians: 'GuardianDependents',
   SchoolDriverLinkDetail: 'SchoolDrivers',
   AdminSchools: 'AdminUsers',
 };
+
+/** Telas de execução da viagem: sem sino e sem barra inferior, para ganhar espaço. */
+const TELAS_SEM_NAVEGACAO = ['DriverAttendance'];
 
 /** Intervalo de atualização do contador do sino enquanto o app está aberto. */
 const CONTADOR_INTERVALO_MS = 60000;
@@ -88,7 +92,8 @@ export default function AppLayout({ role, children }: AppLayoutProps) {
   const route = useRoute();
   const insets = useSafeAreaInsets();
   const activeKey = PARENT_TAB[route.name] ?? route.name;
-  const showBell = role !== 'admin' && route.name !== 'NotificationList';
+  const semNavegacao = TELAS_SEM_NAVEGACAO.includes(route.name);
+  const showBell = role !== 'admin' && route.name !== 'NotificationList' && !semNavegacao;
   const { unreadCount, refreshUnreadCount } = useAppContext();
 
   // Atualiza o contador ao trocar de tela e a cada minuto.
@@ -107,14 +112,8 @@ export default function AppLayout({ role, children }: AppLayoutProps) {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, spacing.sm) + spacing.sm }]}>
-        <View style={styles.headerBrand}>
-          <Logo size="small" showText={false} />
-          <Text style={styles.headerTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-            Tio da Perua
-          </Text>
-        </View>
-        {showBell ? (
+      {showBell && (
+        <View style={[styles.header, { top: Math.max(insets.top, spacing.sm) + spacing.xs }]} pointerEvents="box-none">
           <Pressable
             onPress={() => navigation.navigate('NotificationList')}
             accessibilityRole="button"
@@ -132,16 +131,14 @@ export default function AppLayout({ role, children }: AppLayoutProps) {
               </View>
             )}
           </Pressable>
-        ) : (
-          <View style={styles.headerButton} />
-        )}
-      </View>
+        </View>
+      )}
 
       {role === 'driver' && <ConnectivityBanner />}
 
       <View style={styles.content}>{children}</View>
 
-      <BottomTabBar items={BOTTOM_TABS[role]} activeKey={activeKey} onPress={handleTabPress} />
+      {!semNavegacao && <BottomTabBar items={BOTTOM_TABS[role]} activeKey={activeKey} onPress={handleTabPress} />}
     </View>
   );
 }
@@ -152,31 +149,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingLeft: layout.screenMargin,
-    paddingRight: spacing.sm,
-    paddingBottom: spacing.sm,
-    backgroundColor: colors.surface,
-    borderBottomWidth: borders.hairline,
-    borderBottomColor: colors.border,
-  },
-  headerBrand: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  headerTitle: {
-    ...typography.label,
-    color: colors.ink,
+    position: 'absolute',
+    right: spacing.md,
+    zIndex: 10,
   },
   headerButton: {
     width: layout.minTouch,
     height: layout.minTouch,
-    borderRadius: radius.button,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: borders.hairline,
+    borderColor: colors.border,
   },
   badge: {
     position: 'absolute',

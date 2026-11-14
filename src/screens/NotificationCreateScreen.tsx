@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
@@ -22,6 +22,9 @@ import { borders, colors, layout, radius, spacing, typography } from '../theme';
 
 export default function NotificationCreateScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'NotificationCreate'>>();
+  const params = route.params;
+  const vinculadaAoAluno = !!params?.dependenteId && !!params?.viagemDiaId;
   const { currentUser, showToast } = useAppContext();
 
   const [titulo, setTitulo] = useState('');
@@ -49,7 +52,17 @@ export default function NotificationCreateScreen() {
       const list = await notificacaoService.listarUsuarios();
       // Filter out current user
       const currentId = getUsuarioId();
-      setUsuarios(list.filter(u => u.id !== currentId));
+      const semAtual = list.filter(u => u.id !== currentId);
+      setUsuarios(semAtual);
+      if (params?.destinatarioId) {
+        const pre = semAtual.find(u => u.id === params.destinatarioId);
+        setDestinatario(pre ?? {
+          id: params.destinatarioId,
+          nome: params.nomeDestinatario ?? 'Responsável',
+          tipoPerfil: 'RESPONSAVEL',
+          telefone: '',
+        } as UsuarioResumoDTO);
+      }
     } catch (error) {
       console.error('Error loading users:', error);
       showToast('Erro ao carregar lista de destinatários.', 'error');
@@ -75,9 +88,15 @@ export default function NotificationCreateScreen() {
         visto: false,
         remetenteId,
         destinatarioId: destinatario.id,
+        dependenteId: vinculadaAoAluno ? params!.dependenteId : undefined,
+        viagemDiaId: vinculadaAoAluno ? params!.viagemDiaId : undefined,
       });
       showToast('Notificação enviada com sucesso!', 'success');
-      navigation.navigate('NotificationList');
+      if (vinculadaAoAluno) {
+        navigation.goBack();
+      } else {
+        navigation.navigate('NotificationList');
+      }
     } catch (error) {
       console.error('Error sending notification:', error);
       showToast('Erro ao enviar notificação.', 'error');

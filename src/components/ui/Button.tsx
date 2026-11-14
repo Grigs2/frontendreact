@@ -18,6 +18,8 @@ export type ButtonSize = 'lg' | 'md' | 'icon';
 
 interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> {
   label?: string;
+  /** Linhas máximas do rótulo; padrão 1. Use com quebras de linha para textos longos. */
+  labelLines?: number;
   variant?: ButtonVariant;
   size?: ButtonSize;
   icon?: FeatherIconName;
@@ -43,6 +45,7 @@ const DISABLED: Record<ButtonVariant, { bg: string; text: string; border: string
 
 export default function Button({
   label,
+  labelLines = 1,
   variant = 'primary',
   size = 'lg',
   icon,
@@ -88,8 +91,8 @@ export default function Button({
           {iconPosition === 'left' && iconNode}
           {!!label && size !== 'icon' && (
             <Text
-              style={[styles.label, { color: textColor }]}
-              numberOfLines={1}
+              style={[styles.label, { color: textColor }, labelLines > 1 && styles.labelMultiline]}
+              numberOfLines={labelLines}
               maxFontSizeMultiplier={maxFontSizeMultiplier}
             >
               {label}
@@ -117,4 +120,5 @@ const styles = StyleSheet.create({
   icon: { width: layout.iconButton, height: layout.iconButton, paddingHorizontal: 0 },
   fullWidth: { alignSelf: 'stretch' },
   label: { ...typography.label, flexShrink: 1 },
+  labelMultiline: { textAlign: 'center' },
 });
