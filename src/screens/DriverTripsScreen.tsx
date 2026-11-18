@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
@@ -8,14 +7,27 @@ import { useAppContext } from '../context/AppContext';
 import { PERIODOS, periodoLabel, viagemNome, viagemService } from '../services/viagemService';
 import { motoristaService } from '../services/motoristaService';
 import { AgendaViagemDTO, EscolaBuscaDTO, MotoristaDTO, ViagemDTO } from '../types';
-import ChoiceChips from '../components/ChoiceChips';
-import { SectionTitle } from '../components/HomeBlocks';
+import ChoiceChips, { ChoiceOption } from '../components/ChoiceChips';
 import { formatDayShort, nextSevenDays, todayIso } from '../utils/format';
 import { statusExecucao } from '../utils/statusLabels';
 import DriverLayout from '../components/DriverLayout';
 import { Button, Card, Chip, ListRow, ScreenHeader, StateView, TextField } from '../components/ui';
 import { getApiErrorMessage } from '../utils/apiError';
 import { borders, colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
+
+/** Viagens do motorista. Cada viagem é criada para uma escola e um período: "Viagem para <escola>", Manhã · ida etc. */
+type FiltroAgenda = 'IDA' | 'VOLTA' | 'MANHA' | 'TARDE' | 'NOITE';
+
+const FILTROS_SENTIDO: FiltroAgenda[] = ['IDA', 'VOLTA'];
+
+const OPCOES_FILTRO: ChoiceOption<FiltroAgenda | 'TODOS'>[] = [
+  { value: 'TODOS', label: 'Todas' },
+  { value: 'IDA', label: 'Ida' },
+  { value: 'VOLTA', label: 'Volta' },
+  { value: 'MANHA', label: 'Manhã' },
+  { value: 'TARDE', label: 'Tarde' },
+  { value: 'NOITE', label: 'Noite' },
+];
 
 /** Viagens do motorista. Cada viagem é criada para uma escola e um período: "Viagem para <escola>", Manhã · ida etc. */
 export default function DriverTripsScreen() {
@@ -41,7 +53,8 @@ export default function DriverTripsScreen() {
   const [agenda, setAgenda] = useState<AgendaViagemDTO[]>([]);
   const [prontas, setProntas] = useState<Record<number, boolean>>({});
   const [dia, setDia] = useState(todayIso());
-  const [sentido, setSentido] = useState<'TODOS' | 'IDA' | 'VOLTA'>('TODOS');
+  // Filtros combinados: sentido (IDA/VOLTA) e período (MANHA/TARDE/NOITE). Vazio = Todas.
+  const [filtros, setFiltros] = useState<FiltroAgenda[]>([]);
 
   const loadTrips = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -123,14 +136,21 @@ export default function DriverTripsScreen() {
   };
 
   const dias = nextSevenDays();
+  const sentidosAtivos = filtros.filter((f) => FILTROS_SENTIDO.includes(f));
+  const periodosAtivos = filtros.filter((f) => !FILTROS_SENTIDO.includes(f));
   const agendaDoDia = agenda
     .filter((a) => a.data === dia)
-    .filter((a) => sentido === 'TODOS' || a.periodo.endsWith(sentido === 'IDA' ? '_IDA' : '_VOLTA'));
+    .filter((a) => sentidosAtivos.length === 0 || sentidosAtivos.some((s) => a.periodo.endsWith(`_${s}`)))
+    .filter((a) => periodosAtivos.length === 0 || periodosAtivos.some((p) => a.periodo.startsWith(`${p}_`)));
 
-  const agendaHeader = (
+  const toggleFiltro = (valor: string) => {
+    if (valor === 'TODOS') return setFiltros([]);
+    const f = valor as FiltroAgenda;
+    setFiltros((atual) => (atual.includes(f) ? atual.filter((x) => x !== f) : [...atual, f]));
+  };
+
+  const agendaContent = (
     <View style={styles.agenda}>
-      <Button label="Nova viagem" icon="plus" fullWidth onPress={openCreate} disabled={!hasVehicle} />
-      <SectionTitle>Agenda</SectionTitle>
       <ChoiceChips
         scroll
         options={dias.map((d, i) => ({ value: d, label: i === 0 ? 'Hoje' : String(Number(d.slice(8, 10))), caption: formatDayShort(d).split(',')[0] }))}
@@ -139,14 +159,12 @@ export default function DriverTripsScreen() {
         accessibilityLabel="Data da viagem"
       />
       <ChoiceChips
-        options={[
-          { value: 'TODOS', label: 'Todas' },
-          { value: 'IDA', label: 'Ida' },
-          { value: 'VOLTA', label: 'Volta' },
-        ]}
-        value={sentido}
-        onChange={setSentido}
-        accessibilityLabel="Sentido da viagem"
+        options={OPCOES_FILTRO}
+        value={null}
+        onChange={() => undefined}
+        selectedValues={filtros.length ? filtros : ['TODOS']}
+        onToggle={toggleFiltro}
+        accessibilityLabel="Filtros da agenda"
       />
       {agendaDoDia.length ? (
         agendaDoDia.map((a) => {
@@ -155,7 +173,7 @@ export default function DriverTripsScreen() {
           return (
             <Card
               key={`${a.idViagem}-${a.data}`}
-              onPress={() => navigation.navigate('DriverTripDay', { viagemId: a.idViagem, data: a.data, viagemDiaId: a.idViagemDia })}
+              onPress={() => navigation.navigate('DriverTripDetails', { viagemId: a.idViagem, data: a.data })}
               accessibilityLabel={`${trip ? viagemNome(trip) : 'Viagem'}, ${periodoLabel(a.periodo)}, ${info.label}`}
             >
               <View style={styles.tripRow}>
@@ -175,33 +193,13 @@ export default function DriverTripsScreen() {
           {trips.some((t) => t.ativo) ? 'Nenhuma viagem neste filtro.' : 'Crie uma viagem para vê-la na agenda.'}
         </Text>
       )}
-      <SectionTitle>Itinerários</SectionTitle>
     </View>
-  );
-
-  const renderTrip = ({ item }: { item: ViagemDTO }) => (
-    <Card
-      onPress={() => navigation.navigate('DriverTripDetails', { viagemId: item.id! })}
-      accessibilityLabel={`${viagemNome(item)}, ${periodoLabel(item.periodo)}, ${item.ativo ? 'ativa' : 'inativa'}`}
-      style={styles.tripCard}
-    >
-      <View style={styles.tripRow}>
-        <View style={styles.iconSlot}>
-          <Feather name="map" size={layout.icon} color={colors.ink} />
-        </View>
-        <View style={styles.flex}>
-          <Text style={styles.tripTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>{viagemNome(item)}</Text>
-          <Text style={styles.tripCaption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{periodoLabel(item.periodo)}</Text>
-        </View>
-        <Chip label={item.ativo ? 'Ativa' : 'Encerrada'} tone={item.ativo ? 'success' : 'neutral'} size="sm" />
-      </View>
-    </Card>
   );
 
   return (
     <DriverLayout>
       <View style={styles.container}>
-        <ScreenHeader title="Rotas" subtitle="Agenda da semana e itinerários" />
+        <ScreenHeader title="Rotas" />
 
         {!hasVehicle && (
           <Card variant="alert" style={styles.alert}>
@@ -217,19 +215,18 @@ export default function DriverTripsScreen() {
         {loading && trips.length === 0 ? (
           <StateView kind="loading" title="Carregando viagens..." />
         ) : (
-          <FlatList
-            data={trips}
-            keyExtractor={(item) => String(item.id)}
-            renderItem={renderTrip}
+          <ScrollView
+            style={styles.scroll}
             contentContainerStyle={styles.list}
-            ListHeaderComponent={agendaHeader}
-            ListEmptyComponent={
-              <StateView kind="empty" icon="map" title="Nenhuma viagem criada." message="Toque em Nova para criar a viagem de uma escola." />
-            }
-            refreshing={loading}
-            onRefresh={loadTrips}
-          />
+            refreshControl={<RefreshControl refreshing={loading} onRefresh={loadTrips} />}
+          >
+            {agendaContent}
+          </ScrollView>
         )}
+
+        <View style={styles.footer}>
+          <Button label="Nova viagem" icon="plus" fullWidth onPress={openCreate} disabled={!hasVehicle} />
+        </View>
 
         <Modal visible={showCreateModal} transparent animationType="slide" onRequestClose={() => setShowCreateModal(false)}>
           <View style={styles.modalOverlay}>
@@ -343,9 +340,9 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   container: { flex: 1, padding: layout.screenMargin, width: '100%', maxWidth: 800, alignSelf: 'center' },
   list: { paddingBottom: spacing.xl, gap: spacing.md },
-  tripCard: { gap: 0 },
+  scroll: { flex: 1 },
+  footer: { paddingTop: spacing.md },
   tripRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  iconSlot: { width: layout.iconSlot, height: layout.iconSlot, borderRadius: radius.pill, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
   tripTitle: { ...typography.label, fontSize: 18, lineHeight: 24, color: colors.ink },
   tripCaption: { ...typography.caption, color: colors.slate500 },
   alert: { marginBottom: spacing.lg },

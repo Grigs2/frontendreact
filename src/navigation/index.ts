@@ -21,7 +21,7 @@ export type RootStackParamList = {
   DriverAttendance: { viagemDiaId: number };
   DriverAttendanceDetail: { tripId: number; stopId: number; stopDescription: string; students: DependenteParadaDTO[] };
   DriverTrips: undefined;
-  DriverTripDetails: { viagemId: number };
+  DriverTripDetails: { viagemId: number; data?: string };
   DriverAvailableDependents: { viagemId: number };
   DriverStudents: undefined;
   DriverProfile: undefined;

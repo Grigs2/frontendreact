@@ -74,9 +74,11 @@ export default function DriverMainScreen() {
     const turno = ORDEM_PERIODO.indexOf(a.periodo ?? '');
     return dia + (turno < 0 ? ORDEM_PERIODO.length : turno);
   };
-  const proximaViagem = agenda
+  const proximas = agenda
     .filter((a) => (!a.status || a.status === 'PLANEJADA') && ['Hoje', 'Amanhã'].includes(formatDayRelative(a.data)))
-    .sort((x, y) => ordemProxima(x) - ordemProxima(y))[0];
+    .sort((x, y) => ordemProxima(x) - ordemProxima(y));
+  const proximaViagem = proximas[0];
+  const proximaTrip = proximaViagem ? trips.find((t) => t.id === proximaViagem.idViagem) : undefined;
   const [turnoProxima, sentidoProxima] = (proximaViagem?.periodo ?? '').split('_');
   const docsPendentes = documentos ? pendenciasDocumentais(documentos) : [];
 
@@ -100,14 +102,23 @@ export default function DriverMainScreen() {
               lines={[nextStop ? `Indo para ${enderecoResumido(nextStop)}` : 'Todas as paradas concluídas']}
               onPress={openRoute}
             />
-          ) : activeTrips.length > 0 ? (
+          ) : proximaViagem ? (
             <HighlightCard
               chip="Próxima viagem"
               chipTone="success"
               icon="map"
-              title={viagemNome(activeTrips[0])}
-              lines={[periodoLabel(activeTrips[0].periodo), activeTrips.length > 1 && `e mais ${activeTrips.length - 1} em Rotas`]}
-              onPress={() => navigation.navigate('DriverTripDetails', { viagemId: activeTrips[0].id })}
+              title={proximaTrip ? viagemNome(proximaTrip) : 'Viagem'}
+              lines={[`${formatDayRelative(proximaViagem.data)} · ${periodoLabel(proximaViagem.periodo)}`, proximas.length > 1 && `e mais ${proximas.length - 1} em Rotas`]}
+              onPress={() => navigation.navigate('DriverTripDetails', { viagemId: proximaViagem.idViagem, data: proximaViagem.data })}
+            />
+          ) : activeTrips.length > 0 ? (
+            <HighlightCard
+              chip="Sem viagens"
+              chipTone="neutral"
+              icon="map"
+              title="Nenhuma viagem hoje ou amanhã"
+              lines={['Veja todas as viagens em Rotas.']}
+              onPress={() => navigation.navigate('DriverTrips')}
             />
           ) : (
             <HighlightCard
@@ -147,7 +158,7 @@ export default function DriverMainScreen() {
               variant="secondary"
               labelLines={2}
               label={`Próxima viagem\n${formatDayRelative(proximaViagem.data)} - ${TURNO_LABEL[turnoProxima] ?? ''} - ${SENTIDO_LABEL[sentidoProxima] ?? ''}`}
-              onPress={() => navigation.navigate('DriverTripDay', { viagemId: proximaViagem.idViagem, data: proximaViagem.data, viagemDiaId: proximaViagem.idViagemDia })}
+              onPress={() => navigation.navigate('DriverTripDetails', { viagemId: proximaViagem.idViagem, data: proximaViagem.data })}
               fullWidth
             />
           )}

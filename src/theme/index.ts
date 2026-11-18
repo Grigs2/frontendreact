@@ -18,6 +18,7 @@ export const colors = {
 
   // Semânticas — só para status e alertas (sempre com texto ou ícone)
   success: '#1B7F3B',
+  successPressed: '#145F2C',
   successTint: '#E3F4E8',
   danger: '#C62828',
   dangerPressed: '#A81F1F',
@@ -35,6 +36,7 @@ export const colors = {
   // Utilitários derivados
   onPrimary: '#14181F',
   onDanger: '#FFFFFF',
+  onSuccess: '#FFFFFF',
   overlay: 'rgba(20, 24, 31, 0.4)',
 } as const;
 

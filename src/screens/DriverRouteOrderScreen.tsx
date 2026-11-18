@@ -98,7 +98,7 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
 
   return (
     <DriverLayout>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <ScreenHeader
           title="Ordem das paradas"
           subtitle={emExecucao ? 'Viagem em andamento: só as paradas restantes' : 'Defina a sequência antes de iniciar'}
@@ -165,20 +165,6 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
                 {alteradas} parada(s) mudam de posição.
               </Text>
             )}
-            <View style={styles.actions}>
-              <Button
-                label="Salvar ordem"
-                icon="check"
-                onPress={salvar}
-                loading={salvando}
-                disabled={!alteradas || semId || !online}
-                fullWidth
-              />
-              {alteradas > 0 && (
-                <Button label="Desfazer alterações" variant="tertiary" onPress={() => setOrdem(original)} disabled={salvando} fullWidth />
-              )}
-              {!online && <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>Reordenar exige conexão.</Text>}
-            </View>
 
             {historico.length > 0 && (
               <>
@@ -197,13 +183,39 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
           </>
         )}
       </ScrollView>
+
+      {!loading && !erro && (
+        <View style={styles.footer}>
+          <Button
+            label="Salvar ordem"
+            icon="check"
+            onPress={salvar}
+            loading={salvando}
+            disabled={!alteradas || semId || !online}
+            fullWidth
+          />
+          {alteradas > 0 && (
+            <Button label="Desfazer alterações" variant="tertiary" onPress={() => setOrdem(original)} disabled={salvando} fullWidth />
+          )}
+          {!online && <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>Reordenar exige conexão.</Text>}
+        </View>
+      )}
     </DriverLayout>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  scroll: { flex: 1 },
   content: { padding: layout.screenMargin, paddingBottom: spacing.xxl, width: '100%', maxWidth: 600, alignSelf: 'center', gap: spacing.lg },
+  footer: {
+    padding: layout.screenMargin,
+    gap: layout.buttonGap,
+    backgroundColor: colors.background,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
+  },
   card: { gap: 0 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
   divider: { borderTopWidth: 1, borderTopColor: colors.border },
@@ -214,5 +226,5 @@ const styles = StyleSheet.create({
   caption: { ...typography.caption, color: colors.slate500 },
   arrows: { flexDirection: 'row' },
   impact: { ...typography.body, color: colors.ink },
-  actions: { gap: layout.buttonGap },
 });
+

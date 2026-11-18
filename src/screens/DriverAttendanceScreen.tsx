@@ -426,7 +426,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                 <Button
                   label="Revisar e iniciar"
                   icon="play"
-                  onPress={() => navigation.navigate('DriverTripDay', { viagemId: activeViagemDia.viagemId!, data: execucao?.data ?? '', viagemDiaId })}
+                  onPress={() => navigation.navigate('DriverTripDetails', { viagemId: activeViagemDia.viagemId!, data: activeViagemDia.data })}
                   fullWidth
                 />
               ) : null}

@@ -48,7 +48,6 @@ import GuardianPlansScreen from './src/screens/GuardianPlansScreen';
 import DriverDocumentsScreen from './src/screens/DriverDocumentsScreen';
 import DriverSchoolsScreen from './src/screens/DriverSchoolsScreen';
 import SchoolLinkDetailScreen from './src/screens/SchoolLinkDetailScreen';
-import DriverTripDayScreen from './src/screens/DriverTripDayScreen';
 import DriverRouteOrderScreen from './src/screens/DriverRouteOrderScreen';
 import DriverFocusScreen from './src/screens/DriverFocusScreen';
 import DriverMapScreen from './src/screens/DriverMapScreen';
@@ -123,7 +122,6 @@ export default function App() {
               <Stack.Screen name="DriverDocuments" component={DriverDocumentsScreen} />
               <Stack.Screen name="DriverSchools" component={DriverSchoolsScreen} />
               <Stack.Screen name="DriverSchoolLinkDetail" component={SchoolLinkDetailScreen} />
-              <Stack.Screen name="DriverTripDay" component={DriverTripDayScreen} />
               <Stack.Screen name="DriverRouteOrder" component={DriverRouteOrderScreen} />
               <Stack.Screen name="DriverFocus" component={DriverFocusScreen} />
               <Stack.Screen name="DriverMap" component={DriverMapScreen} />

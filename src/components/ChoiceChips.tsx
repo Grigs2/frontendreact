@@ -13,19 +13,22 @@ interface ChoiceChipsProps<T extends string> {
   options: ChoiceOption<T>[];
   value: T | null;
   onChange: (value: T) => void;
+  /** Modo multisseleção: marca os valores informados e alterna cada um ao tocar. */
+  selectedValues?: T[];
+  onToggle?: (value: T) => void;
   /** Faixa horizontal rolável (datas) em vez de quebra de linha. */
   scroll?: boolean;
   accessibilityLabel?: string;
 }
 
 /** Escolha única em pílulas: ativa em primary (texto ink), inativa com borda neutra. Alvo mínimo 48 px. */
-export default function ChoiceChips<T extends string>({ options, value, onChange, scroll, accessibilityLabel }: ChoiceChipsProps<T>) {
+export default function ChoiceChips<T extends string>({ options, value, onChange, selectedValues, onToggle, scroll, accessibilityLabel }: ChoiceChipsProps<T>) {
   const items = options.map((o) => {
-    const selected = o.value === value;
+    const selected = selectedValues ? selectedValues.includes(o.value) : o.value === value;
     return (
       <Pressable
         key={o.value}
-        onPress={() => onChange(o.value)}
+        onPress={() => (onToggle ? onToggle(o.value) : onChange(o.value))}
         accessibilityRole="radio"
         accessibilityState={{ selected }}
         accessibilityLabel={[o.label, o.caption].filter(Boolean).join(', ')}
