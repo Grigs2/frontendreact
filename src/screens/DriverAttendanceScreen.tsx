@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,7 +19,10 @@ import { Button, Card } from '../components/ui';
 import { viagemService } from '../services/viagemService';
 import { authSession } from '../services/authSession';
 import { offlineQueue, podeRegistrarOffline } from '../services/offlineQueue';
+import { localizacaoService } from '../services/localizacaoService';
 import { MENSAGEM_GPS, useDriverLocation } from '../hooks/useDriverLocation';
+import { useRotaViagem } from '../hooks/useRotaViagem';
+import { distancia, instrucaoCurta, linhaDaRota, tempoAte } from '../utils/rota';
 import { DependenteParadaDTO, ParadaViagemDTO, StatusViagemPresenca, ViagemDiaDTO } from '../types';
 import { statusInfo } from '../utils/statusLabels';
 import { formatTime } from '../utils/format';
@@ -83,6 +86,30 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
 
   // GPS só com a execução em andamento (7.1.3 / 7.1.9).
   const gps = useDriverLocation(viagemDiaId, emAndamento);
+
+  // Sem o consentimento do motorista o backend recusa a posição e o responsável não vê o veículo.
+  const [semConsentimento, setSemConsentimento] = useState(false);
+  const [consentindo, setConsentindo] = useState(false);
+  useEffect(() => {
+    if (!emAndamento || !viagemDiaId) return;
+    localizacaoService
+      .estadoConsentimento(viagemDiaId)
+      .then((e) => setSemConsentimento(!e.motoristaConsentiu))
+      .catch(() => undefined);
+  }, [emAndamento, viagemDiaId]);
+  const permitirLocalizacao = async () => {
+    setConsentindo(true);
+    try {
+      await localizacaoService.consentirMotorista(true);
+      setSemConsentimento(false);
+      gps.tentarNovamente();
+      showToast('Localização compartilhada com os responsáveis durante a viagem.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Não foi possível ativar a localização.'), 'error');
+    } finally {
+      setConsentindo(false);
+    }
+  };
 
   const atualizarLocais = useCallback(async () => {
     if (!usuarioId || !viagemDiaId) return {};
@@ -238,6 +265,29 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
   const pendentesNoDestino = destino ? ordenarAlunos(destino.listaDependentes.filter((d) => pendenteNaParada(destino, d))) : [];
   const aluno = pendentesNoDestino[0];
   const rotuloDestino = destino ? rotuloParada(destino, ida, pendentesNoDestino.length ? pendentesNoDestino : destino.listaDependentes) : '';
+  // Rota do Google a partir da posição do aparelho; volta a ser buscada a cada embarque ou desembarque.
+  const assinaturaRota = currentStops.map((s) => s.listaDependentes.map((d) => d.statusEmbarque).join(',')).join('|');
+  const rota = useRotaViagem(viagemDiaId, emAndamento, gps.posicao, assinaturaRota);
+  const linhaRota = linhaDaRota(rota);
+  const paradasRota = rota?.disponivel ? rota.paradas : [];
+  const pontosMapa = paradasRota.map((p, i) => ({
+    latitude: p.latitude,
+    longitude: p.longitude,
+    titulo: p.rotulo,
+    numero: i + 1,
+    destaque: !!destino && p.ordem === destino.ordem,
+  }));
+  const previsaoDestino = destino ? paradasRota.find((p) => p.ordem === destino.ordem) : undefined;
+  const navegar = (app: 'maps' | 'waze') => {
+    if (!previsaoDestino) return;
+    const { latitude: lat, longitude: lng } = previsaoDestino;
+    const url =
+      app === 'waze'
+        ? `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
+        : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+    Linking.openURL(url).catch(() => showToast('Não foi possível abrir o aplicativo de navegação.', 'error'));
+  };
+
   // Destino seguinte, para o quadro "próxima parada".
   const destinoSeguinte = indiceProximo !== undefined ? destinos[indiceProximo] : undefined;
   const rotuloSeguinte = destinoSeguinte
@@ -284,6 +334,9 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
               ultimaAtualizacao={gps.ultimoEnvio?.toISOString()}
               desatualizada={gps.estado === 'sem_sinal'}
               mensagem={MENSAGEM_GPS[gps.estado]}
+              rota={linhaRota}
+              paradas={pontosMapa}
+              modo="seguir"
             />
             <View style={[styles.telaCheiaTopo, { paddingTop: insets.top + spacing.sm }]} pointerEvents="box-none">
               <Button size="icon" variant="secondary" icon="arrow-left" accessibilityLabel="Voltar para o início" onPress={voltarInicio} />
@@ -345,6 +398,9 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                 ultimaAtualizacao={gps.ultimoEnvio?.toISOString()}
                 desatualizada={gps.estado === 'sem_sinal'}
                 mensagem={MENSAGEM_GPS[gps.estado]}
+                rota={linhaRota}
+                paradas={pontosMapa}
+                modo="seguir"
               />
             )}
             <View style={styles.mapaVoltar} pointerEvents="box-none">
@@ -400,6 +456,15 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
             </Card>
           )}
 
+          {emAndamento && semConsentimento && (
+            <Card variant="alert" style={styles.card}>
+              <Text style={styles.cardTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>Compartilhar sua localização</Text>
+              <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                Os responsáveis acompanham a perua no mapa só durante a viagem. Você pode desligar em Perfil → Configurações.
+              </Text>
+              <Button label="Permitir" icon="map-pin" size="md" loading={consentindo} onPress={permitirLocalizacao} fullWidth />
+            </Card>
+          )}
           {emAndamento && destino && (
             <>
               <Card style={styles.card}>
@@ -419,14 +484,38 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
 
               {aluno && (
                 <View style={styles.direcoes}>
-                  <Feather name={destinoSeguinte ? 'arrow-right-circle' : 'flag'} size={28} color={colors.primary} />
+                  <Feather
+                    name={rota?.proximaInstrucao ? 'navigation' : destinoSeguinte ? 'arrow-right-circle' : 'flag'}
+                    size={28}
+                    color={colors.primary}
+                  />
                   <View style={styles.direcoesTextos}>
-                    <Text style={styles.direcoesTitulo} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                      {indicesPendentes.length <= 1 ? 'Última parada' : `Faltam ${indicesPendentes.length} paradas`}
+                    <Text style={styles.direcoesTitulo} maxFontSizeMultiplier={maxFontSizeMultiplier} numberOfLines={2}>
+                      {rota?.proximaInstrucao
+                        ? `${instrucaoCurta(rota.proximaInstrucao)}${rota.metrosAteInstrucao ? ` · ${distancia(rota.metrosAteInstrucao)}` : ''}`
+                        : indicesPendentes.length <= 1
+                          ? 'Última parada'
+                          : `Faltam ${indicesPendentes.length} paradas`}
                     </Text>
+                    {previsaoDestino ? (
+                      <Text style={styles.direcoesEta} maxFontSizeMultiplier={maxFontSizeMultiplier} numberOfLines={1}>
+                        Chega em {tempoAte(previsaoDestino.segundos)} · {formatTime(previsaoDestino.previsaoChegada)} ·{' '}
+                        {distancia(previsaoDestino.metros)}
+                      </Text>
+                    ) : rota && !rota.disponivel && rota.mensagem ? (
+                      <Text style={styles.direcoesSub} maxFontSizeMultiplier={maxFontSizeMultiplier} numberOfLines={1}>
+                        {rota.mensagem}
+                      </Text>
+                    ) : null}
                     <Text style={styles.direcoesSub} maxFontSizeMultiplier={maxFontSizeMultiplier} numberOfLines={1}>
                       {destinoSeguinte ? `Depois: ${rotuloSeguinte}` : 'Esta é a última parada com alunos.'}
                     </Text>
+                    {previsaoDestino && (
+                      <View style={styles.navegar}>
+                        <ChipAcao label="Abrir no Maps" onPress={() => navegar('maps')} />
+                        <ChipAcao label="Abrir no Waze" onPress={() => navegar('waze')} />
+                      </View>
+                    )}
                   </View>
                 </View>
               )}
@@ -674,6 +763,8 @@ const styles = StyleSheet.create({
   direcoesTextos: { flex: 1, gap: 2 },
   direcoesTitulo: { ...typography.label, color: colors.surface },
   direcoesSub: { ...typography.caption, color: colors.slate500 },
+  direcoesEta: { ...typography.captionBold, color: colors.primary },
+  navegar: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   mapa: { flex: 2, overflow: 'hidden', position: 'relative' },
   linhaArea: { flex: 1, justifyContent: 'center', gap: spacing.sm, paddingHorizontal: layout.screenMargin, backgroundColor: colors.background },
   mapaVoltar: { position: 'absolute', top: 0, left: 0, padding: layout.screenMargin, zIndex: 10, elevation: 10 },
