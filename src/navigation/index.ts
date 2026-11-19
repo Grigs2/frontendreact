@@ -29,7 +29,7 @@ export type RootStackParamList = {
   DriverHistory: undefined;
   DriverHelp: undefined;
   DriverInvites: undefined;
-  DriverSearchStudents: undefined;
+  DriverSearchStudents: { viagemId?: number } | undefined;
   GuardianMain: undefined;
   GuardianTracking: undefined;
   GuardianInvites: undefined;

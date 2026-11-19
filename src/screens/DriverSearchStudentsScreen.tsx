@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useAppContext } from '../context/AppContext';
 import DriverLayout from '../components/DriverLayout';
 import StudentInviteList from '../components/StudentInviteList';
@@ -13,6 +13,8 @@ import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } fr
 /** Motorista procura alunos por nome e convida para uma das suas viagens; o responsável aceita ou recusa. */
 export default function DriverSearchStudentsScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const viagemIdParam: number | undefined = route.params?.viagemId;
   const { currentUser, showToast } = useAppContext();
   const [trips, setTrips] = useState<ViagemDTO[]>([]);
   const [selected, setSelected] = useState<ViagemDTO | null>(null);
@@ -27,12 +29,13 @@ export default function DriverSearchStudentsScreen() {
         .then((list) => {
           const ativas = list.filter((t) => t.ativo);
           setTrips(ativas);
-          setSelected((cur) => ativas.find((t) => t.id === cur?.id) ?? ativas[0] ?? null);
+          const porParametro = viagemIdParam != null ? ativas.find((t) => t.id === viagemIdParam) : undefined;
+          setSelected((cur) => porParametro ?? ativas.find((t) => t.id === cur?.id) ?? ativas[0] ?? null);
         })
         .catch((error) => showToast(getApiErrorMessage(error, 'Não foi possível carregar suas viagens.'), 'error'))
         .finally(() => setLoading(false));
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentUser?.id]),
+    }, [currentUser?.id, viagemIdParam]),
   );
 
   const tripPicker = (

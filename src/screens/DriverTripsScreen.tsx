@@ -6,9 +6,9 @@ import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { PERIODOS, periodoLabel, viagemNome, viagemService } from '../services/viagemService';
 import { motoristaService } from '../services/motoristaService';
-import { AgendaViagemDTO, EscolaBuscaDTO, MotoristaDTO, ViagemDTO } from '../types';
+import { AgendaViagemDTO, EscolaBuscaDTO, MotoristaDTO, ViagemDTO, ViagemDiaResumoDTO } from '../types';
 import ChoiceChips, { ChoiceOption } from '../components/ChoiceChips';
-import { formatDayShort, nextSevenDays, todayIso } from '../utils/format';
+import { addDaysIso, formatDayShort, nextSevenDays, todayIso } from '../utils/format';
 import { statusExecucao } from '../utils/statusLabels';
 import DriverLayout from '../components/DriverLayout';
 import { Button, Card, Chip, ListRow, ScreenHeader, StateView, TextField } from '../components/ui';
@@ -29,6 +29,9 @@ const OPCOES_FILTRO: ChoiceOption<FiltroAgenda | 'TODOS'>[] = [
   { value: 'NOITE', label: 'Noite' },
 ];
 
+/** Data ISO de N dias atrás (para a janela do histórico). */
+const diasAtras = (n: number) => addDaysIso(todayIso(), -n);
+
 /** Viagens do motorista. Cada viagem é criada para uma escola e um período: "Viagem para <escola>", Manhã · ida etc. */
 export default function DriverTripsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -38,6 +41,8 @@ export default function DriverTripsScreen() {
 
   const [trips, setTrips] = useState<ViagemDTO[]>([]);
   const [loading, setLoading] = useState(true);
+  // Só libera a lista após a primeira carga completa (viagens + agenda + histórico + prontidão).
+  const [carregouUmaVez, setCarregouUmaVez] = useState(false);
   const [creating, setCreating] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -51,6 +56,8 @@ export default function DriverTripsScreen() {
 
   // Agenda: janela de 7 dias (5.1.2–5.1.4, 5.1.7)
   const [agenda, setAgenda] = useState<AgendaViagemDTO[]>([]);
+  // Dias já encerrados (concluídos, cancelados, interrompidos) vindos do histórico.
+  const [historico, setHistorico] = useState<ViagemDiaResumoDTO[]>([]);
   const [prontas, setProntas] = useState<Record<number, boolean>>({});
   const [dia, setDia] = useState(todayIso());
   // Filtros combinados: sentido (IDA/VOLTA) e período (MANHA/TARDE/NOITE). Vazio = Todas.
@@ -62,17 +69,22 @@ export default function DriverTripsScreen() {
     try {
       const lista = await viagemService.listarViagens(currentUser.id);
       setTrips(lista);
-      viagemService.agenda(currentUser.id).then(setAgenda).catch(() => setAgenda([]));
-      // Prontidão de cada itinerário ativo: separa "Pronta para iniciar" de "Com pendências".
-      Promise.all(
-        lista.filter((t) => t.ativo && t.id).map((t) =>
-          viagemService.prontidao(t.id!).then((p) => [t.id!, p.pronta] as const).catch(() => null),
-        ),
-      ).then((res) => setProntas(Object.fromEntries(res.filter(Boolean) as (readonly [number, boolean])[])));
+      // Só libera a tela depois que agenda, histórico e prontidão chegam; evita lista vazia piscando.
+      await Promise.all([
+        viagemService.agenda(currentUser.id).then(setAgenda).catch(() => setAgenda([])),
+        viagemService.historico(currentUser.id, diasAtras(30), todayIso()).then(setHistorico).catch(() => setHistorico([])),
+        // Prontidão de cada itinerário ativo: separa "Preparada" de "Com pendências".
+        Promise.all(
+          lista.filter((t) => t.ativo && t.id).map((t) =>
+            viagemService.prontidao(t.id!).then((p) => [t.id!, p.pronta] as const).catch(() => null),
+          ),
+        ).then((res) => setProntas(Object.fromEntries(res.filter(Boolean) as (readonly [number, boolean])[]))),
+      ]);
     } catch (error) {
       showToast(getApiErrorMessage(error, 'Não foi possível carregar as viagens.'), 'error');
     } finally {
       setLoading(false);
+      setCarregouUmaVez(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id]);
@@ -135,13 +147,36 @@ export default function DriverTripsScreen() {
     }
   };
 
-  const dias = nextSevenDays();
+  const diasAgenda = nextSevenDays();
+  // Agenda da janela + dias encerrados do histórico, sem duplicar o mesmo dia da mesma viagem.
+  const agendaCompleta: AgendaViagemDTO[] = [
+    ...agenda,
+    ...historico
+      .filter((h) => h.viagemId != null)
+      .filter((h) => !agenda.some((a) => a.idViagem === h.viagemId && a.data === h.data))
+      .map((h) => ({
+        idViagem: h.viagemId as number,
+        periodo: h.periodo ?? '',
+        data: h.data,
+        idViagemDia: h.id,
+        status: h.status,
+        materializada: true,
+      })),
+  ];
+  const dias = Array.from(new Set([...diasAgenda, ...agendaCompleta.map((a) => a.data)])).sort();
   const sentidosAtivos = filtros.filter((f) => FILTROS_SENTIDO.includes(f));
   const periodosAtivos = filtros.filter((f) => !FILTROS_SENTIDO.includes(f));
-  const agendaDoDia = agenda
+  const agendaDoDia = agendaCompleta
     .filter((a) => a.data === dia)
     .filter((a) => sentidosAtivos.length === 0 || sentidosAtivos.some((s) => a.periodo.endsWith(`_${s}`)))
     .filter((a) => periodosAtivos.length === 0 || periodosAtivos.some((p) => a.periodo.startsWith(`${p}_`)));
+
+  // Nome vem da lista de viagens ativas; para viagens já encerradas/inativas, usa o nome que o histórico traz.
+  const nomeDaViagem = (idViagem: number) => {
+    const trip = trips.find((t) => t.id === idViagem);
+    if (trip) return viagemNome(trip);
+    return historico.find((h) => h.viagemId === idViagem && h.viagemNome)?.viagemNome ?? 'Viagem';
+  };
 
   const toggleFiltro = (valor: string) => {
     if (valor === 'TODOS') return setFiltros([]);
@@ -153,7 +188,7 @@ export default function DriverTripsScreen() {
     <View style={styles.agenda}>
       <ChoiceChips
         scroll
-        options={dias.map((d, i) => ({ value: d, label: i === 0 ? 'Hoje' : String(Number(d.slice(8, 10))), caption: formatDayShort(d).split(',')[0] }))}
+        options={dias.map((d) => ({ value: d, label: d === todayIso() ? 'Hoje' : String(Number(d.slice(8, 10))), caption: formatDayShort(d).split(',')[0] }))}
         value={dia}
         onChange={setDia}
         accessibilityLabel="Data da viagem"
@@ -173,12 +208,16 @@ export default function DriverTripsScreen() {
           return (
             <Card
               key={`${a.idViagem}-${a.data}`}
-              onPress={() => navigation.navigate('DriverTripDetails', { viagemId: a.idViagem, data: a.data })}
-              accessibilityLabel={`${trip ? viagemNome(trip) : 'Viagem'}, ${periodoLabel(a.periodo)}, ${info.label}`}
+              onPress={() =>
+                a.status === 'EM_ANDAMENTO' && a.idViagemDia
+                  ? navigation.navigate('DriverAttendance', { viagemDiaId: a.idViagemDia })
+                  : navigation.navigate('DriverTripDetails', { viagemId: a.idViagem, data: a.data })
+              }
+              accessibilityLabel={`${nomeDaViagem(a.idViagem)}, ${periodoLabel(a.periodo)}, ${info.label}`}
             >
               <View style={styles.tripRow}>
                 <View style={styles.flex}>
-                  <Text style={styles.tripTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>{trip ? viagemNome(trip) : 'Viagem'}</Text>
+                  <Text style={styles.tripTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>{nomeDaViagem(a.idViagem)}</Text>
                   <Text style={styles.tripCaption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
                     {periodoLabel(a.periodo)} · {formatDayShort(a.data)}
                   </Text>
@@ -199,7 +238,10 @@ export default function DriverTripsScreen() {
   return (
     <DriverLayout>
       <View style={styles.container}>
-        <ScreenHeader title="Rotas" />
+        <ScreenHeader
+          title="Rotas"
+          onBack={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('DriverMain'))}
+        />
 
         {!hasVehicle && (
           <Card variant="alert" style={styles.alert}>
@@ -212,7 +254,7 @@ export default function DriverTripsScreen() {
           </Card>
         )}
 
-        {loading && trips.length === 0 ? (
+        {!carregouUmaVez ? (
           <StateView kind="loading" title="Carregando viagens..." />
         ) : (
           <ScrollView

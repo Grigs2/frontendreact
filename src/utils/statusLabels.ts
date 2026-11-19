@@ -79,14 +79,14 @@ export const statusInfo = (dominio: DominioStatus, status?: string | null): Stat
   return DOMINIOS[dominio][status] ?? { label: humanize(status), tone: 'neutral' };
 };
 
-/** Estado exibido de uma execução: separa "Pronta para iniciar" e "Com pendências" do PLANEJADA. */
+/** Estado exibido de uma execução: separa "Preparada" e "Com pendências" do PLANEJADA. */
 export const statusExecucao = (
   status: string | null | undefined,
   opts: { materializada?: boolean; pronta?: boolean | null } = {},
 ): StatusInfo => {
   if (!status || opts.materializada === false) return { label: 'Não preparada', tone: 'neutral' };
   if (status === 'PLANEJADA') {
-    if (opts.pronta === true) return { label: 'Pronta para iniciar', tone: 'warning' };
+    if (opts.pronta === true) return { label: 'Preparada', tone: 'success' };
     if (opts.pronta === false) return { label: 'Com pendências', tone: 'danger' };
   }
   return statusInfo('viagemDia', status);

@@ -6,7 +6,7 @@ import { escolasNomes, viagemNome, viagemService } from '../services/viagemServi
 import { ViagemDTO } from '../types';
 import DriverLayout from '../components/DriverLayout';
 import StudentInviteList from '../components/StudentInviteList';
-import { ScreenHeader } from '../components/ui';
+import { ScreenHeader, StateView } from '../components/ui';
 import { layout } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DriverAvailableDependents'>;
@@ -15,25 +15,40 @@ type Props = NativeStackScreenProps<RootStackParamList, 'DriverAvailableDependen
 export default function DriverAvailableDependentsScreen({ route, navigation }: Props) {
   const { viagemId } = route.params;
   const [viagem, setViagem] = useState<ViagemDTO | null>(null);
+  const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
-    viagemService.visualizar(viagemId).then(setViagem).catch(() => setViagem(null));
+    setCarregando(true);
+    viagemService
+      .visualizar(viagemId)
+      .then(setViagem)
+      .catch(() => setViagem(null))
+      .finally(() => setCarregando(false));
   }, [viagemId]);
+
+  const cabecalho = (
+    <ScreenHeader
+      title="Convidar alunos"
+      subtitle={viagem ? viagemNome(viagem) : undefined}
+      onBack={() => navigation.goBack()}
+    />
+  );
 
   return (
     <DriverLayout>
       <View style={styles.container}>
-        <StudentInviteList
-          viagemId={viagemId}
-          escolaNome={viagem ? escolasNomes(viagem) : undefined}
-          header={
-            <ScreenHeader
-              title="Convidar alunos"
-              subtitle={viagem ? viagemNome(viagem) : undefined}
-              onBack={() => navigation.goBack()}
-            />
-          }
-        />
+        {carregando ? (
+          <>
+            {cabecalho}
+            <StateView kind="loading" title="Carregando viagem..." />
+          </>
+        ) : (
+          <StudentInviteList
+            viagemId={viagemId}
+            escolaNome={viagem ? escolasNomes(viagem) : undefined}
+            header={cabecalho}
+          />
+        )}
       </View>
     </DriverLayout>
   );
