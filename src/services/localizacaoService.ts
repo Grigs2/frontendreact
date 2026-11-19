@@ -5,6 +5,7 @@ import {
   EstadoConsentimentoLocalizacaoDTO,
   LocalizacaoViagemDTO,
   Page,
+  RotaViagemDTO,
 } from '../types';
 
 /** Intervalo mínimo aceito pelo backend entre duas posições. */
@@ -28,6 +29,14 @@ export const localizacaoService = {
 
   consentirDependente: async (idDependente: number, aceito: boolean): Promise<ConsentimentoLocalizacaoDTO> =>
     (await api.put(API_ENDPOINTS.consentimentoDependente(idDependente), { aceito })).data,
+
+  /** Se o responsável logado já autorizou ver a localização nas viagens deste aluno. */
+  consentimentoDependente: async (idDependente: number): Promise<ConsentimentoLocalizacaoDTO> =>
+    (await api.get(API_ENDPOINTS.consentimentoDependente(idDependente))).data,
+
+  /** Rota e previsão de chegada. O motorista pode mandar a posição do aparelho para a rota sair dela. */
+  rota: async (idViagemDia: number, posicao?: { latitude: number; longitude: number } | null): Promise<RotaViagemDTO> =>
+    (await api.get(API_ENDPOINTS.rotaViagemDia(idViagemDia), { params: posicao ?? undefined })).data,
 
   estadoConsentimento: async (idViagemDia: number): Promise<EstadoConsentimentoLocalizacaoDTO> =>
     (await api.get(API_ENDPOINTS.consentimentoExecucao(idViagemDia))).data,

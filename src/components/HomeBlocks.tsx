@@ -64,7 +64,6 @@ export function NotificacoesNovasCard({ total, onPress }: { total: number; onPre
       icon="bell"
       title={total === 1 ? '1 notificação nova' : `${total > 99 ? '99+' : total} notificações novas`}
       lines={['Embarques, avisos e pedidos que você ainda não viu.']}
-      onPress={onPress}
     >
       <Button label="Ver notificações" icon="arrow-right" iconPosition="right" variant="secondary" onPress={onPress} fullWidth />
     </HighlightCard>

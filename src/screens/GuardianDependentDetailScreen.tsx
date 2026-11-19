@@ -70,7 +70,12 @@ export default function GuardianDependentDetailScreen({ navigation, route }: Pro
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load]),
+      // Estado atual do compartilhamento de localização deste responsável para o aluno.
+      localizacaoService
+        .consentimentoDependente(dependenteId)
+        .then((r) => setGpsAutorizado(r.aceito))
+        .catch(() => setGpsAutorizado(null));
+    }, [load, dependenteId]),
   );
 
   if (!dependente) {
@@ -253,12 +258,12 @@ export default function GuardianDependentDetailScreen({ navigation, route }: Pro
           </View>
           <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
             A posição é enviada a cada 15 segundos, só com a viagem em andamento, e guardada por {RETENCAO_GPS_DIAS} dias.
-            Veem: você, os outros responsáveis do aluno e o motorista. Basta um responsável autorizar; revogar suspende o
-            GPS da viagem atual, sem afetar o registro de embarque.
+            Cada responsável autoriza por si: quem autoriza vê o veículo no mapa durante a viagem. Revogar tira só o
+            seu acesso ao mapa, sem afetar o registro de embarque.
           </Text>
           {gpsAutorizado === null && (
             <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-              Sua escolha atual não é exibida pelo servidor; use a chave para autorizar ou revogar.
+              Não foi possível consultar sua escolha atual; use a chave para autorizar ou revogar.
             </Text>
           )}
         </Card>
