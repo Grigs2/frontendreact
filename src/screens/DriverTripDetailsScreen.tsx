@@ -6,6 +6,7 @@ import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { escolasNomes, periodoLabel, viagemNome, viagemService } from '../services/viagemService';
 import { AgendaViagemDTO, MotoristaDTO, ParadaViagemDTO, ViagemDTO } from '../types';
+import { nomeParada } from '../utils/paradas';
 import { todayIso } from '../utils/format';
 import { Notice } from '../components/Feedback';
 import DriverLayout from '../components/DriverLayout';
@@ -166,7 +167,7 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
               accessibilityLabel="Alterar ordem das paradas"
             >
               {paradas.map((p, i) => (
-                <Text key={p.id ?? i} style={styles.depName}>{i + 1}. {p.nomeLocal || p.endereco}</Text>
+                <Text key={p.id ?? i} style={styles.depName}>{i + 1}. {nomeParada(p)}</Text>
               ))}
               <Text style={styles.depDetail}>Toque para alterar a ordem</Text>
             </Card>

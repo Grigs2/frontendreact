@@ -173,6 +173,7 @@ export default function HistoryScreen() {
           visible={ausenciaAberta}
           dependenteId={aluno.id}
           dependenteNome={aluno.nome}
+          dependentes={dependentes.map((d) => ({ id: d.id!, nome: d.nome }))}
           onClose={() => setAusenciaAberta(false)}
         />
       ) : null}

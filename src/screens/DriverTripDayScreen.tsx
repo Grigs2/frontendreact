@@ -24,6 +24,7 @@ import {
   ViagemDiaDTO,
 } from '../types';
 import { statusExecucao, statusInfo } from '../utils/statusLabels';
+import { nomeParada } from '../utils/paradas';
 import { formatDateTime, formatDayRelative, todayIso } from '../utils/format';
 import { getApiErrorMessage, getApiStatus } from '../utils/apiError';
 import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
@@ -283,7 +284,7 @@ export default function DriverTripDayScreen({ navigation, route }: Props) {
                       <Text style={styles.orderText} maxFontSizeMultiplier={maxFontSizeMultiplier}>{i + 1}</Text>
                     </View>
                     <View style={styles.flex}>
-                      <Text style={styles.stopTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>{p.nomeLocal || TIPO_PARADA[p.tipoParada]}</Text>
+                      <Text style={styles.stopTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>{nomeParada(p) || TIPO_PARADA[p.tipoParada]}</Text>
                       <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{p.endereco}</Text>
                       {p.listaDependentes.length > 0 && (
                         <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>

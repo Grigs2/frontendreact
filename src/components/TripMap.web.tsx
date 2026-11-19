@@ -1,5 +1,5 @@
 import React from 'react';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Button, Chip } from './ui';
 import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
@@ -7,7 +7,7 @@ import { formatTimeSeconds } from '../utils/format';
 import type { TripMapProps } from './TripMap';
 
 /** Versão web: react-native-maps não roda no navegador, então mostramos a posição e um link para o mapa. */
-export default function TripMap({ posicao, ultimaAtualizacao, desatualizada, mensagem, altura = 220, preencher = false }: TripMapProps) {
+export default function TripMap({ posicao, ultimaAtualizacao, desatualizada, mensagem, altura = 220, preencher = false, onPress }: TripMapProps) {
   const h = Math.min(altura, layout.topAreaMax);
   const abrir = () => {
     if (!posicao) return;
@@ -22,12 +22,21 @@ export default function TripMap({ posicao, ultimaAtualizacao, desatualizada, men
     return (
       <View style={styles.preencher}>
         {React.createElement('iframe', { src, title: 'Mapa com a posição do veículo', style: iframeStyle })}
+        {/* O iframe engole o clique; com onPress, uma camada transparente amplia o mapa. */}
+        {onPress && (
+          <Pressable style={styles.camadaToque} onPress={onPress} accessibilityRole="button" accessibilityLabel="Ampliar mapa" />
+        )}
       </View>
     );
   }
 
   return (
-    <View style={[styles.wrap, { minHeight: Math.min(h, 200) }]}>
+    <Pressable
+      style={[styles.wrap, preencher ? styles.preencher : { minHeight: Math.min(h, 200) }]}
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityHint={onPress ? 'Amplia o mapa' : undefined}
+    >
       <View style={styles.iconSlot}>
         <Feather name="map-pin" size={layout.icon} color={colors.ink} />
       </View>
@@ -51,7 +60,7 @@ export default function TripMap({ posicao, ultimaAtualizacao, desatualizada, men
           {mensagem ?? 'Aguardando a primeira posição'}
         </Text>
       )}
-    </View>
+    </Pressable>
   );
 }
 
@@ -59,6 +68,7 @@ const iframeStyle = { position: 'absolute', top: 0, left: 0, width: '100%', heig
 
 const styles = StyleSheet.create({
   preencher: { flex: 1, width: '100%', overflow: 'hidden', backgroundColor: colors.pressedNeutral },
+  camadaToque: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   wrap: {
     width: '100%',
     backgroundColor: colors.pressedNeutral,

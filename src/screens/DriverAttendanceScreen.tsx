@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useAreaToque, useNivelMapa } from '../hooks/useNivelMapa';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,7 +23,7 @@ import { DependenteParadaDTO, ParadaViagemDTO, StatusViagemPresenca, ViagemDiaDT
 import { statusInfo } from '../utils/statusLabels';
 import { formatTime } from '../utils/format';
 import { getApiErrorMessage } from '../utils/apiError';
-import { enderecoResumido } from '../utils/paradas';
+import { enderecoResumido, nomeParada } from '../utils/paradas';
 import { rotuloRota } from '../utils/periodo';
 import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
@@ -65,8 +66,8 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
   const [confirmarFim, setConfirmarFim] = useState(false);
   const [updatingTrip, setUpdatingTrip] = useState(false);
   const [avisoAberto, setAvisoAberto] = useState(false);
-  const [mapaOculto, setMapaOculto] = useState(false);
-  const [telaCheia, setTelaCheia] = useState(false);
+  // Mapa: 0 oculto, 1 pequeno (40%), 2 tela cheia. Toque no mapa amplia; toque fora (sem botão) reduz.
+  const { nivel: nivelMapa, setNivel: setNivelMapa, ampliar: ampliarMapa, reduzir: reduzirMapa } = useNivelMapa(1);
   // null = acompanha o primeiro destino pendente; depois o motorista navega pelas setas ou pelo deslize.
   const [indiceManual, setIndiceManual] = useState<number | null>(null);
   const loadingRef = useRef(false);
@@ -226,12 +227,11 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
   const irPara = (novo: number) => {
     if (destinos.length) setIndiceManual(Math.max(0, Math.min(novo, destinos.length - 1)));
   };
-  const deslize = PanResponder.create({
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 24 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
-    onPanResponderRelease: (_, g) => {
-      if (g.dx < -50) irPara(indice + 1);
-      else if (g.dx > 50) irPara(indice - 1);
-    },
+  // Fora do mapa: deslizar troca de aluno; tocar num ponto sem botão reduz o mapa um nível.
+  const deslize = useAreaToque({
+    onToque: reduzirMapa,
+    onDeslizarEsquerda: () => irPara(indice + 1),
+    onDeslizarDireita: () => irPara(indice - 1),
   });
 
   const mensagemAoResponsavel = (dependente: DependenteParadaDTO) =>
@@ -243,8 +243,8 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
     });
 
   const voltarInicio = () => navigation.navigate('DriverMain');
-  const mapaVisivel = emAndamento && !mapaOculto;
-  const telaCheiaAtiva = emAndamento && telaCheia;
+  const mapaVisivel = emAndamento && nivelMapa >= 1;
+  const telaCheiaAtiva = emAndamento && nivelMapa === 2;
   const nomeAluno = (id: number) => alunos.find((a) => a.id === id)?.nomeDependente ?? `Aluno ${id}`;
 
   return (
@@ -262,7 +262,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
             />
             <View style={[styles.telaCheiaTopo, { paddingTop: insets.top + spacing.sm }]} pointerEvents="box-none">
               <Button size="icon" variant="secondary" icon="arrow-left" accessibilityLabel="Voltar para o início" onPress={voltarInicio} />
-              <ChipAcao label="Reduzir mapa" onPress={() => setTelaCheia(false)} />
+              <ChipAcao label="Reduzir mapa" onPress={() => setNivelMapa(1)} />
             </View>
             <View style={[styles.cardFlutuante, { bottom: insets.bottom + spacing.md }]} {...deslize.panHandlers}>
               <ProgressBar value={progressoValor} total={alunos.length} label={`${progressoValor}/${alunos.length} ${progressoRotulo}`} />
@@ -301,13 +301,14 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
               ultimaAtualizacao={gps.ultimoEnvio?.toISOString()}
               desatualizada={gps.estado === 'sem_sinal'}
               mensagem={MENSAGEM_GPS[gps.estado]}
+              onPress={ampliarMapa}
             />
             <View style={styles.mapaVoltar} pointerEvents="box-none">
               <Button size="icon" variant="secondary" icon="arrow-left" accessibilityLabel="Voltar para o início" onPress={voltarInicio} />
             </View>
             <View style={styles.mapaChips} pointerEvents="box-none">
-              <ChipAcao label="Ocultar mapa" onPress={() => setMapaOculto(true)} />
-              <ChipAcao label="Tela cheia" onPress={() => setTelaCheia(true)} />
+              <ChipAcao label="Ocultar mapa" onPress={() => setNivelMapa(0)} />
+              <ChipAcao label="Tela cheia" onPress={() => setNivelMapa(2)} />
             </View>
           </View>
         ) : null}
@@ -320,7 +321,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
               <Text style={[styles.tituloViagem, { fontSize: tamanhoTitulo, lineHeight: tamanhoTitulo + 8 }]} numberOfLines={1}>
                 {tituloViagem}
               </Text>
-              {emAndamento && <ChipAcao label="Ver mapa" onPress={() => setMapaOculto(false)} />}
+              {emAndamento && <ChipAcao label="Ver mapa" onPress={() => setNivelMapa(1)} />}
             </View>
           )}
           {!mapaVisivel && (
@@ -359,7 +360,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
               <Card style={styles.card}>
                 <View style={styles.linha}>
                   <Text style={[styles.nomeAluno, styles.flex]} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                    {aluno ? aluno.nomeDependente : destino.nomeLocal}
+                    {aluno ? aluno.nomeDependente : nomeParada(destino)}
                   </Text>
                   {mapaVisivel && aluno && <ChipAcao label="Mensagem" onPress={() => mensagemAoResponsavel(aluno)} />}
                 </View>

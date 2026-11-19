@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -6,6 +6,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomTabBar, { BottomTab } from './BottomTabBar';
 import ConnectivityBanner from './ConnectivityBanner';
+import NotificationPopout from './NotificationPopout';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { borders, colors, layout, radius, spacing, typography } from '../theme';
@@ -95,6 +96,7 @@ export default function AppLayout({ role, children }: AppLayoutProps) {
   const semNavegacao = TELAS_SEM_NAVEGACAO.includes(route.name);
   const showBell = role !== 'admin' && route.name !== 'NotificationList' && !semNavegacao;
   const { unreadCount, refreshUnreadCount } = useAppContext();
+  const [popoutAberto, setPopoutAberto] = useState(false);
 
   // Atualiza o contador ao trocar de tela e a cada minuto.
   useEffect(() => {
@@ -115,11 +117,12 @@ export default function AppLayout({ role, children }: AppLayoutProps) {
       {showBell && (
         <View style={[styles.header, { top: Math.max(insets.top, spacing.sm) + spacing.xs }]} pointerEvents="box-none">
           <Pressable
-            onPress={() => navigation.navigate('NotificationList')}
+            onPress={() => setPopoutAberto(true)}
             accessibilityRole="button"
             accessibilityLabel={
               unreadCount > 0 ? `Notificações, ${unreadCount} não lidas` : 'Notificações'
             }
+            accessibilityHint="Abre as notificações não lidas"
             style={({ pressed }) => [styles.headerButton, pressed && styles.headerButtonPressed]}
           >
             <Feather name="bell" size={layout.icon} color={colors.ink} />
@@ -139,6 +142,8 @@ export default function AppLayout({ role, children }: AppLayoutProps) {
       <View style={styles.content}>{children}</View>
 
       {!semNavegacao && <BottomTabBar items={BOTTOM_TABS[role]} activeKey={activeKey} onPress={handleTabPress} />}
+
+      {showBell && <NotificationPopout visible={popoutAberto} onClose={() => setPopoutAberto(false)} />}
     </View>
   );
 }

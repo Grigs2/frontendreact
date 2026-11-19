@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAreaToque, useNivelMapa } from '../hooks/useNivelMapa';
 import { useFocusEffect, useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import GuardianLayout from '../components/GuardianLayout';
 import TripMap from '../components/TripMap';
@@ -12,12 +14,15 @@ import { useAppContext } from '../context/AppContext';
 import { responsavelService } from '../services/responsavelService';
 import { periodoLabel, viagemService } from '../services/viagemService';
 import { INTERVALO_GPS_MS, localizacaoService } from '../services/localizacaoService';
-import { LocalizacaoViagemDTO, MonitoramentoDTO, MotoristaViagemDTO, ResponsavelDTO, ViagemDiaDTO } from '../types';
+import { LocalizacaoViagemDTO, MonitoramentoDTO, MotoristaViagemDTO, ParadaViagemDTO, ResponsavelDTO, ViagemDiaDTO } from '../types';
+import MetroProgressMap from '../components/MetroProgressMap';
+import { ProximaInteracaoBox } from '../components/TripProgress';
+import { calcularProgresso } from '../utils/progressoViagem';
 import { statusInfo } from '../utils/statusLabels';
 import { formatDate, formatDayShort, formatRelative, formatTime } from '../utils/format';
 import { maskPlate, maskPhone } from '../utils/masks';
 import { getApiErrorMessage, getApiStatus } from '../utils/apiError';
-import { colors, layout, maxFontSizeMultiplier, spacing, typography } from '../theme';
+import { borders, colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
 /** 3.7 e 7.2 — acompanhamento do aluno: estado da viagem, presença, motorista e localização ao vivo. */
 export default function GuardianMonitoringScreen() {
@@ -33,6 +38,7 @@ export default function GuardianMonitoringScreen() {
   const [execucao, setExecucao] = useState<ViagemDiaDTO | null>(null);
   const [motorista, setMotorista] = useState<MotoristaViagemDTO | null>(null);
   const [posicao, setPosicao] = useState<LocalizacaoViagemDTO | null>(null);
+  const [paradas, setParadas] = useState<ParadaViagemDTO[]>([]);
   const [gpsAviso, setGpsAviso] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,6 +47,10 @@ export default function GuardianMonitoringScreen() {
   const [appAtivo, setAppAtivo] = useState(AppState.currentState === 'active');
   const [, setTick] = useState(0);
   const viagemDiaRef = useRef<number | null>(null);
+  const insets = useSafeAreaInsets();
+  // Mapa: 1 pequeno (topo), 2 tela cheia. Toque no mapa amplia; toque fora do mapa (sem botão) reduz.
+  const { nivel: nivelMapa, setNivel: setNivelMapa, ampliar: ampliarMapa, reduzir: reduzirMapa } = useNivelMapa(1, 1);
+  const areaFora = useAreaToque({ onToque: reduzirMapa });
 
   const load = useCallback(async () => {
     if (!selecionado) {
@@ -54,16 +64,19 @@ export default function GuardianMonitoringScreen() {
       const vdId = data?.statusAtual?.viagemDiaId ?? null;
       viagemDiaRef.current = vdId;
       if (vdId) {
-        const [exec, mot] = await Promise.all([
+        const [exec, mot, par] = await Promise.all([
           viagemService.visualizarViagemDia(vdId).catch(() => null),
           viagemService.consultarMotorista(vdId).catch(() => null),
+          viagemService.buscarParadasViagemDia(vdId).catch(() => [] as ParadaViagemDTO[]),
         ]);
         setExecucao(exec);
         setMotorista(mot);
+        setParadas(Array.isArray(par) ? par : []);
       } else {
         setExecucao(null);
         setMotorista(null);
         setPosicao(null);
+        setParadas([]);
       }
     } catch (e) {
       setErro(getApiErrorMessage(e, 'Não foi possível carregar o acompanhamento.'));
@@ -110,8 +123,12 @@ export default function GuardianMonitoringScreen() {
               : 'Não foi possível atualizar a localização. Tentaremos de novo em instantes.',
         );
       }
-      // Atualiza status/presença junto com a posição.
+      // Atualiza status/presença e o progresso das paradas junto com a posição.
       responsavelService.monitorar(selecionado!).then((m) => ativo && setMonitor(m)).catch(() => undefined);
+      viagemService
+        .buscarParadasViagemDia(id)
+        .then((par) => ativo && Array.isArray(par) && setParadas(par))
+        .catch(() => undefined);
     };
     buscar();
     const timer = setInterval(buscar, INTERVALO_GPS_MS);
@@ -130,6 +147,23 @@ export default function GuardianMonitoringScreen() {
   const historico = [...(monitor?.historicoRecente ?? [])].sort(
     (a, b) => new Date(b.ultimaAlteracao || b.data || 0).getTime() - new Date(a.ultimaAlteracao || a.data || 0).getTime(),
   );
+  const periodo = execucao?.periodo ?? execucao?.viagem?.periodo ?? atual?.periodoViagem ?? null;
+  const progresso =
+    selecionado && paradas.length
+      ? calcularProgresso({
+          paradas,
+          dependenteId: selecionado,
+          dependenteNome: aluno?.nome,
+          periodo,
+          statusViagem: execucao?.status ?? null,
+          ultimosEventos: [execucao?.dataUltimaAlteracaoStatus, execucao?.ultimaAlteracao, atual?.ultimaAlteracao],
+        })
+      : null;
+  const proxima = emAndamento ? progresso?.proxima ?? null : null;
+  const destaque = proxima?.paradasAntes === 0;
+  // Sem posição (GPS desligado, sem consentimento ou sem sinal): o mapa dá lugar à linha de metrô.
+  const semLocalizacao = emAndamento && !posicao && !!progresso;
+  const motivoSemLocalizacao = gpsAviso?.startsWith('Aguardando') ? 'Aguardando a localização' : 'Localização indisponível';
 
   if (!dependentes.length) {
     return (
@@ -139,18 +173,77 @@ export default function GuardianMonitoringScreen() {
     );
   }
 
+  const tituloStatus = !atual
+    ? 'Nenhuma viagem em andamento'
+    : atual.status === 'EMBARCADO'
+      ? `${aluno?.nome.split(' ')[0]} está no veículo`
+      : atual.status === 'DESEMBARCADO'
+        ? `${aluno?.nome.split(' ')[0]} desembarcou`
+        : atual.status === 'FALTOU'
+          ? 'Ausência registrada'
+          : 'Aguardando embarque';
+  const posicaoMapa = posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : null;
+
   return (
     <GuardianLayout>
-      {/* Topo fixo com o mapa quando há viagem em andamento */}
-      {emAndamento && (
-        <TripMap
-          posicao={posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : null}
-          ultimaAtualizacao={posicao?.recebidoEm}
-          desatualizada={posicao?.desatualizada}
-          mensagem={gpsAviso ?? 'Aguardando a posição do veículo'}
-          altura={220}
-        />
+      <View style={styles.flex}>
+      {/* Tela cheia: mapa inteiro, card flutuante embaixo. Tocar no card (fora dos botões) reduz o mapa. */}
+      {emAndamento && nivelMapa === 2 && (
+        <View style={styles.telaCheia}>
+          {semLocalizacao && progresso ? (
+            <View style={[styles.flex, { paddingTop: insets.top + layout.minTouch + spacing.lg }]}>
+              <MetroProgressMap preencher paradas={progresso.paradas} indiceAtual={progresso.indiceAtual} motivo={motivoSemLocalizacao} />
+            </View>
+          ) : (
+            <TripMap
+              preencher
+              posicao={posicaoMapa}
+              ultimaAtualizacao={posicao?.recebidoEm}
+              desatualizada={posicao?.desatualizada}
+              mensagem={gpsAviso ?? 'Aguardando a posição do veículo'}
+            />
+          )}
+          <View style={[styles.telaCheiaTopo, { paddingTop: insets.top + spacing.sm }]} pointerEvents="box-none">
+            <Button size="icon" variant="secondary" icon="arrow-left" accessibilityLabel="Reduzir mapa" onPress={() => setNivelMapa(1)} />
+          </View>
+          <View style={[styles.cardFlutuante, { bottom: insets.bottom + spacing.md }]} {...areaFora.panHandlers}>
+            <View style={styles.rowBetween}>
+              <Chip label={execucao ? viagemInfo.label : 'Sem viagem agora'} tone={execucao ? viagemInfo.tone : 'neutral'} size="sm" />
+              <Pressable onPress={() => setNivelMapa(1)} accessibilityRole="button" accessibilityLabel="Reduzir mapa" style={styles.chipAcao}>
+                <Text style={styles.chipAcaoTexto} maxFontSizeMultiplier={maxFontSizeMultiplier}>Reduzir mapa</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.title} maxFontSizeMultiplier={maxFontSizeMultiplier}>{tituloStatus}</Text>
+            {proxima && <ProximaInteracaoBox proxima={proxima} />}
+            {posicao && (
+              <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                Última localização {formatRelative(posicao.recebidoEm)} ({formatTime(posicao.recebidoEm)})
+              </Text>
+            )}
+          </View>
+        </View>
       )}
+
+      {/* Topo fixo: mapa ao vivo, ou a linha de metrô quando não há localização. Tocar amplia para tela cheia. */}
+      {emAndamento &&
+        (semLocalizacao && progresso ? (
+          <MetroProgressMap
+            paradas={progresso.paradas}
+            indiceAtual={progresso.indiceAtual}
+            motivo={motivoSemLocalizacao}
+            altura={260}
+            onPress={ampliarMapa}
+          />
+        ) : (
+          <TripMap
+            posicao={posicaoMapa}
+            ultimaAtualizacao={posicao?.recebidoEm}
+            desatualizada={posicao?.desatualizada}
+            mensagem={gpsAviso ?? 'Aguardando a posição do veículo'}
+            altura={220}
+            onPress={ampliarMapa}
+          />
+        ))}
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -167,6 +260,7 @@ export default function GuardianMonitoringScreen() {
               setSelecionado(Number(v));
               setPosicao(null);
               setMonitor(null);
+              setParadas([]);
             }}
             accessibilityLabel="Aluno"
           />
@@ -178,23 +272,14 @@ export default function GuardianMonitoringScreen() {
           <StateView kind="error" title="Não foi possível carregar" message={erro} actionLabel="Tentar novamente" onAction={() => { setLoading(true); load(); }} />
         ) : (
           <>
-            {/* card/status */}
-            <Card style={styles.card}>
+            {/* card/status — destacado quando o próximo evento da viagem é com o aluno */}
+            <Card style={[styles.card, destaque && styles.cardDestaque]}>
               <View style={styles.rowBetween}>
                 <Chip label={execucao ? viagemInfo.label : 'Sem viagem agora'} tone={execucao ? viagemInfo.tone : 'neutral'} size="sm" />
                 {atual && <Chip label={presenca.label} tone={presenca.tone} size="sm" />}
               </View>
-              <Text style={styles.title} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                {!atual
-                  ? 'Nenhuma viagem em andamento'
-                  : atual.status === 'EMBARCADO'
-                    ? `${aluno?.nome.split(' ')[0]} está no veículo`
-                    : atual.status === 'DESEMBARCADO'
-                      ? `${aluno?.nome.split(' ')[0]} desembarcou`
-                      : atual.status === 'FALTOU'
-                        ? 'Ausência registrada'
-                        : 'Aguardando embarque'}
-              </Text>
+              <Text style={styles.title} maxFontSizeMultiplier={maxFontSizeMultiplier}>{tituloStatus}</Text>
+              {proxima && <ProximaInteracaoBox proxima={proxima} />}
               {atual && (
                 <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
                   {[
@@ -274,11 +359,31 @@ export default function GuardianMonitoringScreen() {
       {aluno?.id && (
         <AbsenceModal visible={ausencia} dependenteId={aluno.id} dependenteNome={aluno.nome} onClose={() => setAusencia(false)} />
       )}
+      </View>
     </GuardianLayout>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  telaCheia: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 20, elevation: 20, backgroundColor: colors.surface },
+  telaCheiaTopo: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', paddingHorizontal: layout.screenMargin, zIndex: 30, elevation: 30 },
+  cardFlutuante: {
+    position: 'absolute',
+    left: layout.screenMargin,
+    right: layout.screenMargin,
+    backgroundColor: colors.surface,
+    borderWidth: borders.hairline,
+    borderColor: colors.border,
+    borderRadius: radius.card,
+    padding: layout.cardPadding,
+    gap: spacing.sm,
+    zIndex: 30,
+    elevation: 30,
+  },
+  chipAcao: { minHeight: layout.minTouch, justifyContent: 'center', backgroundColor: colors.surface, borderWidth: borders.hairline, borderColor: colors.ink, borderRadius: radius.pill, paddingHorizontal: spacing.md },
+  chipAcaoTexto: { ...typography.captionBold, color: colors.ink },
+  cardDestaque: { borderColor: colors.primary, borderWidth: borders.alert },
   content: { padding: layout.screenMargin, paddingBottom: spacing.xxl, width: '100%', maxWidth: 800, alignSelf: 'center', gap: spacing.lg },
   card: { gap: spacing.sm },
   histCard: { gap: spacing.xs },

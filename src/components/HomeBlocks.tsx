@@ -36,6 +36,24 @@ export function SectionTitle({ children }: { children: string }) {
   );
 }
 
+/**
+ * Título dentro do card (seção 07 do Design Pattern): slot de ícone 48 em primaryTint, ícone 24 ink e título `heading`.
+ * Substitui o SectionTitle solto acima do card.
+ */
+export function CardHeader({ icon, title, right }: { icon: FeatherIconName; title: string; right?: React.ReactNode }) {
+  return (
+    <View style={styles.cardHeader}>
+      <View style={styles.cardHeaderSlot}>
+        <Feather name={icon} size={layout.icon} color={colors.ink} />
+      </View>
+      <Text style={styles.cardHeaderTitle} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
+        {title}
+      </Text>
+      {right}
+    </View>
+  );
+}
+
 export function Grid({ children }: { children: React.ReactNode }) {
   return <View style={styles.grid}>{children}</View>;
 }
@@ -80,6 +98,9 @@ const styles = StyleSheet.create({
   subtitle: { ...typography.body, color: colors.slate500 },
   section: { ...typography.heading, color: colors.ink, marginTop: spacing.sm },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: layout.gridGap },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  cardHeaderSlot: { width: layout.iconSlot, height: layout.iconSlot, borderRadius: radius.pill, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
+  cardHeaderTitle: { ...typography.heading, color: colors.ink, flex: 1 },
   highlightTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   highlightTitle: { ...typography.label, fontSize: 18, lineHeight: 24, color: colors.ink },
   highlightLine: { ...typography.caption, color: colors.slate700 },

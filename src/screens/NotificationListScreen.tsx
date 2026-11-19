@@ -1,21 +1,20 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, SectionList, StyleSheet, RefreshControl, Pressable, ScrollView } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { View, Text, SectionList, StyleSheet, RefreshControl, Pressable } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { notificacaoService, TAMANHO_PAGINA_NOTIFICACOES } from '../services/notificacaoService';
-import { GrupoNotificacao, NotificacaoDTO, TipoNotificacao } from '../types';
+import { GrupoNotificacao, NotificacaoDTO } from '../types';
 import DriverLayout from '../components/DriverLayout';
 import GuardianLayout from '../components/GuardianLayout';
 import SchoolLayout from '../components/SchoolLayout';
 import { Button, ScreenHeader, SegmentedControl, StateView } from '../components/ui';
 import { borders, colors, layout, radius, spacing, typography } from '../theme';
 import { destinoNotificacao } from '../utils/notificationRouting';
+import NotificationCard from '../components/NotificationCard';
 
 type Aba = 'NAO_LIDAS' | 'TODAS';
-type FeatherName = React.ComponentProps<typeof Feather>['name'];
 
 const GRUPOS: { value: GrupoNotificacao | 'TODOS'; label: string }[] = [
   { value: 'TODOS', label: 'Tudo' },
@@ -24,22 +23,6 @@ const GRUPOS: { value: GrupoNotificacao | 'TODOS'; label: string }[] = [
   { value: 'SOLICITACAO', label: 'Vínculos' },
   { value: 'AVISO', label: 'Avisos' },
 ];
-
-/** Ícone e destaque por tipo. Alertas (cancelamento, atraso, falta...) ficam com a cor de perigo. */
-const ICONE: Partial<Record<TipoNotificacao, FeatherName>> = {
-  MOTORISTA_A_CAMINHO: 'navigation',
-  EMBARQUE: 'log-in',
-  DESEMBARQUE: 'log-out',
-  VIAGEM_FINALIZADA: 'check-circle',
-  AUSENCIA: 'user-x',
-  AUSENCIA_INFORMADA: 'calendar',
-  ATRASO: 'clock',
-  VIAGEM_CANCELADA: 'x-circle',
-  VIAGEM_INTERROMPIDA: 'alert-octagon',
-  TROCA_VEICULO: 'truck',
-  SOLICITACAO: 'link',
-  MANUAL: 'message-square',
-};
 
 const inicioDoDia = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 
@@ -51,8 +34,6 @@ export function rotuloDoDia(iso: string, agora = new Date()): string {
   if (dia === hoje - 86400000) return 'Ontem';
   return new Date(iso).toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' });
 }
-
-const hora = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
 export default function NotificationListScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -158,43 +139,9 @@ export default function NotificationListScreen() {
     return Array.from(mapa, ([title, data]) => ({ title, data }));
   }, [notifications]);
 
-  const renderItem = ({ item }: { item: NotificacaoDTO }) => {
-    const tipo = item.tipo ?? 'GERAL';
-    const alerta = item.prioridade === 'ALTA';
-    const temDestino = !!destino(item);
-    const remetente =
-      tipo === 'MANUAL' || tipo === 'GERAL' ? item.remetente?.nome : null;
-    return (
-      <Pressable
-        onPress={() => abrir(item)}
-        accessibilityRole="button"
-        accessibilityLabel={`${item.visto ? '' : 'Não lida. '}${item.titulo}. ${item.mensagem}. ${hora(item.dataCriacao)}`}
-        accessibilityHint={temDestino ? 'Abre os detalhes' : 'Marca como lida'}
-        style={({ pressed }) => [
-          styles.card,
-          !item.visto && styles.cardNaoLida,
-          alerta && !item.visto && styles.cardAlerta,
-          pressed && styles.cardPressed,
-        ]}
-      >
-        <View style={[styles.iconSlot, alerta && styles.iconSlotAlerta]}>
-          <Feather name={ICONE[tipo] ?? 'bell'} size={20} color={alerta ? colors.danger : colors.ink} />
-        </View>
-        <View style={styles.cardBody}>
-          <View style={styles.cardTop}>
-            <Text style={[styles.notifTitle, !item.visto && styles.notifTitleBold]} numberOfLines={2}>
-              {item.titulo}
-            </Text>
-            <Text style={styles.hora}>{hora(item.dataCriacao)}</Text>
-          </View>
-          <Text style={styles.messageText}>{item.mensagem}</Text>
-          {remetente ? <Text style={styles.remetente}>De {remetente}</Text> : null}
-        </View>
-        {!item.visto && <View style={styles.pontoNaoLida} accessibilityElementsHidden importantForAccessibility="no" />}
-        {temDestino && <Feather name="chevron-right" size={18} color={colors.slate500} />}
-      </Pressable>
-    );
-  };
+  const renderItem = ({ item }: { item: NotificacaoDTO }) => (
+    <NotificationCard item={item} temDestino={!!destino(item)} onPress={abrir} />
+  );
 
   const vazio =
     aba === 'NAO_LIDAS'
@@ -228,14 +175,15 @@ export default function NotificationListScreen() {
         style={styles.segment}
       />
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtros} style={styles.filtrosScroll}>
+      {/* Filtros em linhas que quebram (sem rolagem horizontal), para nenhum botão ficar cortado na borda. */}
+      <View style={styles.filtros} accessibilityRole="radiogroup" accessibilityLabel="Filtrar notificações">
         {GRUPOS.map((g) => {
           const ativo = grupo === g.value;
           return (
             <Pressable
               key={g.value}
               onPress={() => setGrupo(g.value)}
-              accessibilityRole="button"
+              accessibilityRole="radio"
               accessibilityState={{ selected: ativo }}
               accessibilityLabel={`Filtrar: ${g.label}`}
               style={[styles.filtro, ativo && styles.filtroAtivo]}
@@ -244,7 +192,7 @@ export default function NotificationListScreen() {
             </Pressable>
           );
         })}
-      </ScrollView>
+      </View>
 
       {unreadCount > 0 && (
         <View style={styles.acoes}>
@@ -325,10 +273,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: layout.screenMargin, width: '100%', maxWidth: 800, alignSelf: 'center' },
   center: { flex: 1 },
   segment: { marginBottom: spacing.md },
-  filtrosScroll: { flexGrow: 0, marginBottom: spacing.sm },
-  filtros: { gap: spacing.sm, paddingVertical: spacing.xs },
+  filtros: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingVertical: spacing.xs, marginBottom: spacing.sm },
   filtro: {
-    minHeight: 36,
+    minHeight: 40,
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
     borderWidth: borders.hairline,
@@ -343,35 +290,4 @@ const styles = StyleSheet.create({
   acoes: { alignItems: 'flex-end', marginBottom: spacing.xs },
   list: { paddingBottom: spacing.xl, gap: spacing.sm },
   secao: { ...typography.captionBold, color: colors.slate500, marginTop: spacing.md, marginBottom: spacing.sm },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    padding: layout.cardPadding,
-    marginBottom: spacing.sm,
-    borderWidth: borders.hairline,
-    borderColor: colors.border,
-  },
-  cardNaoLida: { borderColor: colors.primaryPressed, backgroundColor: colors.surface },
-  cardAlerta: { borderColor: colors.danger, backgroundColor: colors.dangerTint },
-  cardPressed: { opacity: 0.85 },
-  iconSlot: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primaryTint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconSlotAlerta: { backgroundColor: colors.surface },
-  cardBody: { flex: 1, gap: spacing.xs },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  notifTitle: { ...typography.body, color: colors.ink, flex: 1 },
-  notifTitleBold: { ...typography.label },
-  hora: { ...typography.caption, color: colors.slate500 },
-  messageText: { ...typography.body, color: colors.slate700 },
-  remetente: { ...typography.caption, color: colors.slate500 },
-  pontoNaoLida: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.danger, marginTop: 6 },
 });

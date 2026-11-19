@@ -28,6 +28,7 @@ const initials = (nome?: string | null) =>
 /**
  * Pop-up com os dados de quem está do outro lado do vínculo, para conferir antes de aceitar.
  * Nome e telefone aparecem completos; CPF, e-mail e placa chegam mascarados da API; endereço só bairro e cidade.
+ * Com vínculo ativo, a API envia o CPF completo do motorista (`cpf`) e ele é exibido sem censura.
  */
 export default function CounterpartModal({ solicitacao, viewer, canAnswer, loading, onAccept, onRefuse, onClose }: Props) {
   const [dados, setDados] = useState<ContraparteDTO | null>(null);
@@ -104,7 +105,7 @@ export default function CounterpartModal({ solicitacao, viewer, canAnswer, loadi
                     <Button label="Ligar" icon="phone" variant="secondary" size="md" onPress={ligar} fullWidth />
                   )}
                   <Row icon="mail" label="E-mail" value={dados.emailMascarado} />
-                  <Row icon="credit-card" label="CPF" value={dados.cpfMascarado} />
+                  <Row icon="credit-card" label="CPF" value={dados.cpf || dados.cpfMascarado} />
                   <Row icon="map-pin" label={dados.perfil === 'MOTORISTA' ? 'Atende a partir de' : 'Região'} value={local || null} />
                 </Section>
 
@@ -131,7 +132,9 @@ export default function CounterpartModal({ solicitacao, viewer, canAnswer, loadi
                 )}
 
                 <Text style={styles.note} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                  Por segurança, CPF, e-mail e placa aparecem parcialmente. Endereço completo só é usado na rota da viagem.
+                  {dados.cpf
+                    ? 'Vínculo ativo: telefone e CPF aparecem completos. E-mail e placa aparecem parcialmente; endereço completo só é usado na rota da viagem.'
+                    : 'Por segurança, CPF, e-mail e placa aparecem parcialmente. Endereço completo só é usado na rota da viagem.'}
                 </Text>
               </>
             )}

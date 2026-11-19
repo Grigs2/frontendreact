@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { Chip } from './ui';
 import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
@@ -15,10 +15,12 @@ export interface TripMapProps {
   altura?: number;
   /** Ocupa todo o espaço do pai (ignora altura). */
   preencher?: boolean;
+  /** Toque no mapa (usado para ampliar um nível: pequeno → tela cheia). */
+  onPress?: () => void;
 }
 
 /** Mapa da viagem. Só a posição do motorista: paradas ainda não têm coordenadas. */
-export default function TripMap({ posicao, ultimaAtualizacao, desatualizada, mensagem, altura = 220, preencher = false }: TripMapProps) {
+export default function TripMap({ posicao, ultimaAtualizacao, desatualizada, mensagem, altura = 220, preencher = false, onPress }: TripMapProps) {
   const ref = useRef<MapView>(null);
   const h = Math.min(altura, layout.topAreaMax);
 
@@ -38,17 +40,24 @@ export default function TripMap({ posicao, ultimaAtualizacao, desatualizada, men
           initialRegion={{ ...posicao, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
           toolbarEnabled={false}
           showsCompass={false}
+          onPress={onPress}
         >
           <Marker coordinate={posicao} title="Veículo" anchor={{ x: 0.5, y: 0.5 }}>
             <View style={styles.marker} />
           </Marker>
         </MapView>
       ) : (
-        <View style={styles.empty}>
+        <Pressable
+          style={styles.empty}
+          onPress={onPress}
+          disabled={!onPress}
+          accessibilityRole={onPress ? 'button' : undefined}
+          accessibilityHint={onPress ? 'Amplia o mapa' : undefined}
+        >
           <Text style={styles.emptyText} maxFontSizeMultiplier={maxFontSizeMultiplier}>
             {mensagem ?? 'Aguardando a primeira posição'}
           </Text>
-        </View>
+        </Pressable>
       )}
       {(ultimaAtualizacao || desatualizada) && (
         <View style={styles.badge} pointerEvents="none">
