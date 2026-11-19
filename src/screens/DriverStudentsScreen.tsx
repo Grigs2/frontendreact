@@ -15,7 +15,7 @@ export default function DriverStudentsScreen() {
   const driver = currentUser as MotoristaDTO;
 
   const [students, setStudents] = useState<DependenteDTO[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (isFocused && driver?.id) {

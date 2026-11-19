@@ -21,7 +21,7 @@ export type RootStackParamList = {
   DriverAttendance: { viagemDiaId: number };
   DriverAttendanceDetail: { tripId: number; stopId: number; stopDescription: string; students: DependenteParadaDTO[] };
   DriverTrips: undefined;
-  DriverTripDetails: { viagemId: number };
+  DriverTripDetails: { viagemId: number; data?: string };
   DriverAvailableDependents: { viagemId: number };
   DriverStudents: undefined;
   DriverProfile: undefined;
@@ -29,7 +29,7 @@ export type RootStackParamList = {
   DriverHistory: undefined;
   DriverHelp: undefined;
   DriverInvites: undefined;
-  DriverSearchStudents: undefined;
+  DriverSearchStudents: { viagemId?: number } | undefined;
   GuardianMain: undefined;
   GuardianTracking: undefined;
   GuardianInvites: undefined;

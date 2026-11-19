@@ -76,8 +76,8 @@ const PARENT_TAB: Record<string, string> = {
   AdminSchools: 'AdminUsers',
 };
 
-/** Telas de execução da viagem: sem sino e sem barra inferior, para ganhar espaço. */
-const TELAS_SEM_NAVEGACAO = ['DriverAttendance'];
+/** Telas sem sino e sem barra inferior, para ganhar espaço. */
+const TELAS_SEM_NAVEGACAO = ['DriverAttendance', 'DriverTripDetails', 'DriverRouteOrder'];
 
 /** Intervalo de atualização do contador do sino enquanto o app está aberto. */
 const CONTADOR_INTERVALO_MS = 60000;

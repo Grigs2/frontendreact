@@ -4,15 +4,14 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppContext } from '../context/AppContext';
 import DriverLayout from '../components/DriverLayout';
 import { Greeting, Grid, HighlightCard, HomeScroll, SectionTitle, homeStyles } from '../components/HomeBlocks';
-import { Button, ShortcutCard } from '../components/ui';
+import { Button, ShortcutCard, StateView } from '../components/ui';
 import { motoristaService } from '../services/motoristaService';
 import { periodoLabel, viagemNome, viagemService } from '../services/viagemService';
 import { AgendaViagemDTO, DocumentoMotoristaDTO, MotoristaDTO, ParadaViagemDTO, SolicitacaoDTO, ViagemDTO } from '../types';
 import { documentoService, pendenciasDocumentais } from '../services/documentoService';
-import { TIPO_DOCUMENTO_LABEL } from '../utils/statusLabels';
 import { formatDayRelative } from '../utils/format';
 import { enderecoResumido } from '../utils/paradas';
-import { SENTIDO_LABEL, TURNO_LABEL, rotuloRota } from '../utils/periodo';
+import { rotuloRota } from '../utils/periodo';
 
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
@@ -30,14 +29,23 @@ export default function DriverMainScreen() {
   const [requests, setRequests] = useState<SolicitacaoDTO[]>([]);
   const [agenda, setAgenda] = useState<AgendaViagemDTO[]>([]);
   const [documentos, setDocumentos] = useState<DocumentoMotoristaDTO[] | null>(null);
+  // Enquanto true, o destaque não aparece: evita mostrar "Primeiros passos" antes dos dados chegarem.
+  const [carregando, setCarregando] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
-      if (!driver?.id) return;
-      viagemService.listarViagens(driver.id).then(setTrips).catch(() => setTrips([]));
-      motoristaService.listarSolicitacoes(driver.id).then(setRequests).catch(() => setRequests([]));
-      viagemService.agenda(driver.id).then(restaurarViagemEmAndamento).catch(() => setAgenda([]));
-      documentoService.listar(driver.id).then(setDocumentos).catch(() => setDocumentos(null));
+      if (!driver?.id) {
+        setCarregando(false);
+        return;
+      }
+      setCarregando(true);
+      Promise.allSettled([
+        viagemService.listarViagens(driver.id).then(setTrips).catch(() => setTrips([])),
+        motoristaService.listarSolicitacoes(driver.id).then(setRequests).catch(() => setRequests([])),
+        viagemService.agenda(driver.id).then(restaurarViagemEmAndamento).catch(() => setAgenda([])),
+        documentoService.listar(driver.id).then(setDocumentos).catch(() => setDocumentos(null)),
+      ]).finally(() => setCarregando(false));
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [driver?.id]),
   );
 
@@ -74,10 +82,11 @@ export default function DriverMainScreen() {
     const turno = ORDEM_PERIODO.indexOf(a.periodo ?? '');
     return dia + (turno < 0 ? ORDEM_PERIODO.length : turno);
   };
-  const proximaViagem = agenda
+  const proximas = agenda
     .filter((a) => (!a.status || a.status === 'PLANEJADA') && ['Hoje', 'Amanhã'].includes(formatDayRelative(a.data)))
-    .sort((x, y) => ordemProxima(x) - ordemProxima(y))[0];
-  const [turnoProxima, sentidoProxima] = (proximaViagem?.periodo ?? '').split('_');
+    .sort((x, y) => ordemProxima(x) - ordemProxima(y));
+  const proximaViagem = proximas[0];
+  const proximaTrip = proximaViagem ? trips.find((t) => t.id === proximaViagem.idViagem) : undefined;
   const docsPendentes = documentos ? pendenciasDocumentais(documentos) : [];
 
   const openRoute = () => {
@@ -90,7 +99,9 @@ export default function DriverMainScreen() {
         <HomeScroll>
           <Greeting name={driver?.nome} subtitle={inRoute ? 'Você está em rota agora.' : 'Pronto para a rota de hoje?'} />
 
-          {inRoute ? (
+          {carregando ? (
+            <StateView kind="loading" title="Carregando..." />
+          ) : inRoute ? (
             <HighlightCard
               chip="Viagem atual - em rota"
               chipTone="info"
@@ -100,14 +111,23 @@ export default function DriverMainScreen() {
               lines={[nextStop ? `Indo para ${enderecoResumido(nextStop)}` : 'Todas as paradas concluídas']}
               onPress={openRoute}
             />
-          ) : activeTrips.length > 0 ? (
+          ) : proximaViagem ? (
             <HighlightCard
               chip="Próxima viagem"
               chipTone="success"
               icon="map"
-              title={viagemNome(activeTrips[0])}
-              lines={[periodoLabel(activeTrips[0].periodo), activeTrips.length > 1 && `e mais ${activeTrips.length - 1} em Rotas`]}
-              onPress={() => navigation.navigate('DriverTripDetails', { viagemId: activeTrips[0].id })}
+              title={proximaTrip ? viagemNome(proximaTrip) : 'Viagem'}
+              lines={[`${formatDayRelative(proximaViagem.data)} · ${periodoLabel(proximaViagem.periodo)}`, proximas.length > 1 && `e mais ${proximas.length - 1} em Rotas`]}
+              onPress={() => navigation.navigate('DriverTripDetails', { viagemId: proximaViagem.idViagem, data: proximaViagem.data })}
+            />
+          ) : activeTrips.length > 0 ? (
+            <HighlightCard
+              chip="Sem viagens"
+              chipTone="neutral"
+              icon="map"
+              title="Nenhuma viagem hoje ou amanhã"
+              lines={['Veja todas as viagens em Rotas.']}
+              onPress={() => navigation.navigate('DriverTrips')}
             />
           ) : (
             <HighlightCard
@@ -126,33 +146,18 @@ export default function DriverMainScreen() {
             </HighlightCard>
           )}
 
-          {docsPendentes.length > 0 && (
-            // Documentos não bloqueiam a viagem: ainda não há quem os valide. O card só lembra de regularizar.
-            <HighlightCard
-              chip="Para regularizar"
-              chipTone="warning"
-              icon="file-text"
-              title="Documentos pendentes"
-              lines={[
-                docsPendentes.map((t) => TIPO_DOCUMENTO_LABEL[t]).join(', ') + ': ausente, recusado ou vencido.',
-                'Isso não impede iniciar as viagens.',
-              ]}
-            >
-              <Button label="Ver documentos" variant="secondary" onPress={() => navigation.navigate('DriverDocuments')} fullWidth />
-            </HighlightCard>
-          )}
-
-          {proximaViagem && (
+          {!carregando && proximaViagem && (
             <Button
               variant="secondary"
-              labelLines={2}
-              label={`Próxima viagem\n${formatDayRelative(proximaViagem.data)} - ${TURNO_LABEL[turnoProxima] ?? ''} - ${SENTIDO_LABEL[sentidoProxima] ?? ''}`}
-              onPress={() => navigation.navigate('DriverTripDay', { viagemId: proximaViagem.idViagem, data: proximaViagem.data, viagemDiaId: proximaViagem.idViagemDia })}
+              label="Próxima viagem"
+              icon="arrow-right"
+              iconPosition="right"
+              onPress={() => navigation.navigate('DriverTrips')}
               fullWidth
             />
           )}
 
-          {received.length > 0 && (
+          {!carregando && received.length > 0 && (
             <HighlightCard
               chip="Atenção"
               chipTone="danger"
@@ -173,7 +178,7 @@ export default function DriverMainScreen() {
             <ShortcutCard
               label="Documentos"
               icon="file-text"
-              caption={documentos ? (docsPendentes.length ? plural(docsPendentes.length, 'pendência', 'pendências') : 'Em dia') : 'CNH e veículo'}
+              caption={carregando ? 'Verificando...' : documentos ? (docsPendentes.length ? plural(docsPendentes.length, 'pendência', 'pendências') : 'Em dia') : 'CNH e veículo'}
               onPress={() => navigation.navigate('DriverDocuments')}
             />
           </Grid>

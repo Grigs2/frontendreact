@@ -149,6 +149,11 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
   const marcar = async () => {
     if (!confirmar || !viagemDiaId) return;
     const { aluno, novo } = confirmar;
+    if (!podeRegistrarOffline(aluno.statusEmbarque, novo)) {
+      showToast('Esse registro não é possível para o status atual do aluno.', 'warning');
+      setConfirmar(null);
+      return;
+    }
     setSubmitting(aluno.id);
     try {
       if (!online || pendentes > 0) {
@@ -215,22 +220,25 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
   const pendenteNaParada = (s: ParadaViagemDTO, d: DependenteParadaDTO) =>
     embarqueNaParada(s) ? d.statusEmbarque === 'ESPERANDO' : d.statusEmbarque === 'EMBARCADO';
 
-  const primeiroPendente = Math.max(0, destinos.findIndex((s) => s.listaDependentes.some((d) => pendenteNaParada(s, d))));
-  const indice = Math.min(indiceManual ?? primeiroPendente, Math.max(destinos.length - 1, 0));
+  // Só paradas com aluno pendente entram na navegação (setas e deslize); alunos já tratados não voltam a aparecer.
+  const indicesPendentes = destinos.flatMap((s, i) => (s.listaDependentes.some((d) => pendenteNaParada(s, d)) ? [i] : []));
+  const indice = indiceManual !== null && indicesPendentes.includes(indiceManual) ? indiceManual : (indicesPendentes[0] ?? 0);
+  const indiceAnterior = indicesPendentes.filter((i) => i < indice).pop();
+  const indiceProximo = indicesPendentes.find((i) => i > indice);
   const destino = destinos[indice];
   const destinoEhEmbarque = !!destino && embarqueNaParada(destino);
   const aluno = destino?.listaDependentes.find((d) => pendenteNaParada(destino, d));
   const progressoValor = destinoEhEmbarque ? embarcados : desembarcados;
   const progressoRotulo = destinoEhEmbarque ? 'embarcados' : 'desembarcados';
 
-  const irPara = (novo: number) => {
-    if (destinos.length) setIndiceManual(Math.max(0, Math.min(novo, destinos.length - 1)));
+  const irPara = (novo: number | undefined) => {
+    if (novo !== undefined) setIndiceManual(novo);
   };
   const deslize = PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 24 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
     onPanResponderRelease: (_, g) => {
-      if (g.dx < -50) irPara(indice + 1);
-      else if (g.dx > 50) irPara(indice - 1);
+      if (g.dx < -50) irPara(indiceProximo);
+      else if (g.dx > 50) irPara(indiceAnterior);
     },
   });
 
@@ -284,7 +292,9 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                     onPress={() => setConfirmar({ aluno, novo: destinoEhEmbarque ? 'EMBARCADO' : 'DESEMBARCADO' })}
                   />
                   <BotaoCard label="Mensagem" cores={CORES_CARD.neutro} onPress={() => mensagemAoResponsavel(aluno)} />
-                  <BotaoCard label="Faltou" cores={CORES_CARD.negativo} onPress={() => setConfirmar({ aluno, novo: 'FALTOU' })} />
+                  {podeRegistrarOffline(aluno.statusEmbarque, 'FALTOU') && (
+                    <BotaoCard label="Faltou" cores={CORES_CARD.negativo} onPress={() => setConfirmar({ aluno, novo: 'FALTOU' })} />
+                  )}
 
                 </View>
               ) : null}
@@ -359,12 +369,14 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
               <Card style={styles.card}>
                 <View style={styles.linha}>
                   <Text style={[styles.nomeAluno, styles.flex]} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                    {aluno ? aluno.nomeDependente : destino.nomeLocal}
+                    {aluno ? aluno.nomeDependente : 'Todos os alunos registrados'}
                   </Text>
                   {mapaVisivel && aluno && <ChipAcao label="Mensagem" onPress={() => mensagemAoResponsavel(aluno)} />}
                 </View>
                 <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                  {destinoEhEmbarque ? 'Embarque' : 'Desembarque'}: {enderecoResumido(destino)}
+                  {aluno
+                    ? `${destinoEhEmbarque ? 'Embarque' : 'Desembarque'}: ${enderecoResumido(destino)}`
+                    : 'Embarques e desembarques concluídos. Finalize a viagem abaixo.'}
                 </Text>
               </Card>
 
@@ -389,9 +401,9 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
           )}
           {emAndamento && (
             <View style={styles.linha}>
-              <Button size="icon" variant="secondary" icon="chevron-left" accessibilityLabel="Destino anterior" disabled={indice <= 0} onPress={() => irPara(indice - 1)} />
+              <Button size="icon" variant="secondary" icon="chevron-left" accessibilityLabel="Destino anterior" disabled={indiceAnterior === undefined} onPress={() => irPara(indiceAnterior)} />
               <Button label="Alterar viagem" icon="shuffle" variant="secondary" size="md" style={styles.flex} disabled={!online} onPress={() => viagemDiaId && navigation.navigate('DriverRouteOrder', { viagemDiaId, emExecucao: true })} />
-              <Button size="icon" variant="secondary" icon="chevron-right" accessibilityLabel="Próximo destino" disabled={indice >= destinos.length - 1} onPress={() => irPara(indice + 1)} />
+              <Button size="icon" variant="secondary" icon="chevron-right" accessibilityLabel="Próximo destino" disabled={indiceProximo === undefined} onPress={() => irPara(indiceProximo)} />
             </View>
           )}
 
@@ -406,7 +418,9 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                 cores={CORES_CARD.positivo}
                 onPress={() => setConfirmar({ aluno, novo: destinoEhEmbarque ? 'EMBARCADO' : 'DESEMBARCADO' })}
               />
-              <BotaoCard label="Faltou" icone="x" cores={CORES_CARD.negativo} onPress={() => setConfirmar({ aluno, novo: 'FALTOU' })} />
+              {podeRegistrarOffline(aluno.statusEmbarque, 'FALTOU') && (
+                <BotaoCard label="Faltou" icone="x" cores={CORES_CARD.negativo} onPress={() => setConfirmar({ aluno, novo: 'FALTOU' })} />
+              )}
             </View>
           )}
           {emAndamento && pendentesFim.length > 0 && (
@@ -426,7 +440,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                 <Button
                   label="Revisar e iniciar"
                   icon="play"
-                  onPress={() => navigation.navigate('DriverTripDay', { viagemId: activeViagemDia.viagemId!, data: execucao?.data ?? '', viagemDiaId })}
+                  onPress={() => navigation.navigate('DriverTripDetails', { viagemId: activeViagemDia.viagemId!, data: activeViagemDia.data })}
                   fullWidth
                 />
               ) : null}
