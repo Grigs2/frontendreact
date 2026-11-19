@@ -7,7 +7,7 @@ import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { responsavelService } from '../services/responsavelService';
 import { periodoLabel } from '../services/viagemService';
-import { Greeting, Grid, HighlightCard, HomeScroll, SectionTitle, homeStyles } from '../components/HomeBlocks';
+import { Greeting, Grid, HighlightCard, HomeScroll, SectionTitle, homeStyles, NotificacoesNovasCard } from '../components/HomeBlocks';
 import { Button, ShortcutCard } from '../components/ui';
 import { ConviteResponsavelDTO, MonitoramentoDTO, ResponsavelDTO } from '../types';
 import { redeResponsaveisService } from '../services/redeResponsaveisService';
@@ -51,6 +51,7 @@ export default function GuardianMainScreen({ navigation }: Props) {
       <View style={homeStyles.wrapper}>
         <HomeScroll>
           <Greeting name={guardian?.nome} subtitle="Acompanhe o transporte dos seus alunos." />
+          <NotificacoesNovasCard total={unreadCount} onPress={() => navigation.navigate('NotificationList')} />
 
           {convites.length > 0 && (
             <HighlightCard

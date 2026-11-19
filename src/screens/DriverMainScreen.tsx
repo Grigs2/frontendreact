@@ -3,14 +3,14 @@ import { View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppContext } from '../context/AppContext';
 import DriverLayout from '../components/DriverLayout';
-import { Greeting, Grid, HighlightCard, HomeScroll, SectionTitle, homeStyles } from '../components/HomeBlocks';
+import { Greeting, Grid, HighlightCard, HomeScroll, SectionTitle, homeStyles, NotificacoesNovasCard } from '../components/HomeBlocks';
 import { Button, ShortcutCard, StateView } from '../components/ui';
 import { motoristaService } from '../services/motoristaService';
 import { periodoLabel, viagemNome, viagemService } from '../services/viagemService';
 import { AgendaViagemDTO, DocumentoMotoristaDTO, MotoristaDTO, ParadaViagemDTO, SolicitacaoDTO, ViagemDTO } from '../types';
 import { documentoService, pendenciasDocumentais } from '../services/documentoService';
 import { formatDayRelative } from '../utils/format';
-import { enderecoResumido } from '../utils/paradas';
+import { rotuloParada } from '../utils/paradas';
 import { rotuloRota } from '../utils/periodo';
 
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
@@ -21,7 +21,7 @@ const ORDEM_PERIODO = ['MANHA_IDA', 'TARDE_IDA', 'MANHA_VOLTA', 'TARDE_VOLTA'];
 /** Início do motorista: viagem em andamento (ou próxima), avisos que pedem ação e atalhos. */
 export default function DriverMainScreen() {
   const navigation = useNavigation<any>();
-  const { currentUser, activeViagemDia, currentStops, setActiveViagemDia, setCurrentStops } = useAppContext();
+  const { currentUser, activeViagemDia, currentStops, setActiveViagemDia, setCurrentStops, unreadCount } = useAppContext();
   const driver = currentUser as MotoristaDTO;
   const hasVehicle = !!driver?.veiculoDTO?.placa;
 
@@ -98,6 +98,7 @@ export default function DriverMainScreen() {
       <View style={homeStyles.wrapper}>
         <HomeScroll>
           <Greeting name={driver?.nome} subtitle={inRoute ? 'Você está em rota agora.' : 'Pronto para a rota de hoje?'} />
+          <NotificacoesNovasCard total={unreadCount} onPress={() => navigation.navigate('NotificationList')} />
 
           {carregando ? (
             <StateView kind="loading" title="Carregando..." />
@@ -108,7 +109,7 @@ export default function DriverMainScreen() {
               icon="navigation"
               title={rotaAtual ? `Rota da ${rotaAtual}` : 'Rota'}
               tituloSecundario={`${embarcadosNaRota}/${alunosDaRota.length} embarcados`}
-              lines={[nextStop ? `Indo para ${enderecoResumido(nextStop)}` : 'Todas as paradas concluídas']}
+              lines={[nextStop ? `Próxima: ${rotuloParada(nextStop, (activeViagemDia?.periodo ?? activeViagemDia?.viagem?.periodo ?? '').endsWith('IDA'))}` : 'Todas as paradas concluídas']}
               onPress={openRoute}
             />
           ) : proximaViagem ? (
@@ -174,7 +175,7 @@ export default function DriverMainScreen() {
           <Grid>
             <ShortcutCard label="Perfil" icon="settings" caption="Conta e configurações" onPress={() => navigation.navigate('DriverProfile')} />
             <ShortcutCard label="Histórico" icon="clock" caption="Ver viagens" onPress={() => navigation.navigate('DriverHistory')} />
-            <ShortcutCard label="Alunos" icon="users" caption="Buscar e convidar" onPress={() => navigation.navigate('DriverSearchStudents')} />
+            <ShortcutCard label="Alunos" icon="users" caption="Alunos vinculados" onPress={() => navigation.navigate('DriverStudents')} />
             <ShortcutCard
               label="Documentos"
               icon="file-text"

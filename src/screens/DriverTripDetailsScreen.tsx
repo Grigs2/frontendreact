@@ -11,8 +11,11 @@ import { formatDayShort, formatTime, todayIso } from '../utils/format';
 import DriverLayout from '../components/DriverLayout';
 import AvisoAtrasoModal from '../components/AvisoAtrasoModal';
 import EditarNomeViagemModal from '../components/EditarNomeViagemModal';
+import ParadaDetalhesModal from '../components/ParadaDetalhesModal';
+import { rotuloParada } from '../utils/paradas';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ReasonDialog from '../components/ReasonDialog';
+import { Feather } from '@expo/vector-icons';
 import { Button, Chip, ScreenHeader, StateView } from '../components/ui';
 import { colors, layout, radius, spacing, typography } from '../theme';
 import { statusExecucao, statusInfo } from '../utils/statusLabels';
@@ -26,21 +29,6 @@ type Props = NativeStackScreenProps<RootStackParamList, 'DriverTripDetails'>;
 function tituloParada(parada: ParadaViagemDTO): string {
   if (parada.tipoParada === 'MOTORISTA') return parada.nomeLocal || parada.endereco;
   return (parada.endereco ?? '').split(' - ')[0] || parada.nomeLocal;
-}
-
-/** Ex.: "Embarque: Ana Clara, Pedro · 2 alunos" ou "Desembarque: Escola Estadual X - Ana Clara · 1 aluno". */
-function subtituloParada(parada: ParadaViagemDTO, ida: boolean): string {
-  const alunos = parada.listaDependentes ?? [];
-  const resumo =
-    alunos.length === 0
-      ? 'Sem alunos'
-      : `${alunos.map((a) => a.nomeDependente).join(', ')} · ${alunos.length} ${alunos.length === 1 ? 'aluno' : 'alunos'}`;
-  if (parada.tipoParada === 'ESCOLA') {
-    const escola = parada.nomeLocal.replace(/^Escola:\s*/, '');
-    return `${ida ? 'Desembarque' : 'Embarque'}: ${escola}${alunos.length ? ` - ${resumo}` : ''}`;
-  }
-  if (alunos.length === 0) return resumo;
-  return `${ida ? 'Embarque' : 'Desembarque'}: ${resumo}`;
 }
 
 export default function DriverTripDetailsScreen({ route, navigation }: Props) {
@@ -58,6 +46,7 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
   const [showEditarNome, setShowEditarNome] = useState(false);
   const [savingNome, setSavingNome] = useState(false);
   const [diaViagem, setDiaViagem] = useState<AgendaViagemDTO | null>(null);
+  const [detalhesParada, setDetalhesParada] = useState<ParadaViagemDTO | null>(null);
   const [paradas, setParadas] = useState<ParadaViagemDTO[]>([]);
   const [pronta, setPronta] = useState<boolean | null>(null);
   const [resumo, setResumo] = useState<ViagemDiaResumoDTO | null>(null);
@@ -321,9 +310,25 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
                       <Text style={styles.paradaNumeroTexto}>{i + 1}</Text>
                     </View>
                     <View style={styles.paradaInfo}>
-                      <Text style={styles.depName}>{tituloParada(p)}</Text>
-                      {p.tipoParada !== 'MOTORISTA' && <Text style={styles.depDetail}>{subtituloParada(p, ida)}</Text>}
+                      {/* Sem endereço na lista: ele fica no pop-up de detalhes. */}
+                      <Text style={styles.depName}>{rotuloParada(p, ida)}</Text>
+                      {p.tipoParada !== 'MOTORISTA' && p.listaDependentes.length > 0 && (
+                        <Text style={styles.depDetail}>
+                          {p.listaDependentes.length} {p.listaDependentes.length === 1 ? 'aluno' : 'alunos'}
+                        </Text>
+                      )}
                     </View>
+                    {p.tipoParada !== 'MOTORISTA' && (
+                      <Pressable
+                        onPress={() => setDetalhesParada(p)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Ver detalhes: ${rotuloParada(p, ida)}`}
+                        hitSlop={8}
+                        style={styles.paradaDetalhes}
+                      >
+                        <Feather name="info" size={20} color={colors.ink} />
+                      </Pressable>
+                    )}
                   </View>
                 ))}
               </Pressable>
@@ -332,6 +337,8 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
             )}
           </View>
         )}
+
+        <ParadaDetalhesModal parada={detalhesParada} ida={ida} onClose={() => setDetalhesParada(null)} />
 
         <AvisoAtrasoModal
           visible={showAviso}
@@ -479,6 +486,7 @@ const styles = StyleSheet.create({
   },
   paradaNumeroTexto: { ...typography.label, color: colors.ink },
   paradaInfo: { flex: 1, minWidth: 0, gap: spacing.xs },
+  paradaDetalhes: { width: layout.minTouch, height: layout.minTouch, alignItems: 'center', justifyContent: 'center' },
   depName: { ...typography.label, fontSize: 18, lineHeight: 22, color: colors.ink },
   depDetail: { ...typography.caption, color: colors.slate500 },
   linhaSecundaria: { flexDirection: 'row', alignItems: 'center', gap: layout.buttonGap },

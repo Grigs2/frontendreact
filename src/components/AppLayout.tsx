@@ -52,7 +52,7 @@ const PARENT_TAB: Record<string, string> = {
   DriverAvailableDependents: 'DriverTrips',
   DriverAttendance: 'DriverTrips',
   DriverAttendanceDetail: 'DriverTrips',
-  DriverStudents: 'DriverTrips',
+  DriverStudents: 'DriverMain',
   DriverSearchStudents: 'DriverInvites',
   DriverVehicle: 'DriverProfile',
   DriverHelp: 'DriverProfile',
@@ -120,9 +120,13 @@ export default function AppLayout({ role, children }: AppLayoutProps) {
             accessibilityLabel={
               unreadCount > 0 ? `Notificações, ${unreadCount} não lidas` : 'Notificações'
             }
-            style={({ pressed }) => [styles.headerButton, pressed && styles.headerButtonPressed]}
+            style={({ pressed }) => [
+              styles.headerButton,
+              unreadCount > 0 && styles.headerButtonUnread,
+              pressed && styles.headerButtonPressed,
+            ]}
           >
-            <Feather name="bell" size={layout.icon} color={colors.ink} />
+            <Feather name="bell" size={layout.icon} color={unreadCount > 0 ? colors.onPrimary : colors.ink} />
             {unreadCount > 0 && (
               <View style={styles.badge} pointerEvents="none">
                 <Text style={styles.badgeText} maxFontSizeMultiplier={1.2}>
@@ -165,11 +169,11 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: 6,
-    right: 4,
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
+    top: -4,
+    right: -4,
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 5,
     borderRadius: radius.pill,
     backgroundColor: colors.danger,
     alignItems: 'center',
@@ -179,9 +183,14 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     ...typography.captionBold,
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: 12,
+    lineHeight: 14,
     color: colors.onDanger,
+  },
+  headerButtonUnread: {
+    backgroundColor: colors.primary,
+    borderColor: colors.ink,
+    borderWidth: 2,
   },
   headerButtonPressed: {
     backgroundColor: colors.pressedNeutral,

@@ -12,6 +12,8 @@ import TripMap from '../components/TripMap';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ReasonDialog from '../components/ReasonDialog';
 import AvisoAtrasoModal from '../components/AvisoAtrasoModal';
+import ParadaDetalhesModal from '../components/ParadaDetalhesModal';
+import RotaEstacoes from '../components/RotaEstacoes';
 import { Notice, ProgressBar } from '../components/Feedback';
 import { Button, Card } from '../components/ui';
 import { viagemService } from '../services/viagemService';
@@ -22,7 +24,7 @@ import { DependenteParadaDTO, ParadaViagemDTO, StatusViagemPresenca, ViagemDiaDT
 import { statusInfo } from '../utils/statusLabels';
 import { formatTime } from '../utils/format';
 import { getApiErrorMessage } from '../utils/apiError';
-import { enderecoResumido } from '../utils/paradas';
+import { ordenarAlunos, rotuloParada } from '../utils/paradas';
 import { rotuloRota } from '../utils/periodo';
 import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
@@ -62,6 +64,10 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
   const [submitting, setSubmitting] = useState<number | null>(null);
   const [confirmar, setConfirmar] = useState<{ aluno: DependenteParadaDTO; novo: Marca } | null>(null);
   const [cancelarAberto, setCancelarAberto] = useState(false);
+  const [interromperAberto, setInterromperAberto] = useState(false);
+  const [detalhes, setDetalhes] = useState<ParadaViagemDTO | null>(null);
+  // Alternativa ao mapa: a rota como linha de estações (também usada sem internet).
+  const [vistaLinha, setVistaLinha] = useState(false);
   const [confirmarFim, setConfirmarFim] = useState(false);
   const [updatingTrip, setUpdatingTrip] = useState(false);
   const [avisoAberto, setAvisoAberto] = useState(false);
@@ -179,7 +185,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
     }
   };
 
-  const alterarViagem = async (novo: 'FINALIZADA' | 'CANCELADA', motivo?: string) => {
+  const alterarViagem = async (novo: 'FINALIZADA' | 'CANCELADA' | 'INTERROMPIDA', motivo?: string) => {
     if (!viagemDiaId) return;
     setUpdatingTrip(true);
     try {
@@ -191,6 +197,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
       setExecucao(updated);
       setActiveViagemDia(null);
       setCancelarAberto(false);
+      setInterromperAberto(false);
       setConfirmarFim(false);
       showToast(`Viagem ${statusInfo('viagemDia', novo).label.toLowerCase()}. Os responsáveis foram avisados.`, 'success');
       if (novo === 'FINALIZADA') navigation.navigate('DriverTrips');
@@ -227,7 +234,15 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
   const indiceProximo = indicesPendentes.find((i) => i > indice);
   const destino = destinos[indice];
   const destinoEhEmbarque = !!destino && embarqueNaParada(destino);
-  const aluno = destino?.listaDependentes.find((d) => pendenteNaParada(destino, d));
+  // Num mesmo destino (ex.: escola com vários alunos) o atendimento segue a ordem alfabética.
+  const pendentesNoDestino = destino ? ordenarAlunos(destino.listaDependentes.filter((d) => pendenteNaParada(destino, d))) : [];
+  const aluno = pendentesNoDestino[0];
+  const rotuloDestino = destino ? rotuloParada(destino, ida, pendentesNoDestino.length ? pendentesNoDestino : destino.listaDependentes) : '';
+  // Destino seguinte, para o quadro "próxima parada".
+  const destinoSeguinte = indiceProximo !== undefined ? destinos[indiceProximo] : undefined;
+  const rotuloSeguinte = destinoSeguinte
+    ? rotuloParada(destinoSeguinte, ida, destinoSeguinte.listaDependentes.filter((d) => pendenteNaParada(destinoSeguinte, d)))
+    : '';
   const progressoValor = destinoEhEmbarque ? embarcados : desembarcados;
   const progressoRotulo = destinoEhEmbarque ? 'embarcados' : 'desembarcados';
 
@@ -252,7 +267,9 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
 
   const voltarInicio = () => navigation.navigate('DriverMain');
   const mapaVisivel = emAndamento && !mapaOculto;
-  const telaCheiaAtiva = emAndamento && telaCheia;
+  // Sem internet o mapa não carrega: mostra a linha de estações no lugar.
+  const modoLinha = vistaLinha || !online;
+  const telaCheiaAtiva = emAndamento && telaCheia && !modoLinha;
   const nomeAluno = (id: number) => alunos.find((a) => a.id === id)?.nomeDependente ?? `Aluno ${id}`;
 
   return (
@@ -277,9 +294,10 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
               {aluno ? (
                 <>
                   <Text style={styles.nomeAluno} maxFontSizeMultiplier={maxFontSizeMultiplier}>{aluno.nomeDependente}</Text>
-                  <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                    {destinoEhEmbarque ? 'Embarque' : 'Desembarque'}: {enderecoResumido(destino!)}
-                  </Text>
+                  <View style={styles.linha}>
+                    <Text style={[styles.body, styles.flex]} maxFontSizeMultiplier={maxFontSizeMultiplier}>{rotuloDestino}</Text>
+                    <ChipAcao label="Ver detalhes" onPress={() => setDetalhes(destino!)} />
+                  </View>
                 </>
               ) : null}
               {pendentesFim.length === 0 ? (
@@ -305,19 +323,37 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
         {/* Mapa (40%): Ocultar mapa e Tela cheia ficam sobre ele; o voltar leva ao início */}
         {mapaVisivel ? (
           <View style={styles.mapa}>
-            <TripMap
-              preencher
-              posicao={gps.posicao}
-              ultimaAtualizacao={gps.ultimoEnvio?.toISOString()}
-              desatualizada={gps.estado === 'sem_sinal'}
-              mensagem={MENSAGEM_GPS[gps.estado]}
-            />
+            {modoLinha ? (
+              <View style={[styles.linhaArea, { paddingTop: layout.minTouch + spacing.md }]}>
+                <RotaEstacoes
+                  paradas={destinos}
+                  ida={ida}
+                  indiceAtual={indice}
+                  pendenteNaParada={pendenteNaParada}
+                  onSelecionar={(i) => (indicesPendentes.includes(i) && i !== indice ? irPara(i) : setDetalhes(destinos[i]))}
+                />
+                {!online && (
+                  <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                    Sem internet: o mapa volta quando a conexão voltar.
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <TripMap
+                preencher
+                posicao={gps.posicao}
+                ultimaAtualizacao={gps.ultimoEnvio?.toISOString()}
+                desatualizada={gps.estado === 'sem_sinal'}
+                mensagem={MENSAGEM_GPS[gps.estado]}
+              />
+            )}
             <View style={styles.mapaVoltar} pointerEvents="box-none">
               <Button size="icon" variant="secondary" icon="arrow-left" accessibilityLabel="Voltar para o início" onPress={voltarInicio} />
             </View>
             <View style={styles.mapaChips} pointerEvents="box-none">
               <ChipAcao label="Ocultar mapa" onPress={() => setMapaOculto(true)} />
-              <ChipAcao label="Tela cheia" onPress={() => setTelaCheia(true)} />
+              {online && <ChipAcao label={vistaLinha ? 'Ver mapa' : 'Ver linha'} onPress={() => setVistaLinha((v) => !v)} />}
+              {!modoLinha && <ChipAcao label="Tela cheia" onPress={() => setTelaCheia(true)} />}
             </View>
           </View>
         ) : null}
@@ -373,20 +409,27 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                   </Text>
                   {mapaVisivel && aluno && <ChipAcao label="Mensagem" onPress={() => mensagemAoResponsavel(aluno)} />}
                 </View>
-                <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                  {aluno
-                    ? `${destinoEhEmbarque ? 'Embarque' : 'Desembarque'}: ${enderecoResumido(destino)}`
-                    : 'Embarques e desembarques concluídos. Finalize a viagem abaixo.'}
-                </Text>
+                <View style={styles.linha}>
+                  <Text style={[styles.body, styles.flex]} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                    {aluno ? rotuloDestino : 'Embarques e desembarques concluídos. Finalize a viagem abaixo.'}
+                  </Text>
+                  {aluno && <ChipAcao label="Ver detalhes" onPress={() => setDetalhes(destino)} />}
+                </View>
               </Card>
 
-              <View style={styles.direcoes}>
-                <Feather name="corner-up-right" size={28} color={colors.primary} />
-                <View style={styles.direcoesTextos}>
-                  <Text style={styles.direcoesTitulo} maxFontSizeMultiplier={maxFontSizeMultiplier}>Em 120 m, vire à direita</Text>
-                  <Text style={styles.direcoesSub} maxFontSizeMultiplier={maxFontSizeMultiplier}>Trânsito moderado · 29 °C · chega em 2 min</Text>
+              {aluno && (
+                <View style={styles.direcoes}>
+                  <Feather name={destinoSeguinte ? 'arrow-right-circle' : 'flag'} size={28} color={colors.primary} />
+                  <View style={styles.direcoesTextos}>
+                    <Text style={styles.direcoesTitulo} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                      {indicesPendentes.length <= 1 ? 'Última parada' : `Faltam ${indicesPendentes.length} paradas`}
+                    </Text>
+                    <Text style={styles.direcoesSub} maxFontSizeMultiplier={maxFontSizeMultiplier} numberOfLines={1}>
+                      {destinoSeguinte ? `Depois: ${rotuloSeguinte}` : 'Esta é a última parada com alunos.'}
+                    </Text>
+                  </View>
                 </View>
-              </View>
+              )}
 
               <ProgressBar
                 value={progressoValor}
@@ -428,6 +471,17 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
               Faltam {pendentesFim.length} aluno{pendentesFim.length === 1 ? '' : 's'} para finalizar.
               {!online ? ' Sem conexão: só embarque, desembarque e ausência podem ser registrados.' : ''}
             </Text>
+          )}
+          {emAndamento && pendentesFim.length > 0 && (
+            <Button
+              label="Interromper viagem"
+              icon="octagon"
+              variant="tertiary"
+              size="md"
+              disabled={!online}
+              fullWidth
+              onPress={() => setInterromperAberto(true)}
+            />
           )}
 
           {!emAndamento && destinos.length === 0 && (
@@ -494,6 +548,27 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
         loading={updatingTrip}
         onConfirm={(motivo) => alterarViagem('CANCELADA', motivo)}
         onCancel={() => setCancelarAberto(false)}
+      />
+
+      {/* Interromper: a viagem começou mas não pode continuar (pane, acidente, saúde). */}
+      <ReasonDialog
+        visible={interromperAberto}
+        title="Interromper a viagem?"
+        message="Use quando a viagem já começou e não pode continuar (pane, acidente, problema de saúde). O GPS é desligado e os responsáveis recebem o motivo."
+        confirmLabel="Interromper viagem"
+        loading={updatingTrip}
+        onConfirm={(motivo) => alterarViagem('INTERROMPIDA', motivo)}
+        onCancel={() => setInterromperAberto(false)}
+      />
+
+      <ParadaDetalhesModal
+        parada={detalhes}
+        ida={ida}
+        onClose={() => setDetalhes(null)}
+        onMensagem={(a) => {
+          setDetalhes(null);
+          mensagemAoResponsavel(a);
+        }}
       />
 
       <AvisoAtrasoModal
@@ -600,6 +675,7 @@ const styles = StyleSheet.create({
   direcoesTitulo: { ...typography.label, color: colors.surface },
   direcoesSub: { ...typography.caption, color: colors.slate500 },
   mapa: { flex: 2, overflow: 'hidden', position: 'relative' },
+  linhaArea: { flex: 1, justifyContent: 'center', gap: spacing.sm, paddingHorizontal: layout.screenMargin, backgroundColor: colors.background },
   mapaVoltar: { position: 'absolute', top: 0, left: 0, padding: layout.screenMargin, zIndex: 10, elevation: 10 },
   mapaChips: {
     position: 'absolute',
