@@ -1,7 +1,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { Card, Chip } from './ui';
+import { Button, Card, Chip } from './ui';
 import { StatusTone, colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
 type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
@@ -54,6 +54,23 @@ interface HighlightCardProps {
 }
 
 /** Card de destaque: selo (chip) no topo, título 18 Bold, linhas de apoio e ação opcional. */
+/** Destaque no Início quando há notificações não lidas (some quando todas foram vistas). */
+export function NotificacoesNovasCard({ total, onPress }: { total: number; onPress: () => void }) {
+  if (total <= 0) return null;
+  return (
+    <HighlightCard
+      chip="Novidades"
+      chipTone="warning"
+      icon="bell"
+      title={total === 1 ? '1 notificação nova' : `${total > 99 ? '99+' : total} notificações novas`}
+      lines={['Embarques, avisos e pedidos que você ainda não viu.']}
+      onPress={onPress}
+    >
+      <Button label="Ver notificações" icon="arrow-right" iconPosition="right" variant="secondary" onPress={onPress} fullWidth />
+    </HighlightCard>
+  );
+}
+
 export function HighlightCard({ chip, chipTone = 'info', title, tituloSecundario, lines = [], icon, variant = 'default', onPress, children }: HighlightCardProps) {
   const visible = lines.filter(Boolean) as string[];
   return (
