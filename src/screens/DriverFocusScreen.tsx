@@ -9,7 +9,7 @@ import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { viagemService } from '../services/viagemService';
 import { DependenteParadaDTO, ParadaViagemDTO } from '../types';
-import { nomeParada } from '../utils/paradas';
+import { idaDasParadas, rotuloParada } from '../utils/paradas';
 import { getApiErrorMessage } from '../utils/apiError';
 import { colors, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
@@ -77,7 +77,7 @@ export default function DriverFocusScreen({ navigation, route }: Props) {
           <>
             <Card style={styles.destaque}>
               <Text style={styles.ordem} maxFontSizeMultiplier={maxFontSizeMultiplier}>Parada {proxima.ordem}</Text>
-              <Text style={styles.nome} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>{nomeParada(proxima)}</Text>
+              <Text style={styles.nome} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>{rotuloParada(proxima, idaDasParadas(paradas))}</Text>
               <Text style={styles.endereco} maxFontSizeMultiplier={maxFontSizeMultiplier}>{proxima.endereco}</Text>
             </Card>
 

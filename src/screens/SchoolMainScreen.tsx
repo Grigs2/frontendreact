@@ -5,7 +5,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import SchoolLayout from '../components/SchoolLayout';
-import { Greeting, Grid, HighlightCard, HomeScroll, SectionTitle, homeStyles } from '../components/HomeBlocks';
+import { Greeting, Grid, HighlightCard, HomeScroll, SectionTitle, homeStyles, NotificacoesNovasCard } from '../components/HomeBlocks';
 import { Card, ListRow, ShortcutCard } from '../components/ui';
 import { vinculoEscolaService } from '../services/vinculoEscolaService';
 import { EscolaDTO, VinculoEscolaDTO } from '../types';
@@ -38,6 +38,7 @@ export default function SchoolMainScreen({ navigation }: Props) {
       <View style={homeStyles.wrapper}>
         <HomeScroll>
           <Greeting name={school?.nome} subtitle="Painel da escola" />
+          <NotificacoesNovasCard total={unreadCount} onPress={() => navigation.navigate('NotificationList')} />
 
           {pendentes > 0 ? (
             <HighlightCard

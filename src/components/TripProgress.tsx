@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LuzStatus, MINUTOS_POR_PARADA, ProximaInteracao, textoParadasAntes } from '../utils/progressoViagem';
 import { formatTime } from '../utils/format';
+import { distancia, tempoAte } from '../utils/rota';
 import { colors, maxFontSizeMultiplier, radius, spacing, StatusTone, typography } from '../theme';
 
 /** Cor da bolinha por tom (o amarelo usa o tom pressionado para ter contraste sobre branco). */
@@ -61,14 +62,18 @@ export function ProximaInteracaoBox({ proxima }: { proxima: ProximaInteracao }) 
       <View style={styles.linha}>
         <Feather name="clock" size={16} color={colors.ink} />
         <Text style={styles.horario} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-          {proxima.estimativa
-            ? `${proxima.rotuloHorario}: ~${formatTime(proxima.estimativa)}`
-            : `${proxima.rotuloHorario}: após o início da viagem`}
+          {!proxima.estimativa
+            ? `${proxima.rotuloHorario}: após o início da viagem`
+            : proxima.fonte === 'rota'
+              ? `${proxima.rotuloHorario}: ${formatTime(proxima.estimativa)}${proxima.segundos != null ? ` (em ${tempoAte(proxima.segundos)})` : ''}`
+              : `${proxima.rotuloHorario}: ~${formatTime(proxima.estimativa)}`}
         </Text>
       </View>
       {!!proxima.estimativa && (
         <Text style={styles.nota} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-          Estimativa de ~{MINUTOS_POR_PARADA} min por parada restante.
+          {proxima.fonte === 'rota'
+            ? `Previsão pela rota, com trânsito${proxima.metros != null ? ` · ${distancia(proxima.metros)}` : ''}.`
+            : `Estimativa de ~${MINUTOS_POR_PARADA} min por parada restante (sem localização da rota).`}
         </Text>
       )}
     </View>

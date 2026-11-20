@@ -13,10 +13,21 @@ export const parseDate = (value?: string | null): Date | null => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-/** Date → "yyyy-MM-dd" no fuso local (formato LocalDate da API). */
-export const toIsoDate = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+/** Brasília é UTC-3 fixo (sem horário de verão desde 2019). "Hoje" da operação segue esse fuso, não o do aparelho. */
+const BRASILIA_OFFSET_MS = -3 * 60 * 60 * 1000;
 
-export const todayIso = () => toIsoDate(new Date());
+/** "yyyy-MM-dd" da data civil de Brasília, em qualquer fuso do aparelho. */
+export const todayIso = () => {
+  const b = new Date(Date.now() + BRASILIA_OFFSET_MS);
+  return `${b.getUTCFullYear()}-${pad(b.getUTCMonth() + 1)}-${pad(b.getUTCDate())}`;
+};
+
+/** Soma dias a uma data "yyyy-MM-dd" (aritmética de calendário, sem fuso). */
+export const addDaysIso = (iso: string, days: number) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  const u = new Date(Date.UTC(y, m - 1, d + days));
+  return `${u.getUTCFullYear()}-${pad(u.getUTCMonth() + 1)}-${pad(u.getUTCDate())}`;
+};
 
 /** dd/mm/aaaa */
 export const formatDate = (value?: string | null) => {
@@ -52,8 +63,7 @@ export const formatDayShort = (value?: string | null) => {
 export const formatDayRelative = (value?: string | null) => {
   const d = parseDate(value);
   if (!d) return '';
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = parseDate(todayIso())!;
   const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
   if (diff === 0) return 'Hoje';
   if (diff === 1) return 'Amanhã';
@@ -74,13 +84,7 @@ export const formatRelative = (value?: string | null, now = Date.now()) => {
 };
 
 /** Próximos 7 dias (hoje + 6), no formato da API. */
-export const nextSevenDays = () =>
-  Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + i);
-    return toIsoDate(d);
-  });
+export const nextSevenDays = () => Array.from({ length: 7 }, (_, i) => addDaysIso(todayIso(), i));
 
 /** Mostra só os 4 últimos dígitos de um documento: "•••••••8901". */
 export const maskDocument = (value?: string | null) => {

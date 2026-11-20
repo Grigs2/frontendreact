@@ -111,3 +111,17 @@
 Arquivos: `src/theme/index.ts` (`layout.bellReserve` = 56), `src/screens/GuardianMonitoringScreen.tsx`, `src/screens/GuardianDependentsScreen.tsx`, `src/components/HomeHeaderArt.tsx`.
 
 **Pendente:** registrar a arte compacta do cabeçalho no FigCraft (seção 07). A tentativa falhou por falta de créditos no EasyRunCraft; o `.figcraft` em `Docs/` continua com a versão anterior da arte.
+
+## Merge com a `homologacao` (20/11/2026)
+
+A `homologacao` recebeu, em paralelo, a rota do Google com previsão de chegada, a vista em linha do motorista e o `rotuloParada`. Decisões tomadas no merge:
+
+| Ponto | Decisão |
+|---|---|
+| Card "notificações novas" no Início | Retirado. As notificações ficam só no popout do sino, como no redesenho. |
+| Previsão de chegada (Início e Acompanhar) | Rota do Google, com trânsito, quando existir (`comPrevisaoDaRota` em `utils/progressoViagem.ts`). Sem GPS ou sem rota, a estimativa de 5 min por parada é a reserva. A faixa de próxima interação diz qual das duas está valendo. |
+| Atendimento do motorista | Mantidos "Ver linha", o modo offline e os botões da `homologacao`. Somado o toque: no mapa amplia; fora dele, onde não há botão, reduz (tela cheia → pequeno → oculto). |
+| Nome das paradas | Vale o `rotuloParada` da `homologacao` ("Embarque de Ana e Lucas"). O `nomeParada` foi removido. Telas sem o período da viagem usam `idaDasParadas()` para saber se é ida ou volta. |
+| Acompanhar (Responsável) | Estrutura do redesenho (mapa pequeno/tela cheia, linha de metrô sem localização) com a rota, a parada do aluno, o enquadramento e a autorização de localização na tela, que vieram da `homologacao`. |
+
+Verificado depois do merge: `npx tsc --noEmit` sem erros e `npx expo export --platform web` sem erros. Não verificado em aparelho.

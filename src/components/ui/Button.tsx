@@ -13,7 +13,7 @@ import { borders, colors, layout, maxFontSizeMultiplier, radius, spacing, typogr
 
 type FeatherIconName = React.ComponentProps<typeof Feather>['name'];
 
-export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'destructive';
+export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'destructive' | 'success';
 export type ButtonSize = 'lg' | 'md' | 'icon';
 
 interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> {
@@ -34,6 +34,7 @@ const VARIANTS: Record<ButtonVariant, { bg: string; pressed: string; text: strin
   secondary: { bg: colors.surface, pressed: colors.pressedNeutral, text: colors.ink, border: colors.ink },
   tertiary: { bg: 'transparent', pressed: colors.pressedNeutral, text: colors.ink, border: 'transparent' },
   destructive: { bg: colors.danger, pressed: colors.dangerPressed, text: colors.onDanger, border: 'transparent' },
+  success: { bg: colors.success, pressed: colors.successPressed, text: colors.onSuccess, border: 'transparent' },
 };
 
 const DISABLED: Record<ButtonVariant, { bg: string; text: string; border: string }> = {
@@ -41,6 +42,7 @@ const DISABLED: Record<ButtonVariant, { bg: string; text: string; border: string
   secondary: { bg: colors.surface, text: colors.disabledTextOutline, border: colors.disabledBorder },
   tertiary: { bg: 'transparent', text: colors.disabledTextOutline, border: 'transparent' },
   destructive: { bg: colors.disabledBg, text: colors.disabledText, border: 'transparent' },
+  success: { bg: colors.disabledBg, text: colors.disabledText, border: 'transparent' },
 };
 
 export default function Button({

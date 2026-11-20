@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useAreaToque, useNivelMapa } from '../hooks/useNivelMapa';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useAreaToque } from '../hooks/useNivelMapa';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,17 +13,22 @@ import TripMap from '../components/TripMap';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ReasonDialog from '../components/ReasonDialog';
 import AvisoAtrasoModal from '../components/AvisoAtrasoModal';
+import ParadaDetalhesModal from '../components/ParadaDetalhesModal';
+import RotaEstacoes from '../components/RotaEstacoes';
 import { Notice, ProgressBar } from '../components/Feedback';
 import { Button, Card } from '../components/ui';
 import { viagemService } from '../services/viagemService';
 import { authSession } from '../services/authSession';
 import { offlineQueue, podeRegistrarOffline } from '../services/offlineQueue';
+import { localizacaoService } from '../services/localizacaoService';
 import { MENSAGEM_GPS, useDriverLocation } from '../hooks/useDriverLocation';
+import { useRotaViagem } from '../hooks/useRotaViagem';
+import { distancia, instrucaoCurta, linhaDaRota, tempoAte } from '../utils/rota';
 import { DependenteParadaDTO, ParadaViagemDTO, StatusViagemPresenca, ViagemDiaDTO } from '../types';
 import { statusInfo } from '../utils/statusLabels';
 import { formatTime } from '../utils/format';
 import { getApiErrorMessage } from '../utils/apiError';
-import { enderecoResumido, nomeParada } from '../utils/paradas';
+import { ordenarAlunos, rotuloParada } from '../utils/paradas';
 import { rotuloRota } from '../utils/periodo';
 import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
@@ -63,11 +68,15 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
   const [submitting, setSubmitting] = useState<number | null>(null);
   const [confirmar, setConfirmar] = useState<{ aluno: DependenteParadaDTO; novo: Marca } | null>(null);
   const [cancelarAberto, setCancelarAberto] = useState(false);
+  const [interromperAberto, setInterromperAberto] = useState(false);
+  const [detalhes, setDetalhes] = useState<ParadaViagemDTO | null>(null);
+  // Alternativa ao mapa: a rota como linha de estações (também usada sem internet).
+  const [vistaLinha, setVistaLinha] = useState(false);
   const [confirmarFim, setConfirmarFim] = useState(false);
   const [updatingTrip, setUpdatingTrip] = useState(false);
   const [avisoAberto, setAvisoAberto] = useState(false);
-  // Mapa: 0 oculto, 1 pequeno (40%), 2 tela cheia. Toque no mapa amplia; toque fora (sem botão) reduz.
-  const { nivel: nivelMapa, setNivel: setNivelMapa, ampliar: ampliarMapa, reduzir: reduzirMapa } = useNivelMapa(1);
+  const [mapaOculto, setMapaOculto] = useState(false);
+  const [telaCheia, setTelaCheia] = useState(false);
   // null = acompanha o primeiro destino pendente; depois o motorista navega pelas setas ou pelo deslize.
   const [indiceManual, setIndiceManual] = useState<number | null>(null);
   const loadingRef = useRef(false);
@@ -78,6 +87,30 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
 
   // GPS só com a execução em andamento (7.1.3 / 7.1.9).
   const gps = useDriverLocation(viagemDiaId, emAndamento);
+
+  // Sem o consentimento do motorista o backend recusa a posição e o responsável não vê o veículo.
+  const [semConsentimento, setSemConsentimento] = useState(false);
+  const [consentindo, setConsentindo] = useState(false);
+  useEffect(() => {
+    if (!emAndamento || !viagemDiaId) return;
+    localizacaoService
+      .estadoConsentimento(viagemDiaId)
+      .then((e) => setSemConsentimento(!e.motoristaConsentiu))
+      .catch(() => undefined);
+  }, [emAndamento, viagemDiaId]);
+  const permitirLocalizacao = async () => {
+    setConsentindo(true);
+    try {
+      await localizacaoService.consentirMotorista(true);
+      setSemConsentimento(false);
+      gps.tentarNovamente();
+      showToast('Localização compartilhada com os responsáveis durante a viagem.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Não foi possível ativar a localização.'), 'error');
+    } finally {
+      setConsentindo(false);
+    }
+  };
 
   const atualizarLocais = useCallback(async () => {
     if (!usuarioId || !viagemDiaId) return {};
@@ -150,6 +183,11 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
   const marcar = async () => {
     if (!confirmar || !viagemDiaId) return;
     const { aluno, novo } = confirmar;
+    if (!podeRegistrarOffline(aluno.statusEmbarque, novo)) {
+      showToast('Esse registro não é possível para o status atual do aluno.', 'warning');
+      setConfirmar(null);
+      return;
+    }
     setSubmitting(aluno.id);
     try {
       if (!online || pendentes > 0) {
@@ -175,7 +213,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
     }
   };
 
-  const alterarViagem = async (novo: 'FINALIZADA' | 'CANCELADA', motivo?: string) => {
+  const alterarViagem = async (novo: 'FINALIZADA' | 'CANCELADA' | 'INTERROMPIDA', motivo?: string) => {
     if (!viagemDiaId) return;
     setUpdatingTrip(true);
     try {
@@ -187,6 +225,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
       setExecucao(updated);
       setActiveViagemDia(null);
       setCancelarAberto(false);
+      setInterromperAberto(false);
       setConfirmarFim(false);
       showToast(`Viagem ${statusInfo('viagemDia', novo).label.toLowerCase()}. Os responsáveis foram avisados.`, 'success');
       if (novo === 'FINALIZADA') navigation.navigate('DriverTrips');
@@ -216,22 +255,66 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
   const pendenteNaParada = (s: ParadaViagemDTO, d: DependenteParadaDTO) =>
     embarqueNaParada(s) ? d.statusEmbarque === 'ESPERANDO' : d.statusEmbarque === 'EMBARCADO';
 
-  const primeiroPendente = Math.max(0, destinos.findIndex((s) => s.listaDependentes.some((d) => pendenteNaParada(s, d))));
-  const indice = Math.min(indiceManual ?? primeiroPendente, Math.max(destinos.length - 1, 0));
+  // Só paradas com aluno pendente entram na navegação (setas e deslize); alunos já tratados não voltam a aparecer.
+  const indicesPendentes = destinos.flatMap((s, i) => (s.listaDependentes.some((d) => pendenteNaParada(s, d)) ? [i] : []));
+  const indice = indiceManual !== null && indicesPendentes.includes(indiceManual) ? indiceManual : (indicesPendentes[0] ?? 0);
+  const indiceAnterior = indicesPendentes.filter((i) => i < indice).pop();
+  const indiceProximo = indicesPendentes.find((i) => i > indice);
   const destino = destinos[indice];
   const destinoEhEmbarque = !!destino && embarqueNaParada(destino);
-  const aluno = destino?.listaDependentes.find((d) => pendenteNaParada(destino, d));
+  // Num mesmo destino (ex.: escola com vários alunos) o atendimento segue a ordem alfabética.
+  const pendentesNoDestino = destino ? ordenarAlunos(destino.listaDependentes.filter((d) => pendenteNaParada(destino, d))) : [];
+  const aluno = pendentesNoDestino[0];
+  const rotuloDestino = destino ? rotuloParada(destino, ida, pendentesNoDestino.length ? pendentesNoDestino : destino.listaDependentes) : '';
+  // Rota do Google a partir da posição do aparelho; volta a ser buscada a cada embarque ou desembarque.
+  const assinaturaRota = currentStops.map((s) => s.listaDependentes.map((d) => d.statusEmbarque).join(',')).join('|');
+  const rota = useRotaViagem(viagemDiaId, emAndamento, gps.posicao, assinaturaRota);
+  const linhaRota = linhaDaRota(rota);
+  const paradasRota = rota?.disponivel ? rota.paradas : [];
+  const pontosMapa = paradasRota.map((p, i) => ({
+    latitude: p.latitude,
+    longitude: p.longitude,
+    titulo: p.rotulo,
+    numero: i + 1,
+    destaque: !!destino && p.ordem === destino.ordem,
+  }));
+  const previsaoDestino = destino ? paradasRota.find((p) => p.ordem === destino.ordem) : undefined;
+  const navegar = (app: 'maps' | 'waze') => {
+    if (!previsaoDestino) return;
+    const { latitude: lat, longitude: lng } = previsaoDestino;
+    const url =
+      app === 'waze'
+        ? `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
+        : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+    Linking.openURL(url).catch(() => showToast('Não foi possível abrir o aplicativo de navegação.', 'error'));
+  };
+
+  // Destino seguinte, para o quadro "próxima parada".
+  const destinoSeguinte = indiceProximo !== undefined ? destinos[indiceProximo] : undefined;
+  const rotuloSeguinte = destinoSeguinte
+    ? rotuloParada(destinoSeguinte, ida, destinoSeguinte.listaDependentes.filter((d) => pendenteNaParada(destinoSeguinte, d)))
+    : '';
   const progressoValor = destinoEhEmbarque ? embarcados : desembarcados;
   const progressoRotulo = destinoEhEmbarque ? 'embarcados' : 'desembarcados';
 
-  const irPara = (novo: number) => {
-    if (destinos.length) setIndiceManual(Math.max(0, Math.min(novo, destinos.length - 1)));
+  const irPara = (novo: number | undefined) => {
+    if (novo !== undefined) setIndiceManual(novo);
   };
-  // Fora do mapa: deslizar troca de aluno; tocar num ponto sem botão reduz o mapa um nível.
+  // Mapa dinâmico: tocar no mapa amplia (pequeno → tela cheia); tocar fora do mapa, onde não há botão,
+  // reduz um nível (tela cheia → pequeno → oculto). Os botões Ocultar/Ver linha/Tela cheia continuam.
+  const ampliarMapa = () => {
+    if (mapaOculto) setMapaOculto(false);
+    else setTelaCheia(true);
+  };
+  const reduzirMapa = () => {
+    if (telaCheia) setTelaCheia(false);
+    else if (!mapaOculto) setMapaOculto(true);
+  };
+  // Fora do mapa: deslizar troca de aluno; tocar num ponto sem botão reduz o mapa.
   const deslize = useAreaToque({
     onToque: reduzirMapa,
-    onDeslizarEsquerda: () => irPara(indice + 1),
-    onDeslizarDireita: () => irPara(indice - 1),
+    onDeslizarEsquerda: () => irPara(indiceProximo),
+    onDeslizarDireita: () => irPara(indiceAnterior),
   });
 
   const mensagemAoResponsavel = (dependente: DependenteParadaDTO) =>
@@ -243,8 +326,10 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
     });
 
   const voltarInicio = () => navigation.navigate('DriverMain');
-  const mapaVisivel = emAndamento && nivelMapa >= 1;
-  const telaCheiaAtiva = emAndamento && nivelMapa === 2;
+  const mapaVisivel = emAndamento && !mapaOculto;
+  // Sem internet o mapa não carrega: mostra a linha de estações no lugar.
+  const modoLinha = vistaLinha || !online;
+  const telaCheiaAtiva = emAndamento && telaCheia && !modoLinha;
   const nomeAluno = (id: number) => alunos.find((a) => a.id === id)?.nomeDependente ?? `Aluno ${id}`;
 
   return (
@@ -259,19 +344,23 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
               ultimaAtualizacao={gps.ultimoEnvio?.toISOString()}
               desatualizada={gps.estado === 'sem_sinal'}
               mensagem={MENSAGEM_GPS[gps.estado]}
+              rota={linhaRota}
+              paradas={pontosMapa}
+              modo="seguir"
             />
             <View style={[styles.telaCheiaTopo, { paddingTop: insets.top + spacing.sm }]} pointerEvents="box-none">
               <Button size="icon" variant="secondary" icon="arrow-left" accessibilityLabel="Voltar para o início" onPress={voltarInicio} />
-              <ChipAcao label="Reduzir mapa" onPress={() => setNivelMapa(1)} />
+              <ChipAcao label="Reduzir mapa" onPress={() => setTelaCheia(false)} />
             </View>
             <View style={[styles.cardFlutuante, { bottom: insets.bottom + spacing.md }]} {...deslize.panHandlers}>
               <ProgressBar value={progressoValor} total={alunos.length} label={`${progressoValor}/${alunos.length} ${progressoRotulo}`} />
               {aluno ? (
                 <>
                   <Text style={styles.nomeAluno} maxFontSizeMultiplier={maxFontSizeMultiplier}>{aluno.nomeDependente}</Text>
-                  <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                    {destinoEhEmbarque ? 'Embarque' : 'Desembarque'}: {enderecoResumido(destino!)}
-                  </Text>
+                  <View style={styles.linha}>
+                    <Text style={[styles.body, styles.flex]} maxFontSizeMultiplier={maxFontSizeMultiplier}>{rotuloDestino}</Text>
+                    <ChipAcao label="Ver detalhes" onPress={() => setDetalhes(destino!)} />
+                  </View>
                 </>
               ) : null}
               {pendentesFim.length === 0 ? (
@@ -284,7 +373,9 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                     onPress={() => setConfirmar({ aluno, novo: destinoEhEmbarque ? 'EMBARCADO' : 'DESEMBARCADO' })}
                   />
                   <BotaoCard label="Mensagem" cores={CORES_CARD.neutro} onPress={() => mensagemAoResponsavel(aluno)} />
-                  <BotaoCard label="Faltou" cores={CORES_CARD.negativo} onPress={() => setConfirmar({ aluno, novo: 'FALTOU' })} />
+                  {podeRegistrarOffline(aluno.statusEmbarque, 'FALTOU') && (
+                    <BotaoCard label="Faltou" cores={CORES_CARD.negativo} onPress={() => setConfirmar({ aluno, novo: 'FALTOU' })} />
+                  )}
 
                 </View>
               ) : null}
@@ -295,20 +386,41 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
         {/* Mapa (40%): Ocultar mapa e Tela cheia ficam sobre ele; o voltar leva ao início */}
         {mapaVisivel ? (
           <View style={styles.mapa}>
-            <TripMap
-              preencher
-              posicao={gps.posicao}
-              ultimaAtualizacao={gps.ultimoEnvio?.toISOString()}
-              desatualizada={gps.estado === 'sem_sinal'}
-              mensagem={MENSAGEM_GPS[gps.estado]}
-              onPress={ampliarMapa}
-            />
+            {modoLinha ? (
+              <View style={[styles.linhaArea, { paddingTop: layout.minTouch + spacing.md }]}>
+                <RotaEstacoes
+                  paradas={destinos}
+                  ida={ida}
+                  indiceAtual={indice}
+                  pendenteNaParada={pendenteNaParada}
+                  onSelecionar={(i) => (indicesPendentes.includes(i) && i !== indice ? irPara(i) : setDetalhes(destinos[i]))}
+                />
+                {!online && (
+                  <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                    Sem internet: o mapa volta quando a conexão voltar.
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <TripMap
+                preencher
+                posicao={gps.posicao}
+                ultimaAtualizacao={gps.ultimoEnvio?.toISOString()}
+                desatualizada={gps.estado === 'sem_sinal'}
+                mensagem={MENSAGEM_GPS[gps.estado]}
+                rota={linhaRota}
+                paradas={pontosMapa}
+                modo="seguir"
+                onPress={ampliarMapa}
+              />
+            )}
             <View style={styles.mapaVoltar} pointerEvents="box-none">
               <Button size="icon" variant="secondary" icon="arrow-left" accessibilityLabel="Voltar para o início" onPress={voltarInicio} />
             </View>
             <View style={styles.mapaChips} pointerEvents="box-none">
-              <ChipAcao label="Ocultar mapa" onPress={() => setNivelMapa(0)} />
-              <ChipAcao label="Tela cheia" onPress={() => setNivelMapa(2)} />
+              <ChipAcao label="Ocultar mapa" onPress={() => setMapaOculto(true)} />
+              {online && <ChipAcao label={vistaLinha ? 'Ver mapa' : 'Ver linha'} onPress={() => setVistaLinha((v) => !v)} />}
+              {!modoLinha && <ChipAcao label="Tela cheia" onPress={() => setTelaCheia(true)} />}
             </View>
           </View>
         ) : null}
@@ -321,7 +433,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
               <Text style={[styles.tituloViagem, { fontSize: tamanhoTitulo, lineHeight: tamanhoTitulo + 8 }]} numberOfLines={1}>
                 {tituloViagem}
               </Text>
-              {emAndamento && <ChipAcao label="Ver mapa" onPress={() => setNivelMapa(1)} />}
+              {emAndamento && <ChipAcao label="Ver mapa" onPress={() => setMapaOculto(false)} />}
             </View>
           )}
           {!mapaVisivel && (
@@ -355,27 +467,69 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
             </Card>
           )}
 
+          {emAndamento && semConsentimento && (
+            <Card variant="alert" style={styles.card}>
+              <Text style={styles.cardTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>Compartilhar sua localização</Text>
+              <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                Os responsáveis acompanham a perua no mapa só durante a viagem. Você pode desligar em Perfil → Configurações.
+              </Text>
+              <Button label="Permitir" icon="map-pin" size="md" loading={consentindo} onPress={permitirLocalizacao} fullWidth />
+            </Card>
+          )}
           {emAndamento && destino && (
             <>
               <Card style={styles.card}>
                 <View style={styles.linha}>
                   <Text style={[styles.nomeAluno, styles.flex]} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                    {aluno ? aluno.nomeDependente : nomeParada(destino)}
+                    {aluno ? aluno.nomeDependente : 'Todos os alunos registrados'}
                   </Text>
                   {mapaVisivel && aluno && <ChipAcao label="Mensagem" onPress={() => mensagemAoResponsavel(aluno)} />}
                 </View>
-                <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                  {destinoEhEmbarque ? 'Embarque' : 'Desembarque'}: {enderecoResumido(destino)}
-                </Text>
+                <View style={styles.linha}>
+                  <Text style={[styles.body, styles.flex]} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                    {aluno ? rotuloDestino : 'Embarques e desembarques concluídos. Finalize a viagem abaixo.'}
+                  </Text>
+                  {aluno && <ChipAcao label="Ver detalhes" onPress={() => setDetalhes(destino)} />}
+                </View>
               </Card>
 
-              <View style={styles.direcoes}>
-                <Feather name="corner-up-right" size={28} color={colors.primary} />
-                <View style={styles.direcoesTextos}>
-                  <Text style={styles.direcoesTitulo} maxFontSizeMultiplier={maxFontSizeMultiplier}>Em 120 m, vire à direita</Text>
-                  <Text style={styles.direcoesSub} maxFontSizeMultiplier={maxFontSizeMultiplier}>Trânsito moderado · 29 °C · chega em 2 min</Text>
+              {aluno && (
+                <View style={styles.direcoes}>
+                  <Feather
+                    name={rota?.proximaInstrucao ? 'navigation' : destinoSeguinte ? 'arrow-right-circle' : 'flag'}
+                    size={28}
+                    color={colors.primary}
+                  />
+                  <View style={styles.direcoesTextos}>
+                    <Text style={styles.direcoesTitulo} maxFontSizeMultiplier={maxFontSizeMultiplier} numberOfLines={2}>
+                      {rota?.proximaInstrucao
+                        ? `${instrucaoCurta(rota.proximaInstrucao)}${rota.metrosAteInstrucao ? ` · ${distancia(rota.metrosAteInstrucao)}` : ''}`
+                        : indicesPendentes.length <= 1
+                          ? 'Última parada'
+                          : `Faltam ${indicesPendentes.length} paradas`}
+                    </Text>
+                    {previsaoDestino ? (
+                      <Text style={styles.direcoesEta} maxFontSizeMultiplier={maxFontSizeMultiplier} numberOfLines={1}>
+                        Chega em {tempoAte(previsaoDestino.segundos)} · {formatTime(previsaoDestino.previsaoChegada)} ·{' '}
+                        {distancia(previsaoDestino.metros)}
+                      </Text>
+                    ) : rota && !rota.disponivel && rota.mensagem ? (
+                      <Text style={styles.direcoesSub} maxFontSizeMultiplier={maxFontSizeMultiplier} numberOfLines={1}>
+                        {rota.mensagem}
+                      </Text>
+                    ) : null}
+                    <Text style={styles.direcoesSub} maxFontSizeMultiplier={maxFontSizeMultiplier} numberOfLines={1}>
+                      {destinoSeguinte ? `Depois: ${rotuloSeguinte}` : 'Esta é a última parada com alunos.'}
+                    </Text>
+                    {previsaoDestino && (
+                      <View style={styles.navegar}>
+                        <ChipAcao label="Abrir no Maps" onPress={() => navegar('maps')} />
+                        <ChipAcao label="Abrir no Waze" onPress={() => navegar('waze')} />
+                      </View>
+                    )}
+                  </View>
                 </View>
-              </View>
+              )}
 
               <ProgressBar
                 value={progressoValor}
@@ -390,9 +544,9 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
           )}
           {emAndamento && (
             <View style={styles.linha}>
-              <Button size="icon" variant="secondary" icon="chevron-left" accessibilityLabel="Destino anterior" disabled={indice <= 0} onPress={() => irPara(indice - 1)} />
+              <Button size="icon" variant="secondary" icon="chevron-left" accessibilityLabel="Destino anterior" disabled={indiceAnterior === undefined} onPress={() => irPara(indiceAnterior)} />
               <Button label="Alterar viagem" icon="shuffle" variant="secondary" size="md" style={styles.flex} disabled={!online} onPress={() => viagemDiaId && navigation.navigate('DriverRouteOrder', { viagemDiaId, emExecucao: true })} />
-              <Button size="icon" variant="secondary" icon="chevron-right" accessibilityLabel="Próximo destino" disabled={indice >= destinos.length - 1} onPress={() => irPara(indice + 1)} />
+              <Button size="icon" variant="secondary" icon="chevron-right" accessibilityLabel="Próximo destino" disabled={indiceProximo === undefined} onPress={() => irPara(indiceProximo)} />
             </View>
           )}
 
@@ -407,7 +561,9 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                 cores={CORES_CARD.positivo}
                 onPress={() => setConfirmar({ aluno, novo: destinoEhEmbarque ? 'EMBARCADO' : 'DESEMBARCADO' })}
               />
-              <BotaoCard label="Faltou" icone="x" cores={CORES_CARD.negativo} onPress={() => setConfirmar({ aluno, novo: 'FALTOU' })} />
+              {podeRegistrarOffline(aluno.statusEmbarque, 'FALTOU') && (
+                <BotaoCard label="Faltou" icone="x" cores={CORES_CARD.negativo} onPress={() => setConfirmar({ aluno, novo: 'FALTOU' })} />
+              )}
             </View>
           )}
           {emAndamento && pendentesFim.length > 0 && (
@@ -415,6 +571,17 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
               Faltam {pendentesFim.length} aluno{pendentesFim.length === 1 ? '' : 's'} para finalizar.
               {!online ? ' Sem conexão: só embarque, desembarque e ausência podem ser registrados.' : ''}
             </Text>
+          )}
+          {emAndamento && pendentesFim.length > 0 && (
+            <Button
+              label="Interromper viagem"
+              icon="octagon"
+              variant="tertiary"
+              size="md"
+              disabled={!online}
+              fullWidth
+              onPress={() => setInterromperAberto(true)}
+            />
           )}
 
           {!emAndamento && destinos.length === 0 && (
@@ -427,7 +594,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                 <Button
                   label="Revisar e iniciar"
                   icon="play"
-                  onPress={() => navigation.navigate('DriverTripDay', { viagemId: activeViagemDia.viagemId!, data: execucao?.data ?? '', viagemDiaId })}
+                  onPress={() => navigation.navigate('DriverTripDetails', { viagemId: activeViagemDia.viagemId!, data: activeViagemDia.data })}
                   fullWidth
                 />
               ) : null}
@@ -481,6 +648,27 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
         loading={updatingTrip}
         onConfirm={(motivo) => alterarViagem('CANCELADA', motivo)}
         onCancel={() => setCancelarAberto(false)}
+      />
+
+      {/* Interromper: a viagem começou mas não pode continuar (pane, acidente, saúde). */}
+      <ReasonDialog
+        visible={interromperAberto}
+        title="Interromper a viagem?"
+        message="Use quando a viagem já começou e não pode continuar (pane, acidente, problema de saúde). O GPS é desligado e os responsáveis recebem o motivo."
+        confirmLabel="Interromper viagem"
+        loading={updatingTrip}
+        onConfirm={(motivo) => alterarViagem('INTERROMPIDA', motivo)}
+        onCancel={() => setInterromperAberto(false)}
+      />
+
+      <ParadaDetalhesModal
+        parada={detalhes}
+        ida={ida}
+        onClose={() => setDetalhes(null)}
+        onMensagem={(a) => {
+          setDetalhes(null);
+          mensagemAoResponsavel(a);
+        }}
       />
 
       <AvisoAtrasoModal
@@ -586,7 +774,10 @@ const styles = StyleSheet.create({
   direcoesTextos: { flex: 1, gap: 2 },
   direcoesTitulo: { ...typography.label, color: colors.surface },
   direcoesSub: { ...typography.caption, color: colors.slate500 },
+  direcoesEta: { ...typography.captionBold, color: colors.primary },
+  navegar: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   mapa: { flex: 2, overflow: 'hidden', position: 'relative' },
+  linhaArea: { flex: 1, justifyContent: 'center', gap: spacing.sm, paddingHorizontal: layout.screenMargin, backgroundColor: colors.background },
   mapaVoltar: { position: 'absolute', top: 0, left: 0, padding: layout.screenMargin, zIndex: 10, elevation: 10 },
   mapaChips: {
     position: 'absolute',

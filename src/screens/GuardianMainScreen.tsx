@@ -14,7 +14,8 @@ import { Grid, HighlightCard, HomeScroll, SectionTitle, homeStyles } from '../co
 import { Button, Card, ShortcutCard } from '../components/ui';
 import { ConviteResponsavelDTO, DependenteDTO, ResponsavelDTO, SolicitacaoDTO } from '../types';
 import { redeResponsaveisService } from '../services/redeResponsaveisService';
-import { calcularProgresso, luzStatus, maisRecente } from '../utils/progressoViagem';
+import { calcularProgresso, comPrevisaoDaRota, luzStatus, maisRecente } from '../utils/progressoViagem';
+import { useRotaViagem } from '../hooks/useRotaViagem';
 import { formatTime } from '../utils/format';
 import { isoToBrDate } from '../utils/masks';
 import { ageLabel } from '../utils/validators';
@@ -135,6 +136,8 @@ function CardViagemAluno({ dependente: d, vinculo, viagem, onAbrir, onAcompanhar
   const idade = ageLabel(isoToBrDate(d.dataNascimento));
   const hoje = execucaoDeHoje(viagem?.monitor ?? null);
   const execucao = viagem?.execucao ?? null;
+  // Rota do Google (com trânsito) da viagem em andamento; sem ela, vale a estimativa por paradas.
+  const rota = useRotaViagem(execucao?.id ?? null, execucao?.status === 'EM_ANDAMENTO');
   const periodo = execucao?.periodo ?? execucao?.viagem?.periodo ?? hoje?.periodoViagem ?? vinculo?.viagemPeriodo ?? null;
   const luz = vinculo || hoje ? luzStatus(execucao?.status ?? (hoje ? 'PLANEJADA' : null), hoje?.status ?? null, periodo) : null;
   const horaLuz = maisRecente(execucao?.dataUltimaAlteracaoStatus, hoje?.ultimaAlteracao, hoje?.horarioEmbarque, hoje?.horarioDesembarque);
@@ -149,7 +152,7 @@ function CardViagemAluno({ dependente: d, vinculo, viagem, onAbrir, onAcompanhar
           ultimosEventos: [execucao?.dataUltimaAlteracaoStatus, execucao?.ultimaAlteracao, hoje?.ultimaAlteracao],
         })
       : null;
-  const proxima = progresso?.proxima ?? null;
+  const proxima = comPrevisaoDaRota(progresso?.proxima ?? null, rota, d.id);
   const destaque = proxima?.paradasAntes === 0 && execucao?.status === 'EM_ANDAMENTO';
 
   const linhas = [

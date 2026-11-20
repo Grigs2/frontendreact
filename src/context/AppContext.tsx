@@ -66,16 +66,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [toast, setToast] = useState<ToastConfig>({ message: '', type: 'info', visible: false });
 
+  // Último valor lido do contador; null até a primeira leitura da sessão (não avisa o que já estava lá).
+  const ultimoContador = React.useRef<number | null>(null);
+
   const setCurrentUser = useCallback((user: AppUser | null, role: AppRole | null) => {
     setCurrentUserInternal(user);
     setUserRole(role);
-    if (!user) setUnreadCount(0);
+    if (!user) {
+      setUnreadCount(0);
+      ultimoContador.current = null;
+    }
   }, []);
 
   const updateNotifications = useCallback((notifs: NotificacaoDTO[]) => setNotifications(notifs), []);
   const refreshUnreadCount = useCallback(async () => {
     try {
-      setUnreadCount(await notificacaoService.contarNaoLidas());
+      const total = await notificacaoService.contarNaoLidas();
+      const anterior = ultimoContador.current;
+      ultimoContador.current = total;
+      setUnreadCount(total);
+      // Chegou algo desde a última leitura: avisa na hora, além do número no sino.
+      if (anterior !== null && total > anterior) {
+        const novas = total - anterior;
+        setToast({
+          message: `${novas === 1 ? 'Você tem 1 notificação nova' : `Você tem ${novas} notificações novas`}. Toque no sino para ver.`,
+          type: 'info',
+          visible: true,
+        });
+      }
     } catch {
       // Sem contador (rede ou backend antigo): o sino continua funcionando sem o número.
     }

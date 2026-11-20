@@ -12,7 +12,7 @@ import { useAppContext } from '../context/AppContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { viagemService } from '../services/viagemService';
 import { HistoricoOrdemParadaDTO, ParadaViagemDTO } from '../types';
-import { nomeParada } from '../utils/paradas';
+import { idaDasParadas, rotuloParada } from '../utils/paradas';
 import { formatDateTime } from '../utils/format';
 import { getApiErrorMessage } from '../utils/apiError';
 import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
@@ -94,12 +94,12 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
 
   const nomeDaParada = (id: number) => {
     const p = original.find((x) => x.id === id);
-    return p ? nomeParada(p) : `Parada ${id}`;
+    return p ? rotuloParada(p, idaDasParadas(original)) : `Parada ${id}`;
   };
 
   return (
     <DriverLayout>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <ScreenHeader
           title="Ordem das paradas"
           subtitle={emExecucao ? 'Viagem em andamento: só as paradas restantes' : 'Defina a sequência antes de iniciar'}
@@ -129,7 +129,7 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
                       <Text style={styles.orderText} maxFontSizeMultiplier={maxFontSizeMultiplier}>{i + 1}</Text>
                     </View>
                     <View style={styles.flex}>
-                      <Text style={styles.title} maxFontSizeMultiplier={maxFontSizeMultiplier}>{nomeParada(p)}</Text>
+                      <Text style={styles.title} maxFontSizeMultiplier={maxFontSizeMultiplier}>{rotuloParada(p, idaDasParadas(original))}</Text>
                       <Text style={styles.caption} numberOfLines={2} maxFontSizeMultiplier={maxFontSizeMultiplier}>
                         {p.listaDependentes.length ? p.listaDependentes.map((d) => d.nomeDependente).join(', ') : p.endereco}
                       </Text>
@@ -142,7 +142,7 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
                           size="icon"
                           variant="tertiary"
                           icon="arrow-up"
-                          accessibilityLabel={`Subir ${nomeParada(p)}`}
+                          accessibilityLabel={`Subir ${rotuloParada(p, idaDasParadas(original))}`}
                           onPress={() => mover(i, -1)}
                           disabled={i === 0 || travada(ordem[i - 1], i - 1)}
                         />
@@ -150,7 +150,7 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
                           size="icon"
                           variant="tertiary"
                           icon="arrow-down"
-                          accessibilityLabel={`Descer ${nomeParada(p)}`}
+                          accessibilityLabel={`Descer ${rotuloParada(p, idaDasParadas(original))}`}
                           onPress={() => mover(i, 1)}
                           disabled={i === ordem.length - 1 || travada(ordem[i + 1], i + 1)}
                         />
@@ -166,20 +166,6 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
                 {alteradas} parada(s) mudam de posição.
               </Text>
             )}
-            <View style={styles.actions}>
-              <Button
-                label="Salvar ordem"
-                icon="check"
-                onPress={salvar}
-                loading={salvando}
-                disabled={!alteradas || semId || !online}
-                fullWidth
-              />
-              {alteradas > 0 && (
-                <Button label="Desfazer alterações" variant="tertiary" onPress={() => setOrdem(original)} disabled={salvando} fullWidth />
-              )}
-              {!online && <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>Reordenar exige conexão.</Text>}
-            </View>
 
             {historico.length > 0 && (
               <>
@@ -198,13 +184,39 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
           </>
         )}
       </ScrollView>
+
+      {!loading && !erro && (
+        <View style={styles.footer}>
+          <Button
+            label="Salvar ordem"
+            icon="check"
+            onPress={salvar}
+            loading={salvando}
+            disabled={!alteradas || semId || !online}
+            fullWidth
+          />
+          {alteradas > 0 && (
+            <Button label="Desfazer alterações" variant="tertiary" onPress={() => setOrdem(original)} disabled={salvando} fullWidth />
+          )}
+          {!online && <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>Reordenar exige conexão.</Text>}
+        </View>
+      )}
     </DriverLayout>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  scroll: { flex: 1 },
   content: { padding: layout.screenMargin, paddingBottom: spacing.xxl, width: '100%', maxWidth: 600, alignSelf: 'center', gap: spacing.lg },
+  footer: {
+    padding: layout.screenMargin,
+    gap: layout.buttonGap,
+    backgroundColor: colors.background,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
+  },
   card: { gap: 0 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
   divider: { borderTopWidth: 1, borderTopColor: colors.border },
@@ -215,5 +227,5 @@ const styles = StyleSheet.create({
   caption: { ...typography.caption, color: colors.slate500 },
   arrows: { flexDirection: 'row' },
   impact: { ...typography.body, color: colors.ink },
-  actions: { gap: layout.buttonGap },
 });
+

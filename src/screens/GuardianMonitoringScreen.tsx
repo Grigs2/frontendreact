@@ -17,7 +17,9 @@ import { INTERVALO_GPS_MS, localizacaoService } from '../services/localizacaoSer
 import { LocalizacaoViagemDTO, MonitoramentoDTO, MotoristaViagemDTO, ParadaViagemDTO, ResponsavelDTO, ViagemDiaDTO } from '../types';
 import MetroProgressMap from '../components/MetroProgressMap';
 import { ProximaInteracaoBox } from '../components/TripProgress';
-import { calcularProgresso } from '../utils/progressoViagem';
+import { calcularProgresso, comPrevisaoDaRota } from '../utils/progressoViagem';
+import { useRotaViagem } from '../hooks/useRotaViagem';
+import { distancia, linhaDaRota, tempoAte } from '../utils/rota';
 import { statusInfo } from '../utils/statusLabels';
 import { formatDate, formatDayShort, formatRelative, formatTime } from '../utils/format';
 import { maskPlate, maskPhone } from '../utils/masks';
@@ -40,6 +42,9 @@ export default function GuardianMonitoringScreen() {
   const [posicao, setPosicao] = useState<LocalizacaoViagemDTO | null>(null);
   const [paradas, setParadas] = useState<ParadaViagemDTO[]>([]);
   const [gpsAviso, setGpsAviso] = useState<string | null>(null);
+  // O backend pede o consentimento deste responsável antes de mostrar o veículo.
+  const [precisaAutorizar, setPrecisaAutorizar] = useState(false);
+  const [autorizando, setAutorizando] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -111,15 +116,25 @@ export default function GuardianMonitoringScreen() {
         const p = await localizacaoService.posicaoAtual(id);
         if (!ativo) return;
         setPosicao(p);
+        setPrecisaAutorizar(false);
         setGpsAviso(p ? null : 'Aguardando a primeira posição do veículo.');
       } catch (e) {
         if (!ativo) return;
         const st = getApiStatus(e);
+        const texto = getApiErrorMessage(e, '');
+        if (st === 409 && /^autorize/i.test(texto)) {
+          setPrecisaAutorizar(true);
+          setGpsAviso(null);
+          return;
+        }
+        setPrecisaAutorizar(false);
         setGpsAviso(
           st === 404
             ? 'Aguardando a primeira posição do veículo.'
             : st === 409 || st === 503 || st === 403
-              ? 'Localização indisponível para esta viagem.'
+              ? /motorista/i.test(texto)
+                ? 'O motorista ainda não ativou o compartilhamento da localização.'
+                : 'Localização indisponível para esta viagem.'
               : 'Não foi possível atualizar a localização. Tentaremos de novo em instantes.',
         );
       }
@@ -138,12 +153,39 @@ export default function GuardianMonitoringScreen() {
       clearInterval(timer);
       clearInterval(relogio);
     };
-  }, [emAndamento, isFocused, appAtivo, selecionado]);
+  }, [emAndamento, isFocused, appAtivo, selecionado, autorizando]);
+
+  const autorizarLocalizacao = async () => {
+    if (!selecionado) return;
+    setAutorizando(true);
+    try {
+      await localizacaoService.consentirDependente(selecionado, true);
+      setPrecisaAutorizar(false);
+      setGpsAviso('Aguardando a primeira posição do veículo.');
+    } catch (e) {
+      setGpsAviso(getApiErrorMessage(e, 'Não foi possível autorizar agora. Tente de novo.'));
+    } finally {
+      // Muda a dependência do efeito acima, que busca a posição de novo na hora.
+      setAutorizando(false);
+    }
+  };
 
   const aluno = dependentes.find((d) => d.id === selecionado);
   const atual = monitor?.statusAtual ?? null;
   const presenca = statusInfo('presenca', atual?.status);
   const viagemInfo = statusInfo('viagemDia', execucao?.status);
+  // Rota e previsão (estilo Uber): só o trecho até a parada deste aluno. Rebusca a cada mudança de embarque.
+  const rota = useRotaViagem(
+    viagemDiaRef.current,
+    emAndamento && !precisaAutorizar && !!posicao,
+    null,
+    `${selecionado}-${atual?.status ?? ''}`,
+  );
+  const alvo = rota?.disponivel ? rota.paradas.find((p) => p.dependenteId === selecionado) ?? null : null;
+  const pontosMapa = alvo
+    ? [{ latitude: alvo.latitude, longitude: alvo.longitude, titulo: alvo.rotulo, destaque: true, icone: alvo.tipoParada === 'ESCOLA' ? ('book-open' as const) : ('home' as const) }]
+    : [];
+
   const historico = [...(monitor?.historicoRecente ?? [])].sort(
     (a, b) => new Date(b.ultimaAlteracao || b.data || 0).getTime() - new Date(a.ultimaAlteracao || a.data || 0).getTime(),
   );
@@ -159,11 +201,17 @@ export default function GuardianMonitoringScreen() {
           ultimosEventos: [execucao?.dataUltimaAlteracaoStatus, execucao?.ultimaAlteracao, atual?.ultimaAlteracao],
         })
       : null;
-  const proxima = emAndamento ? progresso?.proxima ?? null : null;
+  // Previsão: rota do Google (com trânsito) quando existir; senão, a estimativa por paradas.
+  const proxima = emAndamento ? comPrevisaoDaRota(progresso?.proxima ?? null, rota, selecionado) : null;
   const destaque = proxima?.paradasAntes === 0;
   // Sem posição (GPS desligado, sem consentimento ou sem sinal): o mapa dá lugar à linha de metrô.
   const semLocalizacao = emAndamento && !posicao && !!progresso;
-  const motivoSemLocalizacao = gpsAviso?.startsWith('Aguardando') ? 'Aguardando a localização' : 'Localização indisponível';
+  const motivoSemLocalizacao = precisaAutorizar
+    ? 'Autorize a localização abaixo'
+    : gpsAviso?.startsWith('Aguardando')
+      ? 'Aguardando a localização'
+      : 'Localização indisponível';
+  const mensagemMapa = precisaAutorizar ? 'Autorize abaixo para ver a perua no mapa.' : gpsAviso ?? 'Aguardando a posição do veículo';
 
   if (!dependentes.length) {
     return (
@@ -200,7 +248,10 @@ export default function GuardianMonitoringScreen() {
               posicao={posicaoMapa}
               ultimaAtualizacao={posicao?.recebidoEm}
               desatualizada={posicao?.desatualizada}
-              mensagem={gpsAviso ?? 'Aguardando a posição do veículo'}
+              mensagem={mensagemMapa}
+              rota={alvo ? linhaDaRota(rota) : []}
+              paradas={pontosMapa}
+              modo="enquadrar"
             />
           )}
           <View style={[styles.telaCheiaTopo, { paddingTop: insets.top + spacing.sm }]} pointerEvents="box-none">
@@ -239,8 +290,11 @@ export default function GuardianMonitoringScreen() {
             posicao={posicaoMapa}
             ultimaAtualizacao={posicao?.recebidoEm}
             desatualizada={posicao?.desatualizada}
-            mensagem={gpsAviso ?? 'Aguardando a posição do veículo'}
-            altura={220}
+            mensagem={mensagemMapa}
+            altura={280}
+            rota={alvo ? linhaDaRota(rota) : []}
+            paradas={pontosMapa}
+            modo="enquadrar"
             onPress={ampliarMapa}
           />
         ))}
@@ -295,6 +349,20 @@ export default function GuardianMonitoringScreen() {
                     .join(' · ') || 'Sem horários registrados ainda.'}
                 </Text>
               )}
+              {/* Previsão do Google em destaque só quando a faixa de próxima interação não pôde ser montada. */}
+              {emAndamento && alvo && !proxima && (
+                <View style={styles.previsao}>
+                  <Text style={styles.previsaoTempo} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                    {alvo.segundos < 60 ? 'Chegando agora' : `Chega em ${tempoAte(alvo.segundos)}`}
+                  </Text>
+                  <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                    {alvo.rotulo} · previsão {formatTime(alvo.previsaoChegada)} · {distancia(alvo.metros)}
+                  </Text>
+                </View>
+              )}
+              {emAndamento && !alvo && rota && !rota.disponivel && rota.mensagem && (
+                <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>{rota.mensagem}</Text>
+              )}
               {emAndamento && posicao && (
                 <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
                   Última localização {formatRelative(posicao.recebidoEm)} ({formatTime(posicao.recebidoEm)})
@@ -302,7 +370,19 @@ export default function GuardianMonitoringScreen() {
               )}
             </Card>
 
-            {emAndamento && (posicao?.desatualizada || gpsAviso) && (
+            {emAndamento && precisaAutorizar && (
+              <Card variant="alert" style={styles.autorizar}>
+                <Text style={styles.autorizarTitulo} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                  Ver a perua no mapa
+                </Text>
+                <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                  Autorize o compartilhamento da localização do transporte deste aluno. A posição só aparece durante a
+                  viagem em andamento, e você pode desligar quando quiser nos dados do aluno.
+                </Text>
+                <Button label="Permitir e ver no mapa" icon="map-pin" loading={autorizando} onPress={autorizarLocalizacao} fullWidth />
+              </Card>
+            )}
+            {emAndamento && !precisaAutorizar && (posicao?.desatualizada || gpsAviso) && (
               <Notice tone="warning" title="Localização">
                 {posicao?.desatualizada ? 'A localização está desatualizada. O veículo pode estar sem sinal.' : gpsAviso!}
               </Notice>
@@ -392,6 +472,10 @@ const styles = StyleSheet.create({
   topoComSino: { paddingRight: layout.bellReserve },
   // Mesmo recuo do botão voltar do ScreenHeader.
   voltar: { marginLeft: -spacing.md },
+  previsao: { gap: 2, paddingTop: spacing.xs },
+  previsaoTempo: { ...typography.title, color: colors.ink },
+  autorizar: { gap: spacing.sm },
+  autorizarTitulo: { ...typography.heading, color: colors.ink },
   content: { padding: layout.screenMargin, paddingBottom: spacing.xxl, width: '100%', maxWidth: 800, alignSelf: 'center', gap: spacing.lg },
   card: { gap: spacing.sm },
   histCard: { gap: spacing.xs },

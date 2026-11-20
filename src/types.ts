@@ -565,6 +565,37 @@ export interface EstadoConsentimentoLocalizacaoDTO {
   podeAtualizar: boolean;
 }
 
+/** Parada com previsão de chegada (GET /Viagem/ViagemDia/{id}/Rota). */
+export interface ParadaRotaDTO {
+  paradaId?: number | null;
+  ordem?: number | null;
+  tipoParada: 'MOTORISTA' | 'RESPONSAVEL' | 'ESCOLA';
+  rotulo: string;
+  latitude: number;
+  longitude: number;
+  /** Tempo estimado da posição atual do veículo até a parada, com trânsito. */
+  segundos: number;
+  metros: number;
+  previsaoChegada: string;
+  /** Só na visão do responsável: o aluno a que a parada se refere. */
+  dependenteId?: number | null;
+  acao?: 'EMBARQUE' | 'DESEMBARQUE' | null;
+}
+
+export interface RotaViagemDTO {
+  disponivel: boolean;
+  mensagem?: string | null;
+  calculadaEm: string;
+  origemLatitude?: number | null;
+  origemLongitude?: number | null;
+  /** Trechos no formato "encoded polyline" do Google. */
+  polylines: string[];
+  paradas: ParadaRotaDTO[];
+  /** Só para o motorista: próxima manobra (ex.: "Vire à direita na Rua X"). */
+  proximaInstrucao?: string | null;
+  metrosAteInstrucao?: number | null;
+}
+
 export interface LocalizacaoViagemDTO {
   idViagemDia: number;
   latitude: number;

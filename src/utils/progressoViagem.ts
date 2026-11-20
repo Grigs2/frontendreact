@@ -1,4 +1,4 @@
-import { ParadaViagemDTO, StatusViagemDia, StatusViagemPresenca } from '../types';
+import { ParadaViagemDTO, RotaViagemDTO, StatusViagemDia, StatusViagemPresenca } from '../types';
 import { StatusTone } from '../theme';
 
 /**
@@ -31,6 +31,11 @@ export interface ProximaInteracao {
   titulo: string;
   /** Rótulo do horário, ex.: "Chegada do motorista na sua casa". */
   rotuloHorario: string;
+  /** De onde vem o horário: rota do Google (com trânsito) ou estimativa por paradas (reserva). */
+  fonte?: 'rota' | 'estimativa';
+  /** Com a rota do Google: segundos até a parada e distância em metros. */
+  segundos?: number;
+  metros?: number;
 }
 
 export interface ProgressoViagem {
@@ -120,6 +125,7 @@ export function calcularProgresso({ paradas, dependenteId, dependenteNome, perio
         tipo,
         paradasAntes,
         estimativa: statusViagem === 'EM_ANDAMENTO' ? estimar(paradasAntes, ultimosEventos, agora) : null,
+        fonte: 'estimativa',
         titulo: TEXTOS[tipo].titulo(nome),
         rotuloHorario: TEXTOS[tipo].horario,
       };
@@ -177,4 +183,22 @@ export function luzStatus(statusViagem: StatusViagemDia | null | undefined, pres
 export function maisRecente(...valores: (string | null | undefined)[]): string | null {
   const t = valores.map((v) => (v ? new Date(v).getTime() : NaN)).filter((n) => !Number.isNaN(n));
   return t.length ? new Date(Math.max(...t)).toISOString() : null;
+}
+
+/**
+ * Previsão de chegada (decisão de 20/11/2026): usa a rota do Google, com trânsito, quando ela tem a parada
+ * do aluno; senão mantém a estimativa por paradas como reserva (sem GPS, sem rota ou rota indisponível).
+ */
+export function comPrevisaoDaRota(
+  proxima: ProximaInteracao | null,
+  rota: RotaViagemDTO | null | undefined,
+  dependenteId: number | null | undefined,
+): ProximaInteracao | null {
+  if (!proxima || !rota?.disponivel || !dependenteId) return proxima;
+  const acao = proxima.tipo === 'BUSCAR_EM_CASA' || proxima.tipo === 'EMBARCAR_NA_ESCOLA' ? 'EMBARQUE' : 'DESEMBARQUE';
+  const parada =
+    rota.paradas.find((p) => p.dependenteId === dependenteId && p.acao === acao) ??
+    rota.paradas.find((p) => p.dependenteId === dependenteId && !p.acao);
+  if (!parada?.previsaoChegada) return proxima;
+  return { ...proxima, estimativa: parada.previsaoChegada, fonte: 'rota', segundos: parada.segundos, metros: parada.metros };
 }

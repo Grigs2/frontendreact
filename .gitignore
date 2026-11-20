@@ -42,3 +42,6 @@ yarn-error.*
 
 # mockup (web prototype - não faz parte do build)
 mockup/
+
+# Credenciais locais (chaves, senhas). Nunca commitar: o repositório é público.
+*.local.md
