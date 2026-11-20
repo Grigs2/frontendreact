@@ -99,3 +99,15 @@
   4. Sino: abrir o popout, tocar numa notificação, "Marcar todas como lidas".
   5. Aceitar uma segunda viagem de manhã-ida para o mesmo aluno: aceite desabilitado; pela API, 409.
   6. Dois alunos no mesmo endereço: conferir "Embarque de Lucas, Ana".
+
+## Ajustes após o teste no Codespace (20/11/2026)
+
+| Tela | Antes | Agora |
+|---|---|---|
+| Acompanhar | Título "Acompanhar" com o nome do aluno | Só a seta de voltar e, com mais de um aluno, a escolha do aluno na mesma linha. Sem mapa no topo, a linha deixa espaço para o sino. |
+| Alunos | "+ Novo" ficava embaixo do sino flutuante | "+ Novo" fica à esquerda do sino (`layout.bellReserve`). |
+| Início | Marca "Tio da Perua" em duas linhas e arte de 96 px, desalinhadas dos títulos das outras abas | "Tio da Perua" no mesmo estilo e posição do título das outras abas (`typography.title`, topo da tela) e arte compacta (28 px) no lugar do subtítulo, com pino e perua menores. O espaço até o primeiro card é o mesmo do `ScreenHeader` (24 px). |
+
+Arquivos: `src/theme/index.ts` (`layout.bellReserve` = 56), `src/screens/GuardianMonitoringScreen.tsx`, `src/screens/GuardianDependentsScreen.tsx`, `src/components/HomeHeaderArt.tsx`.
+
+**Pendente:** registrar a arte compacta do cabeçalho no FigCraft (seção 07). A tentativa falhou por falta de créditos no EasyRunCraft; o `.figcraft` em `Docs/` continua com a versão anterior da arte.

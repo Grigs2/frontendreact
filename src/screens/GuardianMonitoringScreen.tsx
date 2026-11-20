@@ -9,7 +9,7 @@ import AbsenceModal from '../components/AbsenceModal';
 import ChoiceChips from '../components/ChoiceChips';
 import { InfoLine, Notice } from '../components/Feedback';
 import { SectionTitle } from '../components/HomeBlocks';
-import { Button, Card, Chip, ScreenHeader, StateView } from '../components/ui';
+import { Button, Card, Chip, StateView } from '../components/ui';
 import { useAppContext } from '../context/AppContext';
 import { responsavelService } from '../services/responsavelService';
 import { periodoLabel, viagemService } from '../services/viagemService';
@@ -249,22 +249,26 @@ export default function GuardianMonitoringScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
       >
-        <ScreenHeader title="Acompanhar" subtitle={aluno?.nome} onBack={() => navigation.goBack()} />
-
-        {dependentes.length > 1 && (
-          <ChoiceChips
-            scroll
-            options={dependentes.map((d) => ({ value: String(d.id), label: d.nome.split(' ')[0] }))}
-            value={selecionado ? String(selecionado) : null}
-            onChange={(v) => {
-              setSelecionado(Number(v));
-              setPosicao(null);
-              setMonitor(null);
-              setParadas([]);
-            }}
-            accessibilityLabel="Aluno"
-          />
-        )}
+        {/* Topo: só voltar e a escolha do aluno (sem título), com espaço para o sino quando não há mapa. */}
+        <View style={[styles.topo, !emAndamento && styles.topoComSino]}>
+          <Button variant="tertiary" size="icon" icon="arrow-left" accessibilityLabel="Voltar" onPress={() => navigation.goBack()} style={styles.voltar} />
+          {dependentes.length > 1 && (
+            <View style={styles.flex}>
+              <ChoiceChips
+                scroll
+                options={dependentes.map((d) => ({ value: String(d.id), label: d.nome.split(' ')[0] }))}
+                value={selecionado ? String(selecionado) : null}
+                onChange={(v) => {
+                  setSelecionado(Number(v));
+                  setPosicao(null);
+                  setMonitor(null);
+                  setParadas([]);
+                }}
+                accessibilityLabel="Aluno"
+              />
+            </View>
+          )}
+        </View>
 
         {loading ? (
           <StateView kind="loading" title="Carregando..." />
@@ -384,6 +388,10 @@ const styles = StyleSheet.create({
   chipAcao: { minHeight: layout.minTouch, justifyContent: 'center', backgroundColor: colors.surface, borderWidth: borders.hairline, borderColor: colors.ink, borderRadius: radius.pill, paddingHorizontal: spacing.md },
   chipAcaoTexto: { ...typography.captionBold, color: colors.ink },
   cardDestaque: { borderColor: colors.primary, borderWidth: borders.alert },
+  topo: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  topoComSino: { paddingRight: layout.bellReserve },
+  // Mesmo recuo do botão voltar do ScreenHeader.
+  voltar: { marginLeft: -spacing.md },
   content: { padding: layout.screenMargin, paddingBottom: spacing.xxl, width: '100%', maxWidth: 800, alignSelf: 'center', gap: spacing.lg },
   card: { gap: spacing.sm },
   histCard: { gap: spacing.xs },

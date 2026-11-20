@@ -79,6 +79,8 @@ export const layout = {
   tabBar: 80,
   topAreaMax: 316,
   minTouch: 48,
+  /** Espaço à direita do cabeçalho ocupado pelo sino flutuante (48 + 8), para ações não ficarem embaixo dele. */
+  bellReserve: 56,
 } as const;
 
 // O design não usa sombras: superfícies são separadas por borda de 1px.

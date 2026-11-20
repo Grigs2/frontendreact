@@ -112,7 +112,12 @@ export default function GuardianDependentsScreen() {
             <ScreenHeader
               title="Alunos"
               subtitle="Quem você acompanha no transporte"
-              right={<Button label="Novo" icon="plus" size="md" accessibilityLabel="Cadastrar aluno" onPress={() => navigation.navigate('GuardianDependentForm')} />}
+              right={
+                // Fica à esquerda do sino flutuante, sem ficar embaixo dele.
+                <View style={styles.acaoTopo}>
+                  <Button label="Novo" icon="plus" size="md" accessibilityLabel="Cadastrar aluno" onPress={() => navigation.navigate('GuardianDependentForm')} />
+                </View>
+              }
             />
           }
           ListEmptyComponent={
@@ -139,6 +144,7 @@ export default function GuardianDependentsScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   container: { flex: 1, padding: layout.screenMargin, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  acaoTopo: { marginRight: layout.bellReserve },
   list: { paddingBottom: spacing.xl, gap: spacing.md },
   card: { gap: spacing.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },

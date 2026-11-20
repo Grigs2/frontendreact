@@ -82,7 +82,7 @@ Aguarde a mensagem de que o ambiente está pronto. Isso pode levar alguns minuto
 No terminal do codespace (`Terminal → New Terminal`), na pasta `/workspaces/BackEndJava`:
 
 ```bash
-./mvnw spring-boot:run
+./mvnw spring-boot:run -Dmaven.test.skip=true
 ```
 
 Espere aparecer `Started BackEndJavaApplication` (ou similar) nos logs. O Hibernate cria/atualiza as tabelas sozinho (`ddl-auto=update`).
@@ -120,6 +120,16 @@ https://<nome-do-codespace>-8080.app.github.dev/TioDaPerua/api/Autenticacao/Entr
 Uma resposta de método não permitido (GET) ou de erro de login (sem corpo) já mostra que a API está no ar. Para testar de verdade, use o login pelo frontend.
 
 > A documentação Swagger só aparece se `DOCS_ENABLED` estiver `true` (no `docker-compose.yml` ela já vem `true` no codespace).
+
+### 4.4 Criar contas e dados de teste (sem cadastrar nada à mão)
+
+No terminal do codespace do **backend**, na raiz do repositório:
+
+```bash
+bash scripts/preparar-ambiente-teste.sh
+```
+
+Ele cria escolas, motoristas, responsáveis, alunos, viagens, vínculos aceitos (um pendente em BH), GPS e viagens de hoje em andamento (SP com GPS; RJ sem GPS, para o mapa em linha de metrô). Contas e senha: `scripts/seed-perfis-teste/credenciais.txt` no backend. O que testar com cada conta: `scripts/seed-perfis-teste/README.md` do backend. Depois, entre no app do frontend com essas contas.
 
 ---
 
@@ -178,7 +188,7 @@ git checkout <nome-da-branch>
 git pull
 ```
 
-Depois, reinicie o serviço (backend: `Ctrl+C` e rode `./mvnw spring-boot:run` de novo; frontend: `Ctrl+C` e rode `npx expo start --web --port 8081` de novo). Se mudou dependência (`pom.xml` ou `package.json`), rode `./mvnw -q dependency:go-offline` ou `npm install` antes.
+Depois, reinicie o serviço (backend: `Ctrl+C` e rode `./mvnw spring-boot:run -Dmaven.test.skip=true` de novo; frontend: `Ctrl+C` e rode `npx expo start --web --port 8081` de novo). Se mudou dependência (`pom.xml` ou `package.json`), rode `./mvnw -q dependency:go-offline` ou `npm install` antes.
 
 - **Backend e frontend em branches diferentes:** tudo bem. Cada codespace tem sua própria branch. Só lembre que a URL da API no frontend aponta para o codespace do backend, não para uma branch.
 
@@ -197,7 +207,7 @@ Depois, reinicie o serviço (backend: `Ctrl+C` e rode `./mvnw spring-boot:run` d
 ## 8. Dia a dia (resumo)
 
 1. Abra https://github.com/codespaces e ligue o codespace do **backend**.
-2. Terminal: `./mvnw spring-boot:run`.
+2. Terminal: `./mvnw spring-boot:run -Dmaven.test.skip=true`.
 3. PORTS: porta 8080 **Public**. Copie o endereço.
 4. Ligue o codespace do **frontend**. Confira/atualize `.env.local`.
 5. Terminal: `npx expo start --web --port 8081`.
