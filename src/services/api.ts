@@ -205,6 +205,7 @@ export const API_ENDPOINTS = {
   atualizarLocalizacao: '/Viagem/Localizacao',
   localizacaoAtual: (idViagemDia: number) => `/Viagem/Localizacao/Atual/${idViagemDia}`,
   rotaViagemDia: (idViagemDia: number) => `/Viagem/ViagemDia/${idViagemDia}/Rota`,
+  linhaViagemDia: (idViagemDia: number) => `/Viagem/ViagemDia/${idViagemDia}/Linha`,
   historicoLocalizacao: (idViagemDia: number) => `/Viagem/Localizacao/Historico/${idViagemDia}`,
 
   // Sincronização offline de presença

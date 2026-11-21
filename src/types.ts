@@ -601,6 +601,28 @@ export interface RotaViagemDTO {
   metrosAteInstrucao?: number | null;
 }
 
+/** Uma estação da linha do responsável. Não depende do Google. */
+export interface LinhaParadaDTO {
+  /** Sequencial entre as paradas devolvidas (sem as de motorista), igual ao "Parada N" do motorista. */
+  ordem: number;
+  /** O backend não devolve paradas de motorista nesta linha. */
+  tipoParada: 'RESPONSAVEL' | 'ESCOLA';
+  acao: 'EMBARQUE' | 'DESEMBARQUE';
+  concluida: boolean;
+  /** Parada do próprio aluno. */
+  doFilho: boolean;
+  /** Só a escola e a parada do próprio aluno têm rótulo; nas outras casas vem null (mostra "Parada N"). */
+  rotulo?: string | null;
+}
+
+export interface LinhaViagemDTO {
+  disponivel: boolean;
+  mensagem?: string | null;
+  /** Ordem da parada que a perua está seguindo agora. */
+  indiceAtual?: number | null;
+  paradas: LinhaParadaDTO[];
+}
+
 export interface LocalizacaoViagemDTO {
   idViagemDia: number;
   latitude: number;
