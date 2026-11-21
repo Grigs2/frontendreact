@@ -21,6 +21,7 @@ import GuardianDependentsScreen from './src/screens/GuardianDependentsScreen';
 import GuardianDependentFormScreen from './src/screens/GuardianDependentFormScreen';
 import GuardianSearchDriverScreen from './src/screens/GuardianSearchDriverScreen';
 import GuardianMonitoringScreen from './src/screens/GuardianMonitoringScreen';
+import GuardianFullMapScreen from './src/screens/GuardianFullMapScreen';
 import NotificationListScreen from './src/screens/NotificationListScreen';
 import NotificationCreateScreen from './src/screens/NotificationCreateScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -131,6 +132,7 @@ export default function App() {
               <Stack.Screen name="GuardianInvites" component={GuardianInvitesScreen} />
               <Stack.Screen name="GuardianSearchDriver" component={GuardianSearchDriverScreen} />
               <Stack.Screen name="GuardianMonitoring" component={GuardianMonitoringScreen} />
+              <Stack.Screen name="GuardianFullMap" component={GuardianFullMapScreen} />
               <Stack.Screen name="NotificationList" component={NotificationListScreen} />
               <Stack.Screen name="NotificationCreate" component={NotificationCreateScreen} />
               <Stack.Screen name="GuardianDependents" component={GuardianDependentsScreen} />

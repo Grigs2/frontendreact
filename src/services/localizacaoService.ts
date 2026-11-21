@@ -3,6 +3,7 @@ import {
   AtualizarLocalizacaoDTO,
   ConsentimentoLocalizacaoDTO,
   EstadoConsentimentoLocalizacaoDTO,
+  LinhaViagemDTO,
   LocalizacaoViagemDTO,
   Page,
   RotaViagemDTO,
@@ -37,6 +38,9 @@ export const localizacaoService = {
   /** Rota e previsão de chegada. O motorista pode mandar a posição do aparelho para a rota sair dela. */
   rota: async (idViagemDia: number, posicao?: { latitude: number; longitude: number } | null): Promise<RotaViagemDTO> =>
     (await api.get(API_ENDPOINTS.rotaViagemDia(idViagemDia), { params: posicao ?? undefined })).data,
+  /** Linha de estações do responsável para o próprio aluno. Funciona sem o Google Maps. */
+  linha: async (idViagemDia: number, dependenteId: number): Promise<LinhaViagemDTO> =>
+    (await api.get(API_ENDPOINTS.linhaViagemDia(idViagemDia), { params: { dependenteId } })).data,
 
   estadoConsentimento: async (idViagemDia: number): Promise<EstadoConsentimentoLocalizacaoDTO> =>
     (await api.get(API_ENDPOINTS.consentimentoExecucao(idViagemDia))).data,

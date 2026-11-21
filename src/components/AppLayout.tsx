@@ -78,7 +78,7 @@ const PARENT_TAB: Record<string, string> = {
 };
 
 /** Telas sem sino e sem barra inferior, para ganhar espaço. */
-const TELAS_SEM_NAVEGACAO = ['DriverAttendance', 'DriverTripDetails', 'DriverRouteOrder'];
+const TELAS_SEM_NAVEGACAO = ['DriverAttendance', 'DriverTripDetails', 'DriverRouteOrder', 'GuardianFullMap'];
 
 /** Intervalo de atualização do contador do sino enquanto o app está aberto. */
 const CONTADOR_INTERVALO_MS = 60000;
@@ -93,7 +93,8 @@ export default function AppLayout({ role, children }: AppLayoutProps) {
   const route = useRoute();
   const insets = useSafeAreaInsets();
   const activeKey = PARENT_TAB[route.name] ?? route.name;
-  const semNavegacao = TELAS_SEM_NAVEGACAO.includes(route.name);
+  const telaCheia = (route.params as { telaCheia?: boolean } | undefined)?.telaCheia === true;
+  const semNavegacao = TELAS_SEM_NAVEGACAO.includes(route.name) || telaCheia;
   const showBell = role !== 'admin' && route.name !== 'NotificationList' && !semNavegacao;
   const { unreadCount, refreshUnreadCount } = useAppContext();
   const [popoutAberto, setPopoutAberto] = useState(false);

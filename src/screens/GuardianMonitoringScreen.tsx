@@ -5,6 +5,7 @@ import { useAreaToque, useNivelMapa } from '../hooks/useNivelMapa';
 import { useFocusEffect, useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import GuardianLayout from '../components/GuardianLayout';
 import TripMap from '../components/TripMap';
+import LinhaResponsavel from '../components/LinhaResponsavel';
 import AbsenceModal from '../components/AbsenceModal';
 import ChoiceChips from '../components/ChoiceChips';
 import { InfoLine, Notice } from '../components/Feedback';
@@ -14,7 +15,7 @@ import { useAppContext } from '../context/AppContext';
 import { responsavelService } from '../services/responsavelService';
 import { periodoLabel, viagemService } from '../services/viagemService';
 import { INTERVALO_GPS_MS, localizacaoService } from '../services/localizacaoService';
-import { LocalizacaoViagemDTO, MonitoramentoDTO, MotoristaViagemDTO, ParadaViagemDTO, ResponsavelDTO, ViagemDiaDTO } from '../types';
+import { LinhaViagemDTO, LocalizacaoViagemDTO, MonitoramentoDTO, MotoristaViagemDTO, ParadaViagemDTO, ResponsavelDTO, ViagemDiaDTO } from '../types';
 import MetroProgressMap from '../components/MetroProgressMap';
 import { ProximaInteracaoBox } from '../components/TripProgress';
 import { calcularProgresso, comPrevisaoDaRota } from '../utils/progressoViagem';
@@ -25,6 +26,17 @@ import { formatDate, formatDayShort, formatRelative, formatTime } from '../utils
 import { maskPlate, maskPhone } from '../utils/masks';
 import { getApiErrorMessage, getApiStatus } from '../utils/apiError';
 import { borders, colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
+
+const ALTURA_MAPA = 280;
+
+/** Chip pequeno sobre o mapa, igual ao da tela do motorista. */
+function ChipAcao({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={styles.chip}>
+      <Text style={styles.chipTexto} maxFontSizeMultiplier={maxFontSizeMultiplier}>{label}</Text>
+    </Pressable>
+  );
+}
 
 /** 3.7 e 7.2 — acompanhamento do aluno: estado da viagem, presença, motorista e localização ao vivo. */
 export default function GuardianMonitoringScreen() {
@@ -42,6 +54,11 @@ export default function GuardianMonitoringScreen() {
   const [posicao, setPosicao] = useState<LocalizacaoViagemDTO | null>(null);
   const [paradas, setParadas] = useState<ParadaViagemDTO[]>([]);
   const [gpsAviso, setGpsAviso] = useState<string | null>(null);
+  const [linha, setLinha] = useState<LinhaViagemDTO | null>(null);
+  const [linhaErro, setLinhaErro] = useState<string | null>(null);
+  const [linhaSemConsentimento, setLinhaSemConsentimento] = useState(false);
+  // null: automático (linha quando não há previsão do Google); true/false: escolha do responsável.
+  const [vistaLinha, setVistaLinha] = useState<boolean | null>(null);
   // O backend pede o consentimento deste responsável antes de mostrar o veículo.
   const [precisaAutorizar, setPrecisaAutorizar] = useState(false);
   const [autorizando, setAutorizando] = useState(false);
@@ -56,6 +73,11 @@ export default function GuardianMonitoringScreen() {
   // Mapa: 1 pequeno (topo), 2 tela cheia. Toque no mapa amplia; toque fora do mapa (sem botão) reduz.
   const { nivel: nivelMapa, setNivel: setNivelMapa, ampliar: ampliarMapa, reduzir: reduzirMapa } = useNivelMapa(1, 1);
   const areaFora = useAreaToque({ onToque: reduzirMapa });
+
+  // Informa o AppLayout para esconder barra inferior e sino durante a tela cheia.
+  useEffect(() => {
+    navigation.setParams({ telaCheia: nivelMapa === 2 });
+  }, [navigation, nivelMapa]);
 
   const load = useCallback(async () => {
     if (!selecionado) {
@@ -155,12 +177,51 @@ export default function GuardianMonitoringScreen() {
     };
   }, [emAndamento, isFocused, appAtivo, selecionado, autorizando]);
 
+  // Linha de estações: não usa o Google, então segue atualizada mesmo sem mapa.
+  useEffect(() => {
+    if (!emAndamento || !isFocused || !appAtivo || !selecionado || !viagemDiaRef.current) {
+      setLinha(null);
+      setLinhaErro(null);
+      setLinhaSemConsentimento(false);
+      return undefined;
+    }
+    let ativo = true;
+    const buscar = () => {
+      const id = viagemDiaRef.current;
+      if (!id) return;
+      localizacaoService
+        .linha(id, selecionado)
+        .then((l) => {
+          if (!ativo) return;
+          setLinhaErro(null);
+          setLinhaSemConsentimento(false);
+          setLinha(l);
+        })
+        .catch((e) => {
+          if (!ativo) return;
+          setLinha(null);
+          const st = getApiStatus(e);
+          const texto = getApiErrorMessage(e, '');
+          const semConsentimento = st === 409 && /^autorize/i.test(texto);
+          setLinhaSemConsentimento(semConsentimento);
+          setLinhaErro(semConsentimento ? null : getApiErrorMessage(e, 'Não foi possível carregar a linha agora.'));
+        });
+    };
+    buscar();
+    const timer = setInterval(buscar, INTERVALO_GPS_MS);
+    return () => {
+      ativo = false;
+      clearInterval(timer);
+    };
+  }, [emAndamento, isFocused, appAtivo, selecionado, autorizando]);
+
   const autorizarLocalizacao = async () => {
     if (!selecionado) return;
     setAutorizando(true);
     try {
       await localizacaoService.consentirDependente(selecionado, true);
       setPrecisaAutorizar(false);
+      setLinhaSemConsentimento(false);
       setGpsAviso('Aguardando a primeira posição do veículo.');
     } catch (e) {
       setGpsAviso(getApiErrorMessage(e, 'Não foi possível autorizar agora. Tente de novo.'));
@@ -185,6 +246,7 @@ export default function GuardianMonitoringScreen() {
   const pontosMapa = alvo
     ? [{ latitude: alvo.latitude, longitude: alvo.longitude, titulo: alvo.rotulo, destaque: true, icone: alvo.tipoParada === 'ESCOLA' ? ('book-open' as const) : ('home' as const) }]
     : [];
+  const linhaAtiva = emAndamento && (vistaLinha ?? (!alvo && !!linha));
 
   const historico = [...(monitor?.historicoRecente ?? [])].sort(
     (a, b) => new Date(b.ultimaAlteracao || b.data || 0).getTime() - new Date(a.ultimaAlteracao || a.data || 0).getTime(),
@@ -275,29 +337,46 @@ export default function GuardianMonitoringScreen() {
         </View>
       )}
 
-      {/* Topo fixo: mapa ao vivo, ou a linha de metrô quando não há localização. Tocar amplia para tela cheia. */}
-      {emAndamento &&
-        (semLocalizacao && progresso ? (
-          <MetroProgressMap
-            paradas={progresso.paradas}
-            indiceAtual={progresso.indiceAtual}
-            motivo={motivoSemLocalizacao}
-            altura={260}
-            onPress={ampliarMapa}
-          />
-        ) : (
-          <TripMap
-            posicao={posicaoMapa}
-            ultimaAtualizacao={posicao?.recebidoEm}
-            desatualizada={posicao?.desatualizada}
-            mensagem={mensagemMapa}
-            altura={280}
-            rota={alvo ? linhaDaRota(rota) : []}
-            paradas={pontosMapa}
-            modo="enquadrar"
-            onPress={ampliarMapa}
-          />
-        ))}
+      {/* Topo fixo: mapa ao vivo, ou a linha de metrô quando não há localização. A linha do aluno substitui o mapa quando ativada. Tocar no mapa amplia. */}
+      {emAndamento && (
+        <View style={styles.mapaArea}>
+          {linhaAtiva ? (
+            <View style={styles.linhaArea}>
+              {linha ? (
+                <LinhaResponsavel linha={linha} />
+              ) : (
+                <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                  {linhaSemConsentimento ? 'Autorize abaixo para ver a linha do aluno.' : linhaErro ?? 'Carregando a linha...'}
+                </Text>
+              )}
+            </View>
+          ) : semLocalizacao && progresso ? (
+            <MetroProgressMap
+              paradas={progresso.paradas}
+              indiceAtual={progresso.indiceAtual}
+              motivo={motivoSemLocalizacao}
+              altura={ALTURA_MAPA}
+              onPress={ampliarMapa}
+            />
+          ) : (
+            <TripMap
+              posicao={posicaoMapa}
+              ultimaAtualizacao={posicao?.recebidoEm}
+              desatualizada={posicao?.desatualizada}
+              mensagem={mensagemMapa}
+              altura={ALTURA_MAPA}
+              rota={alvo ? linhaDaRota(rota) : []}
+              paradas={pontosMapa}
+              modo="enquadrar"
+              onPress={ampliarMapa}
+            />
+          )}
+          <View style={styles.mapaChips} pointerEvents="box-none">
+            <ChipAcao label={linhaAtiva ? 'Ver mapa' : 'Ver linha'} onPress={() => setVistaLinha(!linhaAtiva)} />
+            {!linhaAtiva && <ChipAcao label="Tela cheia" onPress={() => setNivelMapa(2)} />}
+          </View>
+        </View>
+      )}
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -370,7 +449,7 @@ export default function GuardianMonitoringScreen() {
               )}
             </Card>
 
-            {emAndamento && precisaAutorizar && (
+            {emAndamento && (precisaAutorizar || linhaSemConsentimento) && (
               <Card variant="alert" style={styles.autorizar}>
                 <Text style={styles.autorizarTitulo} maxFontSizeMultiplier={maxFontSizeMultiplier}>
                   Ver a perua no mapa
@@ -449,6 +528,11 @@ export default function GuardianMonitoringScreen() {
 }
 
 const styles = StyleSheet.create({
+  mapaArea: { height: ALTURA_MAPA },
+  linhaArea: { flex: 1, justifyContent: 'center', padding: spacing.md, paddingBottom: 64, backgroundColor: colors.surface },
+  mapaChips: { position: 'absolute', bottom: spacing.md, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: spacing.sm, zIndex: 10, elevation: 10 },
+  chip: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.ink, borderRadius: radius.pill, paddingVertical: spacing.xs, paddingHorizontal: spacing.md },
+  chipTexto: { ...typography.captionBold, color: colors.ink },
   flex: { flex: 1 },
   telaCheia: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 20, elevation: 20, backgroundColor: colors.surface },
   telaCheiaTopo: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', paddingHorizontal: layout.screenMargin, zIndex: 30, elevation: 30 },
