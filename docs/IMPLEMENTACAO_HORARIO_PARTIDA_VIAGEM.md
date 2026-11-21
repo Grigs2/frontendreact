@@ -41,11 +41,16 @@ Ida e volta têm horários independentes. Cada viagem tem um único período, en
 
 1. **Criação:** o motorista informa o horário de partida ao criar a viagem. Se não informar, o back usa o padrão do turno da tabela acima.
 2. **Formato:** horário no formato `HH:mm` (24h), sem data e sem fuso (horário local da escola).
-3. **Alteração do padrão:** o motorista pode alterar o horário padrão da viagem. Isso afeta apenas datas futuras sem horário próprio.
+3. **Alteração do padrão:** o motorista pode alterar o horário padrão da viagem enquanto ela não estiver iniciada. Isso afeta apenas as execuções futuras que ainda não têm horário próprio. Cada execução é independente: alterar o horário de um dia não muda os demais dias.
+
+   Exemplo: a Viagem A tem padrão 07:00. No dia 21 o motorista muda para 08:00. Só o dia 21 fica com 08:00. Os dias futuros continuam com 07:00 até o motorista alterar na preparação de cada dia, ou alterar o padrão da viagem.
 4. **Alteração por dia:** o motorista pode definir o horário de partida de uma data específica, dentro da janela de preparação (hoje + 6 dias, igual à `agenda`).
 5. **Voltar ao padrão:** enviar horário vazio (`null`) no dia remove o horário próprio e volta a usar o padrão da viagem.
-6. **Viagens já existentes (backfill):** viagens ativas criadas antes desta mudança recebem o padrão do turno. Execuções de dia já criadas também passam a usar o padrão da viagem, sem gravar horário próprio.
-7. **Execução em andamento:** alterar o horário enquanto a viagem do dia está `EM_ANDAMENTO` ou `FINALIZADA` não é permitido.
+6. **Viagens já existentes (backfill na migração):** viagens ativas criadas antes desta mudança recebem o padrão do turno em `Viagem.horarioPartidaPadrao`. As execuções de dia (`ViagemDia`) já criadas também recebem o horário na migração, copiado do padrão da viagem.
+7. **Execução iniciada:** alterar o horário (padrão ou por dia) não é permitido para execuções `EM_ANDAMENTO` ou `FINALIZADA`.
+8. **Horário não bloqueia início:** o horário de partida é informativo. O motorista pode iniciar a viagem a qualquer momento, antes ou depois do horário.
+9. **Sem motivo:** alterar o horário de um dia não exige motivo.
+10. **Texto para o responsável:** o horário aparece como "previsto" (ex.: "Partida prevista às 07:00"), nunca como compromisso fixo.
 
 # Contrato de API (proposta)
 
@@ -104,7 +109,7 @@ O front já possui `horarioInicio`/`horarioFim` em `ViagemDiaDTO` (início e fim
 
 ## 5. Notificação (proposta)
 
-Ao iniciar a viagem do dia, a notificação aos responsáveis pode informar o horário de partida efetivo. Definir com o back o texto e se isso entra na mesma notificação de atraso (`avisarAtraso`) ou em uma nova.
+Ao iniciar a viagem do dia, a notificação aos responsáveis informa o horário de partida efetivo (ex.: "Viagem iniciada. Partida prevista às 07:00."). Definir com o back se entra na notificação de início já existente ou em uma nova.
 
 # Impacto no Front
 
@@ -150,20 +155,23 @@ Ao iniciar a viagem do dia, a notificação aos responsáveis pode informar o ho
 
 - Entidade `Viagem`: novo campo `horarioPartidaPadrao` (`LocalTime`).
 - Entidade `ViagemDia`: novo campo `horarioPartida` (`LocalTime`, nullable).
-- Migração: adicionar colunas e preencher `Viagem.horarioPartidaPadrao` por turno para viagens existentes (7h / 12h / 17h).
+- Migração: adicionar colunas; preencher `Viagem.horarioPartidaPadrao` por turno para viagens ativas existentes (7h / 12h / 17h); copiar esse padrão para `ViagemDia.horarioPartida` das execuções já existentes.
+- Alteração do padrão: atualiza só execuções não iniciadas sem horário próprio. Nunca altera `ViagemDia` `EM_ANDAMENTO` ou `FINALIZADA`.
 - Regra de resolução do horário efetivo (seção "Conceitos") nos DTOs de agenda, dia, resumo e histórico.
 - Validação: `HH:mm` válido; não alterar execução `EM_ANDAMENTO` ou `FINALIZADA`; data dentro da janela de preparação.
 - Notificação de partida (se aprovada).
 - Endpoints de alteração (seção "Contrato de API").
 
-# Perguntas em aberto
+# Decisões (respostas do produto)
 
-1. O back já tem algum campo de horário de partida ou de saída em `Viagem` ou `ViagemDia`? (Não foi possível verificar: o repositório do back não está neste Codespace.)
-2. Alterar o horário padrão deve valer só para datas futuras, ou também para execuções já preparadas e ainda `PLANEJADA`? (Proposta atual: só as que não têm horário próprio.)
-3. Execuções de dia já criadas antes da mudança recebem o horário na migração, ou só passam a usar o padrão ao resolver? (Proposta atual: resolver na leitura, sem gravar.)
-4. O horário de partida aparece para o responsável como "previsto" ou como compromisso fixo? Isso muda o texto da UI.
-5. A alteração por dia deve exigir motivo (como cancelar e interromper) ou é livre?
-6. O horário de partida deve entrar na notificação de início de viagem?
+1. Não existe campo de horário de partida no back hoje. Os campos são novos.
+2. Alterar o padrão da viagem vale para execuções não iniciadas e sem horário próprio. Cada execução é independente (ver regra 3).
+3. Execuções já existentes recebem o horário na migração (ver regra 6).
+4. Responsável vê "previsto".
+5. Alteração por dia não exige motivo.
+6. Horário entra na notificação de início.
+
+Horário de partida não bloqueia o início da viagem fora do horário.
 
 # Deploy
 
