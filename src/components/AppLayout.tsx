@@ -77,7 +77,7 @@ const PARENT_TAB: Record<string, string> = {
 };
 
 /** Telas sem sino e sem barra inferior, para ganhar espaço. */
-const TELAS_SEM_NAVEGACAO = ['DriverAttendance', 'DriverTripDetails', 'DriverRouteOrder'];
+const TELAS_SEM_NAVEGACAO = ['DriverAttendance', 'DriverTripDetails', 'DriverRouteOrder', 'GuardianFullMap'];
 
 /** Intervalo de atualização do contador do sino enquanto o app está aberto. */
 const CONTADOR_INTERVALO_MS = 60000;

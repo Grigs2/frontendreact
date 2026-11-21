@@ -41,6 +41,7 @@ export type RootStackParamList = {
   GuardianHelp: undefined;
   GuardianSearchDriver: undefined;
   GuardianMonitoring: { dependenteId: number };
+  GuardianFullMap: { dependenteId: number; viagemDiaId: number };
   NotificationList: undefined;
   NotificationCreate: NotificationCreateParams | undefined;
   SchoolMain: undefined;
