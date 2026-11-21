@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import GuardianLayout from '../components/GuardianLayout';
 import TripMap from '../components/TripMap';
@@ -20,7 +20,18 @@ import { statusInfo } from '../utils/statusLabels';
 import { formatDate, formatDayShort, formatRelative, formatTime } from '../utils/format';
 import { maskPlate, maskPhone } from '../utils/masks';
 import { getApiErrorMessage, getApiStatus } from '../utils/apiError';
-import { colors, layout, maxFontSizeMultiplier, spacing, typography } from '../theme';
+import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
+
+const ALTURA_MAPA = 280;
+
+/** Chip pequeno sobre o mapa, igual ao da tela do motorista. */
+function ChipAcao({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={styles.chip}>
+      <Text style={styles.chipTexto} maxFontSizeMultiplier={maxFontSizeMultiplier}>{label}</Text>
+    </Pressable>
+  );
+}
 
 /** 3.7 e 7.2 — acompanhamento do aluno: estado da viagem, presença, motorista e localização ao vivo. */
 export default function GuardianMonitoringScreen() {
@@ -38,6 +49,8 @@ export default function GuardianMonitoringScreen() {
   const [posicao, setPosicao] = useState<LocalizacaoViagemDTO | null>(null);
   const [gpsAviso, setGpsAviso] = useState<string | null>(null);
   const [linha, setLinha] = useState<LinhaViagemDTO | null>(null);
+  // null: automático (linha quando não há previsão do Google); true/false: escolha do responsável.
+  const [vistaLinha, setVistaLinha] = useState<boolean | null>(null);
   // O backend pede o consentimento deste responsável antes de mostrar o veículo.
   const [precisaAutorizar, setPrecisaAutorizar] = useState(false);
   const [autorizando, setAutorizando] = useState(false);
@@ -193,6 +206,7 @@ export default function GuardianMonitoringScreen() {
   const pontosMapa = alvo
     ? [{ latitude: alvo.latitude, longitude: alvo.longitude, titulo: alvo.rotulo, destaque: true, icone: alvo.tipoParada === 'ESCOLA' ? ('book-open' as const) : ('home' as const) }]
     : [];
+  const linhaAtiva = emAndamento && (vistaLinha ?? (!alvo && !!linha));
 
   const historico = [...(monitor?.historicoRecente ?? [])].sort(
     (a, b) => new Date(b.ultimaAlteracao || b.data || 0).getTime() - new Date(a.ultimaAlteracao || a.data || 0).getTime(),
@@ -208,28 +222,34 @@ export default function GuardianMonitoringScreen() {
 
   return (
     <GuardianLayout>
-      {/* Topo fixo com o mapa quando há viagem em andamento */}
+      {/* Topo fixo com o mapa (ou a linha) quando há viagem em andamento */}
       {emAndamento && (
-        <TripMap
-          posicao={posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : null}
-          ultimaAtualizacao={posicao?.recebidoEm}
-          desatualizada={posicao?.desatualizada}
-          mensagem={precisaAutorizar ? 'Autorize abaixo para ver a perua no mapa.' : gpsAviso ?? 'Aguardando a posição do veículo'}
-          altura={280}
-          rota={alvo ? linhaDaRota(rota) : []}
-          paradas={pontosMapa}
-          modo="enquadrar"
-        />
-      )}
-      {emAndamento && !precisaAutorizar && viagemDiaRef.current && selecionado && (
-        <View style={styles.telaCheia} pointerEvents="box-none">
-          <Button
-            label="Tela cheia"
-            icon="maximize-2"
-            variant="secondary"
-            size="md"
-            onPress={() => navigation.navigate('GuardianFullMap', { dependenteId: selecionado, viagemDiaId: viagemDiaRef.current })}
-          />
+        <View style={styles.mapaArea}>
+          {linhaAtiva ? (
+            <View style={styles.linhaArea}>
+              {linha ? <LinhaResponsavel linha={linha} /> : <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>Carregando a linha...</Text>}
+            </View>
+          ) : (
+            <TripMap
+              posicao={posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : null}
+              ultimaAtualizacao={posicao?.recebidoEm}
+              desatualizada={posicao?.desatualizada}
+              mensagem={precisaAutorizar ? 'Autorize abaixo para ver a perua no mapa.' : gpsAviso ?? 'Aguardando a posição do veículo'}
+              altura={ALTURA_MAPA}
+              rota={alvo ? linhaDaRota(rota) : []}
+              paradas={pontosMapa}
+              modo="enquadrar"
+            />
+          )}
+          <View style={styles.mapaChips} pointerEvents="box-none">
+            <ChipAcao label={linhaAtiva ? 'Ver mapa' : 'Ver linha'} onPress={() => setVistaLinha(!linhaAtiva)} />
+            {!linhaAtiva && viagemDiaRef.current && selecionado && (
+              <ChipAcao
+                label="Tela cheia"
+                onPress={() => navigation.navigate('GuardianFullMap', { dependenteId: selecionado, viagemDiaId: viagemDiaRef.current })}
+              />
+            )}
+          </View>
         </View>
       )}
 
@@ -306,13 +326,6 @@ export default function GuardianMonitoringScreen() {
                 </Text>
               )}
             </Card>
-
-            {emAndamento && !alvo && linha && (
-              <Card style={styles.card}>
-                <Text style={styles.sectionCardTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>Linha da viagem</Text>
-                <LinhaResponsavel linha={linha} />
-              </Card>
-            )}
 
             {emAndamento && precisaAutorizar && (
               <Card variant="alert" style={styles.autorizar}>
@@ -392,7 +405,11 @@ export default function GuardianMonitoringScreen() {
 }
 
 const styles = StyleSheet.create({
-  telaCheia: { position: 'absolute', top: spacing.md, right: spacing.md, zIndex: 10 },
+  mapaArea: { height: ALTURA_MAPA },
+  linhaArea: { flex: 1, justifyContent: 'center', padding: spacing.md, paddingBottom: 64, backgroundColor: colors.surface },
+  mapaChips: { position: 'absolute', bottom: spacing.md, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: spacing.sm, zIndex: 10, elevation: 10 },
+  chip: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.ink, borderRadius: radius.pill, paddingVertical: spacing.xs, paddingHorizontal: spacing.md },
+  chipTexto: { ...typography.captionBold, color: colors.ink },
   previsao: { gap: 2, paddingTop: spacing.xs },
   previsaoTempo: { ...typography.title, color: colors.ink },
   autorizar: { gap: spacing.sm },
