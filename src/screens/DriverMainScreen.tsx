@@ -150,8 +150,7 @@ export default function DriverMainScreen() {
           {!carregando && proximaViagem && (
             <Button
               variant="secondary"
-              label="Próxima viagem"
-              icon="arrow-right"
+              label={proximaViagem.horarioPartida ? `Próxima viagem ${proximaViagem.horarioPartida}` : 'Próxima viagem'}
               iconPosition="right"
               onPress={() => navigation.navigate('DriverTrips')}
               fullWidth

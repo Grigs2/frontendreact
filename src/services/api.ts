@@ -119,6 +119,8 @@ export const API_ENDPOINTS = {
   listarViagens: (idMotorista: number) => `/Viagem/ListarViagens/${idMotorista}`,
   desativarViagem: (idViagem: number) => `/Viagem/DesativarViagem/${idViagem}`,
   atualizarNomeViagem: (idViagem: number) => `/Viagem/AtualizarNome/${idViagem}`,
+  alterarHorarioPartida: (idViagem: number) => `/Viagem/AlterarHorarioPartida/${idViagem}`,
+  alterarHorarioPartidaDia: (idViagem: number) => `/Viagem/AlterarHorarioPartidaDia/${idViagem}`,
   historicoViagens: (idMotorista: number) => `/Viagem/Historico/${idMotorista}`,
   consultarMotoristaViagem: (idViagemDia: number) => `/Viagem/ConsultarMotorista/${idViagemDia}`,
   
