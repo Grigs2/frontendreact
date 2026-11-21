@@ -23,7 +23,7 @@ GET /Viagem/ViagemDia/{viagemDiaId}/Linha?dependenteId={id}
   "indiceAtual": 2,
   "paradas": [
     { "ordem": 1, "tipoParada": "RESPONSAVEL", "acao": "EMBARQUE", "concluida": true,  "doFilho": false, "rotulo": null },
-    { "ordem": 2, "tipoParada": "RESPONSAVEL", "acao": "EMBARQUE", "concluida": false, "doFilho": true,  "rotulo": "Casa do Enzo" },
+    { "ordem": 2, "tipoParada": "RESPONSAVEL", "acao": "EMBARQUE", "concluida": false, "doFilho": true,  "rotulo": "Casa de Enzo" },
     { "ordem": 3, "tipoParada": "ESCOLA",      "acao": "DESEMBARQUE", "concluida": false, "doFilho": false, "rotulo": "Colégio X" }
   ]
 }
@@ -48,7 +48,7 @@ O responsável não pode ver endereço nem nome de outras famílias.
 
 - **`rotulo` é preenchido só em dois casos:**
   - `tipoParada = ESCOLA`: nome da escola;
-  - `doFilho = true`: `Casa do {primeiroNome}` do aluno consultado.
+  - `doFilho = true`: `Casa de {primeiroNome}` do aluno consultado.
 - **Nas outras casas, `rotulo` é `null`.** O app mostra "Parada N".
 - **Endereço nunca vai nesta resposta**, nem para a parada do aluno. O endereço fica no detalhe do aluno.
 - As coordenadas também não entram neste contrato. A posição da perua continua vindo de `GET /Viagem/Localizacao/Atual/{viagemDiaId}`.
