@@ -3,6 +3,7 @@ import { AppState, RefreshControl, ScrollView, StyleSheet, Text, View } from 're
 import { useFocusEffect, useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import GuardianLayout from '../components/GuardianLayout';
 import TripMap from '../components/TripMap';
+import LinhaResponsavel from '../components/LinhaResponsavel';
 import AbsenceModal from '../components/AbsenceModal';
 import ChoiceChips from '../components/ChoiceChips';
 import { InfoLine, Notice } from '../components/Feedback';
@@ -14,7 +15,7 @@ import { periodoLabel, viagemService } from '../services/viagemService';
 import { INTERVALO_GPS_MS, localizacaoService } from '../services/localizacaoService';
 import { useRotaViagem } from '../hooks/useRotaViagem';
 import { distancia, linhaDaRota, tempoAte } from '../utils/rota';
-import { LocalizacaoViagemDTO, MonitoramentoDTO, MotoristaViagemDTO, ResponsavelDTO, ViagemDiaDTO } from '../types';
+import { LinhaViagemDTO, LocalizacaoViagemDTO, MonitoramentoDTO, MotoristaViagemDTO, ResponsavelDTO, ViagemDiaDTO } from '../types';
 import { statusInfo } from '../utils/statusLabels';
 import { formatDate, formatDayShort, formatRelative, formatTime } from '../utils/format';
 import { maskPlate, maskPhone } from '../utils/masks';
@@ -36,6 +37,7 @@ export default function GuardianMonitoringScreen() {
   const [motorista, setMotorista] = useState<MotoristaViagemDTO | null>(null);
   const [posicao, setPosicao] = useState<LocalizacaoViagemDTO | null>(null);
   const [gpsAviso, setGpsAviso] = useState<string | null>(null);
+  const [linha, setLinha] = useState<LinhaViagemDTO | null>(null);
   // O backend pede o consentimento deste responsável antes de mostrar o veículo.
   const [precisaAutorizar, setPrecisaAutorizar] = useState(false);
   const [autorizando, setAutorizando] = useState(false);
@@ -138,6 +140,29 @@ export default function GuardianMonitoringScreen() {
     };
   }, [emAndamento, isFocused, appAtivo, selecionado, autorizando]);
 
+  // Linha de estações: não usa o Google, então segue atualizada mesmo sem mapa.
+  useEffect(() => {
+    if (!emAndamento || !isFocused || !appAtivo || !selecionado || !viagemDiaRef.current) {
+      setLinha(null);
+      return undefined;
+    }
+    let ativo = true;
+    const buscar = () => {
+      const id = viagemDiaRef.current;
+      if (!id) return;
+      localizacaoService
+        .linha(id, selecionado)
+        .then((l) => ativo && setLinha(l))
+        .catch(() => ativo && setLinha(null));
+    };
+    buscar();
+    const timer = setInterval(buscar, INTERVALO_GPS_MS);
+    return () => {
+      ativo = false;
+      clearInterval(timer);
+    };
+  }, [emAndamento, isFocused, appAtivo, selecionado]);
+
   const autorizarLocalizacao = async () => {
     if (!selecionado) return;
     setAutorizando(true);
@@ -195,6 +220,17 @@ export default function GuardianMonitoringScreen() {
           paradas={pontosMapa}
           modo="enquadrar"
         />
+      )}
+      {emAndamento && !precisaAutorizar && viagemDiaRef.current && selecionado && (
+        <View style={styles.telaCheia} pointerEvents="box-none">
+          <Button
+            label="Tela cheia"
+            icon="maximize-2"
+            variant="secondary"
+            size="md"
+            onPress={() => navigation.navigate('GuardianFullMap', { dependenteId: selecionado, viagemDiaId: viagemDiaRef.current })}
+          />
+        </View>
       )}
 
       <ScrollView
@@ -270,6 +306,13 @@ export default function GuardianMonitoringScreen() {
                 </Text>
               )}
             </Card>
+
+            {emAndamento && !alvo && linha && (
+              <Card style={styles.card}>
+                <Text style={styles.sectionCardTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>Linha da viagem</Text>
+                <LinhaResponsavel linha={linha} />
+              </Card>
+            )}
 
             {emAndamento && precisaAutorizar && (
               <Card variant="alert" style={styles.autorizar}>
@@ -349,6 +392,7 @@ export default function GuardianMonitoringScreen() {
 }
 
 const styles = StyleSheet.create({
+  telaCheia: { position: 'absolute', top: spacing.md, right: spacing.md, zIndex: 10 },
   previsao: { gap: 2, paddingTop: spacing.xs },
   previsaoTempo: { ...typography.title, color: colors.ink },
   autorizar: { gap: spacing.sm },
