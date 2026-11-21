@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
+import { NavigationBar } from 'expo-navigation-bar';
 import { useFonts, Inter_400Regular, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
 import { View, Platform } from 'react-native';
@@ -158,7 +159,9 @@ export default function App() {
           <TermsReacceptGate />
           <PushNotificationsHandler />
           <Toast />
-          <StatusBar style="dark" />
+          {/* No Android, barras ocultas; deslizar da borda as mostra por alguns segundos */}
+          {Platform.OS === 'android' && <NavigationBar hidden />}
+          <StatusBar style="dark" hidden={Platform.OS === 'android'} />
         </View>
         </ConnectivityProvider>
       </AppProvider>
