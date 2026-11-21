@@ -29,6 +29,21 @@ const PERIODO_LABEL: Record<string, string> = {
   NOITE: 'Noite',
 };
 
+/** Horário padrão de partida por período (HH:mm), usado na criação da viagem. */
+export const horarioPartidaPadrao = (periodo?: string | null): string => {
+  if (periodo?.startsWith('TARDE')) return '12:00';
+  if (periodo?.startsWith('NOITE')) return '17:00';
+  return '07:00';
+};
+
+export const HORARIO_PARTIDA_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Mantém só dígitos (até 4) e insere ':' automaticamente após as horas. */
+export const mascararHorarioPartida = (texto: string): string => {
+  const digitos = texto.replace(/\D/g, '').slice(0, 4);
+  return digitos.length <= 2 ? digitos : `${digitos.slice(0, 2)}:${digitos.slice(2)}`;
+};
+
 export const periodoLabel = (periodo?: string | null) => (periodo ? PERIODO_LABEL[periodo] ?? periodo.replace('_', ' ') : '');
 
 /** Nome exibido da viagem: o editado, ou o padrão de ida/volta com as escolas atendidas. */
@@ -45,15 +60,32 @@ export const viagemNome = (viagem?: Pick<ViagemDTO, 'nome' | 'escolas' | 'period
 };
 
 export const viagemService = {
-  criar: async (idMotorista: number, periodo: string, escolaIds: number[], nome?: string): Promise<ViagemDTO> => {
+  criar: async (idMotorista: number, periodo: string, escolaIds: number[], nome?: string, horarioPartida?: string): Promise<ViagemDTO> => {
     const escolas = escolaIds.map((id) => ({ id, nome: '' }));
-    const response = await api.post(API_ENDPOINTS.criarViagem(idMotorista), { periodo, escolas, nome: nome?.trim() || null });
+    const response = await api.post(API_ENDPOINTS.criarViagem(idMotorista), {
+      periodo,
+      escolas,
+      nome: nome?.trim() || null,
+      horarioPartida: horarioPartida ?? horarioPartidaPadrao(periodo),
+    });
     return response.data;
   },
 
   /** Nome vazio volta ao padrão de ida/volta. */
   atualizarNome: async (idViagem: number, nome: string): Promise<ViagemDTO> => {
     const response = await api.put(API_ENDPOINTS.atualizarNomeViagem(idViagem), { nome: nome.trim() || null });
+    return response.data;
+  },
+
+  /** Altera o horário padrão da viagem. Não muda execuções já iniciadas, passadas ou com horário próprio. */
+  alterarHorarioPartida: async (idViagem: number, horarioPartida: string): Promise<ViagemDTO> => {
+    const response = await api.put(API_ENDPOINTS.alterarHorarioPartida(idViagem), { horarioPartida });
+    return response.data;
+  },
+
+  /** Horário próprio de um dia (de hoje até 6 dias). `null` volta ao padrão da viagem. */
+  alterarHorarioPartidaDia: async (idViagem: number, data: string, horarioPartida: string | null): Promise<ViagemDiaDTO> => {
+    const response = await api.put(API_ENDPOINTS.alterarHorarioPartidaDia(idViagem), { data, horarioPartida });
     return response.data;
   },
 

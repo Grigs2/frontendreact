@@ -11,6 +11,7 @@ import { formatDayShort, formatTime, todayIso } from '../utils/format';
 import DriverLayout from '../components/DriverLayout';
 import AvisoAtrasoModal from '../components/AvisoAtrasoModal';
 import EditarNomeViagemModal from '../components/EditarNomeViagemModal';
+import EditarHorarioPartidaModal from '../components/EditarHorarioPartidaModal';
 import ParadaDetalhesModal from '../components/ParadaDetalhesModal';
 import { rotuloParada } from '../utils/paradas';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -53,6 +54,9 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
   const [eventosStatus, setEventosStatus] = useState<HistoricoViagemDiaDTO[]>([]);
   const [eventosPresenca, setEventosPresenca] = useState<HistoricoViagemPresencaDTO[]>([]);
   const [showAviso, setShowAviso] = useState(false);
+  const [horarioAjustado, setHorarioAjustado] = useState(false);
+  const [editandoHorario, setEditandoHorario] = useState(false);
+  const [savingHorario, setSavingHorario] = useState(false);
   const motoristaId = (currentUser as MotoristaDTO)?.id;
   // Mesma regra da presença: na ida o embarque é no aluno e o desembarque na escola.
   const ida = viagem?.periodo?.endsWith('IDA') ?? false;
@@ -85,12 +89,14 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
       setDiaViagem(diaFinal);
       setResumo(noHistorico ?? null);
       const idEncerrado = diaFinal?.idViagemDia && ENCERRADAS.includes(diaFinal.status ?? '') ? diaFinal.idViagemDia : null;
-      const [paradasDia, prontidao, eventos, presencas] = await Promise.all([
+      const [paradasDia, prontidao, eventos, presencas, execucao] = await Promise.all([
         diaFinal?.idViagemDia ? viagemService.buscarParadasViagemDia(diaFinal.idViagemDia).catch(() => []) : Promise.resolve([]),
         diaFinal?.idViagemDia && diaFinal.status === 'PLANEJADA' ? viagemService.prontidao(viagemId).catch(() => null) : Promise.resolve(null),
         idEncerrado ? viagemService.historicoStatus(idEncerrado).catch(() => []) : Promise.resolve([]),
         idEncerrado && diaFinal?.status === 'FINALIZADA' ? viagemService.historicoPresenca(idEncerrado).catch(() => []) : Promise.resolve([]),
+        diaFinal?.idViagemDia ? viagemService.visualizarViagemDia(diaFinal.idViagemDia).catch(() => null) : Promise.resolve(null),
       ]);
+      setHorarioAjustado(!!execucao?.horarioPartidaPersonalizado);
       setParadas(paradasDia);
       setPronta(prontidao ? prontidao.pronta : null);
       setEventosStatus(eventos);
@@ -103,6 +109,22 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
       setCarregado(true);
     }
   }, [viagemId, dataViagem, showToast, motoristaId]);
+
+  // Altera só a data aberta (null volta ao horário padrão da viagem).
+  const handleSalvarHorario = async (horario: string | null) => {
+    setSavingHorario(true);
+    try {
+      await viagemService.alterarHorarioPartidaDia(viagemId, dataViagem, horario);
+      showToast(horario ? 'Horário de partida deste dia atualizado.' : 'Dia voltou ao horário padrão da viagem.', 'success');
+      setEditandoHorario(false);
+      loadViagem();
+    } catch (error) {
+      console.error('Error changing departure time:', error);
+      showToast(getApiErrorMessage(error, 'Não foi possível alterar o horário de partida.'), 'error');
+    } finally {
+      setSavingHorario(false);
+    }
+  };
 
   const handleSalvarNome = async (nome: string) => {
     setSavingNome(true);
@@ -202,6 +224,7 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
   const encerrada = ENCERRADAS.includes(diaViagem?.status ?? '');
   const emAndamento = diaViagem?.status === 'EM_ANDAMENTO';
   const planejada = !diaViagem?.status || diaViagem.status === 'PLANEJADA';
+  const horarioDoDia = diaViagem?.horarioPartida ?? viagem.horarioPartida;
   const hoje = dataViagem === todayIso();
   const statusChip = encerrada
     ? statusInfo('viagemDia', diaViagem?.status)
@@ -260,9 +283,22 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
         <ScreenHeader
           title={viagemNome(viagem)}
-          subtitle={[formatDayShort(dataViagem), escolasNomes(viagem)].filter(Boolean).join(' - ')}
+          subtitle={[formatDayShort(dataViagem), horarioDoDia ? `saída ${horarioDoDia}` : null, escolasNomes(viagem)].filter(Boolean).join(' - ')}
           onBack={() => navigation.goBack()}
           onTitlePress={encerrada ? undefined : () => setShowEditarNome(true)}
+          titleAccessory={
+            !encerrada && planejada ? (
+              <Pressable
+                onPress={() => setEditandoHorario(true)}
+                disabled={loading || savingHorario}
+                accessibilityRole="button"
+                accessibilityLabel="Alterar horário de partida deste dia"
+                hitSlop={12}
+              >
+                <Feather name="clock" size={layout.icon} color={colors.slate500} />
+              </Pressable>
+            ) : undefined
+          }
           right={<Chip label={statusChip.label} tone={statusChip.tone} size="sm" />}
         />
 
@@ -337,6 +373,17 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
             )}
           </View>
         )}
+
+        <EditarHorarioPartidaModal
+          visible={editandoHorario}
+          title="Horário de partida deste dia"
+          description="Vale somente para esta data. Os demais dias continuam com o horário da viagem."
+          horarioAtual={horarioDoDia ?? '07:00'}
+          saving={savingHorario}
+          onSave={(horario) => handleSalvarHorario(horario)}
+          onRestaurarPadrao={horarioAjustado ? () => handleSalvarHorario(null) : undefined}
+          onClose={() => setEditandoHorario(false)}
+        />
 
         <ParadaDetalhesModal parada={detalhesParada} ida={ida} onClose={() => setDetalhesParada(null)} />
 

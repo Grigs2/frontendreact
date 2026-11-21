@@ -4,7 +4,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
-import { PERIODOS, periodoLabel, viagemNome, viagemService } from '../services/viagemService';
+import { PERIODOS, horarioPartidaPadrao, HORARIO_PARTIDA_REGEX, mascararHorarioPartida, periodoLabel, viagemNome, viagemService } from '../services/viagemService';
 import { motoristaService } from '../services/motoristaService';
 import { AgendaViagemDTO, EscolaBuscaDTO, MotoristaDTO, ViagemDTO, ViagemDiaResumoDTO } from '../types';
 import ChoiceChips, { ChoiceOption } from '../components/ChoiceChips';
@@ -52,6 +52,7 @@ export default function DriverTripsScreen() {
   const [searchingSchools, setSearchingSchools] = useState(false);
   const [schools, setSchools] = useState<EscolaBuscaDTO[]>([]);
   const [period, setPeriod] = useState<string>(PERIODOS[0]);
+  const [horarioPartida, setHorarioPartida] = useState<string>(horarioPartidaPadrao(PERIODOS[0]));
   const [nome, setNome] = useState('');
 
   // Agenda: janela de 7 dias (5.1.2–5.1.4, 5.1.7)
@@ -122,8 +123,14 @@ export default function DriverTripsScreen() {
     setSchoolQuery('');
     setSchoolResults([]);
     setPeriod(PERIODOS[0]);
+    setHorarioPartida(horarioPartidaPadrao(PERIODOS[0]));
     setNome('');
     setShowCreateModal(true);
+  };
+
+  const escolherPeriodo = (p: string) => {
+    setPeriod(p);
+    setHorarioPartida(horarioPartidaPadrao(p));
   };
 
   const toggleSchool = (s: EscolaBuscaDTO) => {
@@ -132,11 +139,13 @@ export default function DriverTripsScreen() {
 
   const usedPeriods = new Set(trips.filter((t) => t.ativo).map((t) => t.periodo));
 
+  const horarioValido = HORARIO_PARTIDA_REGEX.test(horarioPartida.trim());
+
   const handleCreateTrip = async () => {
-    if (!currentUser?.id || schools.length === 0) return;
+    if (!currentUser?.id || schools.length === 0 || !horarioValido) return;
     setCreating(true);
     try {
-      await viagemService.criar(currentUser.id, period, schools.map((s) => s.id), nome);
+      await viagemService.criar(currentUser.id, period, schools.map((s) => s.id), nome, horarioPartida.trim());
       setShowCreateModal(false);
       showToast('Viagem criada.', 'success');
       loadTrips();
@@ -222,7 +231,10 @@ export default function DriverTripsScreen() {
                     {periodoLabel(a.periodo)} · {formatDayShort(a.data)}
                   </Text>
                 </View>
-                <Chip label={info.label} tone={info.tone} size="sm" />
+                <View style={styles.tripAside}>
+                  {a.horarioPartida && <Chip label={a.horarioPartida} tone="info" size="sm" />}
+                  <Chip label={info.label} tone={info.tone} size="sm" />
+                </View>
               </View>
             </Card>
           );
@@ -320,7 +332,7 @@ export default function DriverTripsScreen() {
                         accessibilityState={{ selected, disabled: used }}
                         accessibilityLabel={`${periodoLabel(p)}${used ? ', já existe uma viagem ativa' : ''}`}
                         disabled={used}
-                        onPress={() => setPeriod(p)}
+                        onPress={() => escolherPeriodo(p)}
                         style={[styles.periodOption, selected && styles.periodSelected, used && styles.periodUsed]}
                       >
                         <Text style={[styles.periodText, selected && styles.periodTextSelected, used && styles.periodTextUsed]} maxFontSizeMultiplier={maxFontSizeMultiplier}>
@@ -336,7 +348,20 @@ export default function DriverTripsScreen() {
                   Veículo: {driver?.veiculoDTO?.modelo || '—'} · {driver?.veiculoDTO?.capacidade ?? '?'} lugares. A data é escolhida ao preparar cada viagem na agenda.
                 </Text>
 
-                <Text style={styles.label} maxFontSizeMultiplier={maxFontSizeMultiplier}>3. Nome da viagem</Text>
+                <Text style={styles.label} maxFontSizeMultiplier={maxFontSizeMultiplier}>3. Horário de partida</Text>
+                <TextField
+                  label="Horário (HH:mm)"
+                  value={horarioPartida}
+                  onChangeText={(texto) => setHorarioPartida(mascararHorarioPartida(texto))}
+                  keyboardType="number-pad"
+                  maxLength={5}
+                  error={horarioPartida.trim() && !horarioValido ? 'Use o formato HH:mm, ex.: 07:00.' : undefined}
+                />
+                <Text style={styles.hint} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                  Padrão do período. Você pode ajustar o horário depois, na preparação de cada viagem.
+                </Text>
+
+                <Text style={styles.label} maxFontSizeMultiplier={maxFontSizeMultiplier}>4. Nome da viagem</Text>
                 <TextField
                   label="Nome"
                   value={nome}
@@ -364,7 +389,7 @@ export default function DriverTripsScreen() {
                     icon="check"
                     onPress={handleCreateTrip}
                     loading={creating}
-                    disabled={schools.length === 0 || usedPeriods.has(period)}
+                    disabled={schools.length === 0 || usedPeriods.has(period) || !horarioValido}
                     fullWidth
                   />
                   <Button label="Cancelar" variant="tertiary" onPress={() => setShowCreateModal(false)} disabled={creating} fullWidth />
@@ -385,6 +410,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   footer: { paddingTop: spacing.md },
   tripRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  tripAside: { alignItems: 'flex-end', gap: spacing.xs },
   tripTitle: { ...typography.label, fontSize: 18, lineHeight: 24, color: colors.ink },
   tripCaption: { ...typography.caption, color: colors.slate500 },
   alert: { marginBottom: spacing.lg },

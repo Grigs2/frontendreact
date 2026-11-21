@@ -146,6 +146,7 @@ export interface ViagemDiaResumoDTO {
   faltas: number;
   inicio?: string | null;
   fim?: string | null;
+  horarioPartida?: string | null;
   motivo?: string | null;
 }
 
@@ -236,6 +237,8 @@ export interface ViagemDTO {
   escolas?: EscolaResumoDTO[] | null;
   /** Nome editável; se vazio, o servidor devolve o padrão de ida/volta com as escolas. */
   nome?: string | null;
+  /** Horário padrão de partida (HH:mm). Contrato: docs/IMPLEMENTACAO_HORARIO_PARTIDA_VIAGEM.md */
+  horarioPartida?: string | null;
 }
 
 export interface EscolaResumoDTO {
@@ -334,6 +337,10 @@ export interface ViagemDiaDTO {
   quantidadePassageiros?: number;
   horarioInicio?: string | null;
   horarioFim?: string | null;
+  /** Horário efetivo de partida (próprio do dia ou padrão da viagem), HH:mm. */
+  horarioPartida?: string | null;
+  /** true quando o dia tem horário próprio, diferente do padrão da viagem. */
+  horarioPartidaPersonalizado?: boolean;
 }
 
 export interface MonitoramentoItemDTO {
@@ -507,6 +514,8 @@ export interface AgendaViagemDTO {
   idViagemDia: number | null;
   status: StatusViagemDia | null;
   materializada: boolean;
+  /** Horário efetivo de partida do dia (HH:mm). */
+  horarioPartida?: string | null;
 }
 
 export interface ProntidaoViagemDTO {

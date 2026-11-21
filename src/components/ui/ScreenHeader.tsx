@@ -11,11 +11,13 @@ interface ScreenHeaderProps {
   right?: React.ReactNode;
   /** Torna o título editável: exibe um lápis ao lado e chama onTitlePress ao tocar. */
   onTitlePress?: () => void;
+  /** Ação ao lado do título (ex.: ícone), exibida após o lápis. */
+  titleAccessory?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }
 
 // Cabeçalho de tela: voltar (opcional) + título "title" do design + ação à direita.
-export default function ScreenHeader({ title, subtitle, onBack, right, onTitlePress, style }: ScreenHeaderProps) {
+export default function ScreenHeader({ title, subtitle, onBack, right, onTitlePress, titleAccessory, style }: ScreenHeaderProps) {
   const titleText = (
     <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={maxFontSizeMultiplier}>
       {title}
@@ -35,19 +37,22 @@ export default function ScreenHeader({ title, subtitle, onBack, right, onTitlePr
         />
       )}
       <View style={styles.texts}>
-        {onTitlePress ? (
-          <Pressable
-            onPress={onTitlePress}
-            accessibilityRole="button"
-            accessibilityLabel={`Editar ${title}`}
-            style={({ pressed }) => [styles.titleRow, pressed && styles.titlePressed]}
-          >
-            {titleText}
-            <Feather name="edit-2" size={layout.icon} color={colors.slate500} />
-          </Pressable>
-        ) : (
-          titleText
-        )}
+        <View style={styles.titleLine}>
+          {onTitlePress ? (
+            <Pressable
+              onPress={onTitlePress}
+              accessibilityRole="button"
+              accessibilityLabel={`Editar ${title}`}
+              style={({ pressed }) => [styles.titleRow, pressed && styles.titlePressed]}
+            >
+              {titleText}
+              <Feather name="edit-2" size={layout.icon} color={colors.slate500} />
+            </Pressable>
+          ) : (
+            titleText
+          )}
+          {titleAccessory}
+        </View>
         {!!subtitle && (
           <Text style={styles.subtitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>
             {subtitle}
@@ -77,6 +82,13 @@ const styles = StyleSheet.create({
     ...typography.title,
     color: colors.ink,
     flexShrink: 1,
+  },
+  titleLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
   },
   titleRow: {
     flexDirection: 'row',
