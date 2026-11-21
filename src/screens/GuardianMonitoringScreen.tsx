@@ -49,6 +49,8 @@ export default function GuardianMonitoringScreen() {
   const [posicao, setPosicao] = useState<LocalizacaoViagemDTO | null>(null);
   const [gpsAviso, setGpsAviso] = useState<string | null>(null);
   const [linha, setLinha] = useState<LinhaViagemDTO | null>(null);
+  const [linhaErro, setLinhaErro] = useState<string | null>(null);
+  const [linhaSemConsentimento, setLinhaSemConsentimento] = useState(false);
   // null: automático (linha quando não há previsão do Google); true/false: escolha do responsável.
   const [vistaLinha, setVistaLinha] = useState<boolean | null>(null);
   // O backend pede o consentimento deste responsável antes de mostrar o veículo.
@@ -157,6 +159,8 @@ export default function GuardianMonitoringScreen() {
   useEffect(() => {
     if (!emAndamento || !isFocused || !appAtivo || !selecionado || !viagemDiaRef.current) {
       setLinha(null);
+      setLinhaErro(null);
+      setLinhaSemConsentimento(false);
       return undefined;
     }
     let ativo = true;
@@ -165,8 +169,21 @@ export default function GuardianMonitoringScreen() {
       if (!id) return;
       localizacaoService
         .linha(id, selecionado)
-        .then((l) => ativo && setLinha(l))
-        .catch(() => ativo && setLinha(null));
+        .then((l) => {
+          if (!ativo) return;
+          setLinhaErro(null);
+          setLinhaSemConsentimento(false);
+          setLinha(l);
+        })
+        .catch((e) => {
+          if (!ativo) return;
+          setLinha(null);
+          const st = getApiStatus(e);
+          const texto = getApiErrorMessage(e, '');
+          const semConsentimento = st === 409 && /^autorize/i.test(texto);
+          setLinhaSemConsentimento(semConsentimento);
+          setLinhaErro(semConsentimento ? null : getApiErrorMessage(e, 'Não foi possível carregar a linha agora.'));
+        });
     };
     buscar();
     const timer = setInterval(buscar, INTERVALO_GPS_MS);
@@ -174,7 +191,7 @@ export default function GuardianMonitoringScreen() {
       ativo = false;
       clearInterval(timer);
     };
-  }, [emAndamento, isFocused, appAtivo, selecionado]);
+  }, [emAndamento, isFocused, appAtivo, selecionado, autorizando]);
 
   const autorizarLocalizacao = async () => {
     if (!selecionado) return;
@@ -182,6 +199,7 @@ export default function GuardianMonitoringScreen() {
     try {
       await localizacaoService.consentirDependente(selecionado, true);
       setPrecisaAutorizar(false);
+      setLinhaSemConsentimento(false);
       setGpsAviso('Aguardando a primeira posição do veículo.');
     } catch (e) {
       setGpsAviso(getApiErrorMessage(e, 'Não foi possível autorizar agora. Tente de novo.'));
@@ -227,7 +245,15 @@ export default function GuardianMonitoringScreen() {
         <View style={styles.mapaArea}>
           {linhaAtiva ? (
             <View style={styles.linhaArea}>
-              {linha ? <LinhaResponsavel linha={linha} /> : <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>Carregando a linha...</Text>}
+              {linha ? (
+                <LinhaResponsavel linha={linha} />
+              ) : (
+                <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                  {linhaSemConsentimento
+                    ? 'Autorize abaixo para ver a linha do aluno.'
+                    : linhaErro ?? 'Carregando a linha...'}
+                </Text>
+              )}
             </View>
           ) : (
             <TripMap
@@ -327,7 +353,7 @@ export default function GuardianMonitoringScreen() {
               )}
             </Card>
 
-            {emAndamento && precisaAutorizar && (
+            {emAndamento && (precisaAutorizar || linhaSemConsentimento) && (
               <Card variant="alert" style={styles.autorizar}>
                 <Text style={styles.autorizarTitulo} maxFontSizeMultiplier={maxFontSizeMultiplier}>
                   Ver a perua no mapa
