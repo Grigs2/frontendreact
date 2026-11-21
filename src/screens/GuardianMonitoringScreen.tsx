@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAreaToque, useNivelMapa } from '../hooks/useNivelMapa';
 import { useFocusEffect, useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import GuardianLayout from '../components/GuardianLayout';
 import TripMap from '../components/TripMap';
@@ -8,19 +10,22 @@ import AbsenceModal from '../components/AbsenceModal';
 import ChoiceChips from '../components/ChoiceChips';
 import { InfoLine, Notice } from '../components/Feedback';
 import { SectionTitle } from '../components/HomeBlocks';
-import { Button, Card, Chip, ScreenHeader, StateView } from '../components/ui';
+import { Button, Card, Chip, StateView } from '../components/ui';
 import { useAppContext } from '../context/AppContext';
 import { responsavelService } from '../services/responsavelService';
 import { periodoLabel, viagemService } from '../services/viagemService';
 import { INTERVALO_GPS_MS, localizacaoService } from '../services/localizacaoService';
+import { LinhaViagemDTO, LocalizacaoViagemDTO, MonitoramentoDTO, MotoristaViagemDTO, ParadaViagemDTO, ResponsavelDTO, ViagemDiaDTO } from '../types';
+import MetroProgressMap from '../components/MetroProgressMap';
+import { ProximaInteracaoBox } from '../components/TripProgress';
+import { calcularProgresso, comPrevisaoDaRota } from '../utils/progressoViagem';
 import { useRotaViagem } from '../hooks/useRotaViagem';
 import { distancia, linhaDaRota, tempoAte } from '../utils/rota';
-import { LinhaViagemDTO, LocalizacaoViagemDTO, MonitoramentoDTO, MotoristaViagemDTO, ResponsavelDTO, ViagemDiaDTO } from '../types';
 import { statusInfo } from '../utils/statusLabels';
 import { formatDate, formatDayShort, formatRelative, formatTime } from '../utils/format';
 import { maskPlate, maskPhone } from '../utils/masks';
 import { getApiErrorMessage, getApiStatus } from '../utils/apiError';
-import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
+import { borders, colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
 
 const ALTURA_MAPA = 280;
 
@@ -47,6 +52,7 @@ export default function GuardianMonitoringScreen() {
   const [execucao, setExecucao] = useState<ViagemDiaDTO | null>(null);
   const [motorista, setMotorista] = useState<MotoristaViagemDTO | null>(null);
   const [posicao, setPosicao] = useState<LocalizacaoViagemDTO | null>(null);
+  const [paradas, setParadas] = useState<ParadaViagemDTO[]>([]);
   const [gpsAviso, setGpsAviso] = useState<string | null>(null);
   const [linha, setLinha] = useState<LinhaViagemDTO | null>(null);
   const [linhaErro, setLinhaErro] = useState<string | null>(null);
@@ -63,6 +69,15 @@ export default function GuardianMonitoringScreen() {
   const [appAtivo, setAppAtivo] = useState(AppState.currentState === 'active');
   const [, setTick] = useState(0);
   const viagemDiaRef = useRef<number | null>(null);
+  const insets = useSafeAreaInsets();
+  // Mapa: 1 pequeno (topo), 2 tela cheia. Toque no mapa amplia; toque fora do mapa (sem botão) reduz.
+  const { nivel: nivelMapa, setNivel: setNivelMapa, ampliar: ampliarMapa, reduzir: reduzirMapa } = useNivelMapa(1, 1);
+  const areaFora = useAreaToque({ onToque: reduzirMapa });
+
+  // Informa o AppLayout para esconder barra inferior e sino durante a tela cheia.
+  useEffect(() => {
+    navigation.setParams({ telaCheia: nivelMapa === 2 });
+  }, [navigation, nivelMapa]);
 
   const load = useCallback(async () => {
     if (!selecionado) {
@@ -76,16 +91,19 @@ export default function GuardianMonitoringScreen() {
       const vdId = data?.statusAtual?.viagemDiaId ?? null;
       viagemDiaRef.current = vdId;
       if (vdId) {
-        const [exec, mot] = await Promise.all([
+        const [exec, mot, par] = await Promise.all([
           viagemService.visualizarViagemDia(vdId).catch(() => null),
           viagemService.consultarMotorista(vdId).catch(() => null),
+          viagemService.buscarParadasViagemDia(vdId).catch(() => [] as ParadaViagemDTO[]),
         ]);
         setExecucao(exec);
         setMotorista(mot);
+        setParadas(Array.isArray(par) ? par : []);
       } else {
         setExecucao(null);
         setMotorista(null);
         setPosicao(null);
+        setParadas([]);
       }
     } catch (e) {
       setErro(getApiErrorMessage(e, 'Não foi possível carregar o acompanhamento.'));
@@ -142,8 +160,12 @@ export default function GuardianMonitoringScreen() {
               : 'Não foi possível atualizar a localização. Tentaremos de novo em instantes.',
         );
       }
-      // Atualiza status/presença junto com a posição.
+      // Atualiza status/presença e o progresso das paradas junto com a posição.
       responsavelService.monitorar(selecionado!).then((m) => ativo && setMonitor(m)).catch(() => undefined);
+      viagemService
+        .buscarParadasViagemDia(id)
+        .then((par) => ativo && Array.isArray(par) && setParadas(par))
+        .catch(() => undefined);
     };
     buscar();
     const timer = setInterval(buscar, INTERVALO_GPS_MS);
@@ -229,6 +251,29 @@ export default function GuardianMonitoringScreen() {
   const historico = [...(monitor?.historicoRecente ?? [])].sort(
     (a, b) => new Date(b.ultimaAlteracao || b.data || 0).getTime() - new Date(a.ultimaAlteracao || a.data || 0).getTime(),
   );
+  const periodo = execucao?.periodo ?? execucao?.viagem?.periodo ?? atual?.periodoViagem ?? null;
+  const progresso =
+    selecionado && paradas.length
+      ? calcularProgresso({
+          paradas,
+          dependenteId: selecionado,
+          dependenteNome: aluno?.nome,
+          periodo,
+          statusViagem: execucao?.status ?? null,
+          ultimosEventos: [execucao?.dataUltimaAlteracaoStatus, execucao?.ultimaAlteracao, atual?.ultimaAlteracao],
+        })
+      : null;
+  // Previsão: rota do Google (com trânsito) quando existir; senão, a estimativa por paradas.
+  const proxima = emAndamento ? comPrevisaoDaRota(progresso?.proxima ?? null, rota, selecionado) : null;
+  const destaque = proxima?.paradasAntes === 0;
+  // Sem posição (GPS desligado, sem consentimento ou sem sinal): o mapa dá lugar à linha de metrô.
+  const semLocalizacao = emAndamento && !posicao && !!progresso;
+  const motivoSemLocalizacao = precisaAutorizar
+    ? 'Autorize a localização abaixo'
+    : gpsAviso?.startsWith('Aguardando')
+      ? 'Aguardando a localização'
+      : 'Localização indisponível';
+  const mensagemMapa = precisaAutorizar ? 'Autorize abaixo para ver a perua no mapa.' : gpsAviso ?? 'Aguardando a posição do veículo';
 
   if (!dependentes.length) {
     return (
@@ -238,9 +283,61 @@ export default function GuardianMonitoringScreen() {
     );
   }
 
+  const tituloStatus = !atual
+    ? 'Nenhuma viagem em andamento'
+    : atual.status === 'EMBARCADO'
+      ? `${aluno?.nome.split(' ')[0]} está no veículo`
+      : atual.status === 'DESEMBARCADO'
+        ? `${aluno?.nome.split(' ')[0]} desembarcou`
+        : atual.status === 'FALTOU'
+          ? 'Ausência registrada'
+          : 'Aguardando embarque';
+  const posicaoMapa = posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : null;
+
   return (
     <GuardianLayout>
-      {/* Topo fixo com o mapa (ou a linha) quando há viagem em andamento */}
+      <View style={styles.flex}>
+      {/* Tela cheia: mapa inteiro, card flutuante embaixo. Tocar no card (fora dos botões) reduz o mapa. */}
+      {emAndamento && nivelMapa === 2 && (
+        <View style={styles.telaCheia}>
+          {semLocalizacao && progresso ? (
+            <View style={[styles.flex, { paddingTop: insets.top + layout.minTouch + spacing.lg }]}>
+              <MetroProgressMap preencher paradas={progresso.paradas} indiceAtual={progresso.indiceAtual} motivo={motivoSemLocalizacao} />
+            </View>
+          ) : (
+            <TripMap
+              preencher
+              posicao={posicaoMapa}
+              ultimaAtualizacao={posicao?.recebidoEm}
+              desatualizada={posicao?.desatualizada}
+              mensagem={mensagemMapa}
+              rota={alvo ? linhaDaRota(rota) : []}
+              paradas={pontosMapa}
+              modo="enquadrar"
+            />
+          )}
+          <View style={[styles.telaCheiaTopo, { paddingTop: insets.top + spacing.sm }]} pointerEvents="box-none">
+            <Button size="icon" variant="secondary" icon="arrow-left" accessibilityLabel="Reduzir mapa" onPress={() => setNivelMapa(1)} />
+          </View>
+          <View style={[styles.cardFlutuante, { bottom: insets.bottom + spacing.md }]} {...areaFora.panHandlers}>
+            <View style={styles.rowBetween}>
+              <Chip label={execucao ? viagemInfo.label : 'Sem viagem agora'} tone={execucao ? viagemInfo.tone : 'neutral'} size="sm" />
+              <Pressable onPress={() => setNivelMapa(1)} accessibilityRole="button" accessibilityLabel="Reduzir mapa" style={styles.chipAcao}>
+                <Text style={styles.chipAcaoTexto} maxFontSizeMultiplier={maxFontSizeMultiplier}>Reduzir mapa</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.title} maxFontSizeMultiplier={maxFontSizeMultiplier}>{tituloStatus}</Text>
+            {proxima && <ProximaInteracaoBox proxima={proxima} />}
+            {posicao && (
+              <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+                Última localização {formatRelative(posicao.recebidoEm)} ({formatTime(posicao.recebidoEm)})
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* Topo fixo: mapa ao vivo, ou a linha de metrô quando não há localização. A linha do aluno substitui o mapa quando ativada. Tocar no mapa amplia. */}
       {emAndamento && (
         <View style={styles.mapaArea}>
           {linhaAtiva ? (
@@ -249,32 +346,34 @@ export default function GuardianMonitoringScreen() {
                 <LinhaResponsavel linha={linha} />
               ) : (
                 <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                  {linhaSemConsentimento
-                    ? 'Autorize abaixo para ver a linha do aluno.'
-                    : linhaErro ?? 'Carregando a linha...'}
+                  {linhaSemConsentimento ? 'Autorize abaixo para ver a linha do aluno.' : linhaErro ?? 'Carregando a linha...'}
                 </Text>
               )}
             </View>
+          ) : semLocalizacao && progresso ? (
+            <MetroProgressMap
+              paradas={progresso.paradas}
+              indiceAtual={progresso.indiceAtual}
+              motivo={motivoSemLocalizacao}
+              altura={ALTURA_MAPA}
+              onPress={ampliarMapa}
+            />
           ) : (
             <TripMap
-              posicao={posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : null}
+              posicao={posicaoMapa}
               ultimaAtualizacao={posicao?.recebidoEm}
               desatualizada={posicao?.desatualizada}
-              mensagem={precisaAutorizar ? 'Autorize abaixo para ver a perua no mapa.' : gpsAviso ?? 'Aguardando a posição do veículo'}
+              mensagem={mensagemMapa}
               altura={ALTURA_MAPA}
               rota={alvo ? linhaDaRota(rota) : []}
               paradas={pontosMapa}
               modo="enquadrar"
+              onPress={ampliarMapa}
             />
           )}
           <View style={styles.mapaChips} pointerEvents="box-none">
             <ChipAcao label={linhaAtiva ? 'Ver mapa' : 'Ver linha'} onPress={() => setVistaLinha(!linhaAtiva)} />
-            {!linhaAtiva && viagemDiaRef.current && selecionado && (
-              <ChipAcao
-                label="Tela cheia"
-                onPress={() => navigation.navigate('GuardianFullMap', { dependenteId: selecionado, viagemDiaId: viagemDiaRef.current })}
-              />
-            )}
+            {!linhaAtiva && <ChipAcao label="Tela cheia" onPress={() => setNivelMapa(2)} />}
           </View>
         </View>
       )}
@@ -283,21 +382,26 @@ export default function GuardianMonitoringScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
       >
-        <ScreenHeader title="Acompanhar" subtitle={aluno?.nome} onBack={() => navigation.goBack()} />
-
-        {dependentes.length > 1 && (
-          <ChoiceChips
-            scroll
-            options={dependentes.map((d) => ({ value: String(d.id), label: d.nome.split(' ')[0] }))}
-            value={selecionado ? String(selecionado) : null}
-            onChange={(v) => {
-              setSelecionado(Number(v));
-              setPosicao(null);
-              setMonitor(null);
-            }}
-            accessibilityLabel="Aluno"
-          />
-        )}
+        {/* Topo: só voltar e a escolha do aluno (sem título), com espaço para o sino quando não há mapa. */}
+        <View style={[styles.topo, !emAndamento && styles.topoComSino]}>
+          <Button variant="tertiary" size="icon" icon="arrow-left" accessibilityLabel="Voltar" onPress={() => navigation.goBack()} style={styles.voltar} />
+          {dependentes.length > 1 && (
+            <View style={styles.flex}>
+              <ChoiceChips
+                scroll
+                options={dependentes.map((d) => ({ value: String(d.id), label: d.nome.split(' ')[0] }))}
+                value={selecionado ? String(selecionado) : null}
+                onChange={(v) => {
+                  setSelecionado(Number(v));
+                  setPosicao(null);
+                  setMonitor(null);
+                  setParadas([]);
+                }}
+                accessibilityLabel="Aluno"
+              />
+            </View>
+          )}
+        </View>
 
         {loading ? (
           <StateView kind="loading" title="Carregando..." />
@@ -305,23 +409,14 @@ export default function GuardianMonitoringScreen() {
           <StateView kind="error" title="Não foi possível carregar" message={erro} actionLabel="Tentar novamente" onAction={() => { setLoading(true); load(); }} />
         ) : (
           <>
-            {/* card/status */}
-            <Card style={styles.card}>
+            {/* card/status — destacado quando o próximo evento da viagem é com o aluno */}
+            <Card style={[styles.card, destaque && styles.cardDestaque]}>
               <View style={styles.rowBetween}>
                 <Chip label={execucao ? viagemInfo.label : 'Sem viagem agora'} tone={execucao ? viagemInfo.tone : 'neutral'} size="sm" />
                 {atual && <Chip label={presenca.label} tone={presenca.tone} size="sm" />}
               </View>
-              <Text style={styles.title} maxFontSizeMultiplier={maxFontSizeMultiplier}>
-                {!atual
-                  ? 'Nenhuma viagem em andamento'
-                  : atual.status === 'EMBARCADO'
-                    ? `${aluno?.nome.split(' ')[0]} está no veículo`
-                    : atual.status === 'DESEMBARCADO'
-                      ? `${aluno?.nome.split(' ')[0]} desembarcou`
-                      : atual.status === 'FALTOU'
-                        ? 'Ausência registrada'
-                        : 'Aguardando embarque'}
-              </Text>
+              <Text style={styles.title} maxFontSizeMultiplier={maxFontSizeMultiplier}>{tituloStatus}</Text>
+              {proxima && <ProximaInteracaoBox proxima={proxima} />}
               {atual && (
                 <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>
                   {[
@@ -333,7 +428,8 @@ export default function GuardianMonitoringScreen() {
                     .join(' · ') || 'Sem horários registrados ainda.'}
                 </Text>
               )}
-              {emAndamento && alvo && (
+              {/* Previsão do Google em destaque só quando a faixa de próxima interação não pôde ser montada. */}
+              {emAndamento && alvo && !proxima && (
                 <View style={styles.previsao}>
                   <Text style={styles.previsaoTempo} maxFontSizeMultiplier={maxFontSizeMultiplier}>
                     {alvo.segundos < 60 ? 'Chegando agora' : `Chega em ${tempoAte(alvo.segundos)}`}
@@ -426,6 +522,7 @@ export default function GuardianMonitoringScreen() {
       {aluno?.id && (
         <AbsenceModal visible={ausencia} dependenteId={aluno.id} dependenteNome={aluno.nome} onClose={() => setAusencia(false)} />
       )}
+      </View>
     </GuardianLayout>
   );
 }
@@ -436,6 +533,29 @@ const styles = StyleSheet.create({
   mapaChips: { position: 'absolute', bottom: spacing.md, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: spacing.sm, zIndex: 10, elevation: 10 },
   chip: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.ink, borderRadius: radius.pill, paddingVertical: spacing.xs, paddingHorizontal: spacing.md },
   chipTexto: { ...typography.captionBold, color: colors.ink },
+  flex: { flex: 1 },
+  telaCheia: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 20, elevation: 20, backgroundColor: colors.surface },
+  telaCheiaTopo: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', paddingHorizontal: layout.screenMargin, zIndex: 30, elevation: 30 },
+  cardFlutuante: {
+    position: 'absolute',
+    left: layout.screenMargin,
+    right: layout.screenMargin,
+    backgroundColor: colors.surface,
+    borderWidth: borders.hairline,
+    borderColor: colors.border,
+    borderRadius: radius.card,
+    padding: layout.cardPadding,
+    gap: spacing.sm,
+    zIndex: 30,
+    elevation: 30,
+  },
+  chipAcao: { minHeight: layout.minTouch, justifyContent: 'center', backgroundColor: colors.surface, borderWidth: borders.hairline, borderColor: colors.ink, borderRadius: radius.pill, paddingHorizontal: spacing.md },
+  chipAcaoTexto: { ...typography.captionBold, color: colors.ink },
+  cardDestaque: { borderColor: colors.primary, borderWidth: borders.alert },
+  topo: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  topoComSino: { paddingRight: layout.bellReserve },
+  // Mesmo recuo do botão voltar do ScreenHeader.
+  voltar: { marginLeft: -spacing.md },
   previsao: { gap: 2, paddingTop: spacing.xs },
   previsaoTempo: { ...typography.title, color: colors.ink },
   autorizar: { gap: spacing.sm },

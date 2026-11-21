@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { Feather } from '@expo/vector-icons';
 import { Chip } from './ui';
@@ -27,6 +27,8 @@ export interface TripMapProps {
   altura?: number;
   /** Ocupa todo o espaço do pai (ignora altura). */
   preencher?: boolean;
+  /** Toque no mapa (usado para ampliar um nível: pequeno → tela cheia). */
+  onPress?: () => void;
   /** Linha da rota (já decodificada). */
   rota?: { latitude: number; longitude: number }[];
   /** Paradas a mostrar no mapa. */
@@ -49,6 +51,7 @@ export default function TripMap({
   rota = [],
   paradas = [],
   modo = 'seguir',
+  onPress,
 }: TripMapProps) {
   const ref = useRef<MapView>(null);
   const enquadrou = useRef('');
@@ -93,6 +96,7 @@ export default function TripMap({
           initialRegion={{ ...centro, latitudeDelta: 0.02, longitudeDelta: 0.02 }}
           toolbarEnabled={false}
           showsCompass={false}
+          onPress={onPress}
           onMapReady={() => {
             enquadrou.current = '';
           }}
@@ -118,11 +122,17 @@ export default function TripMap({
           )}
         </MapView>
       ) : (
-        <View style={styles.empty}>
+        <Pressable
+          style={styles.empty}
+          onPress={onPress}
+          disabled={!onPress}
+          accessibilityRole={onPress ? 'button' : undefined}
+          accessibilityHint={onPress ? 'Amplia o mapa' : undefined}
+        >
           <Text style={styles.emptyText} maxFontSizeMultiplier={maxFontSizeMultiplier}>
             {mensagem ?? 'Aguardando a primeira posição'}
           </Text>
-        </View>
+        </Pressable>
       )}
       {(ultimaAtualizacao || desatualizada) && (
         <View style={styles.badge} pointerEvents="none">

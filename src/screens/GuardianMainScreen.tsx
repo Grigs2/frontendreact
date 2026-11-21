@@ -1,46 +1,62 @@
 import React, { useCallback, useState } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import GuardianLayout from '../components/GuardianLayout';
+import HomeHeaderArt from '../components/HomeHeaderArt';
+import { ProximaInteracaoBox, StatusLight } from '../components/TripProgress';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { responsavelService } from '../services/responsavelService';
 import { periodoLabel } from '../services/viagemService';
-import { Greeting, Grid, HighlightCard, HomeScroll, SectionTitle, homeStyles, NotificacoesNovasCard } from '../components/HomeBlocks';
-import { Button, ShortcutCard } from '../components/ui';
-import { ConviteResponsavelDTO, MonitoramentoDTO, ResponsavelDTO } from '../types';
+import { acompanhamentoService, execucaoDeHoje, ViagemDoAluno } from '../services/acompanhamentoService';
+import { Grid, HighlightCard, HomeScroll, SectionTitle, homeStyles } from '../components/HomeBlocks';
+import { Button, Card, ShortcutCard } from '../components/ui';
+import { ConviteResponsavelDTO, DependenteDTO, ResponsavelDTO, SolicitacaoDTO } from '../types';
 import { redeResponsaveisService } from '../services/redeResponsaveisService';
-import { statusInfo } from '../utils/statusLabels';
-import { formatTime, todayIso } from '../utils/format';
+import { calcularProgresso, comPrevisaoDaRota, luzStatus, maisRecente } from '../utils/progressoViagem';
+import { useRotaViagem } from '../hooks/useRotaViagem';
+import { formatTime } from '../utils/format';
 import { isoToBrDate } from '../utils/masks';
 import { ageLabel } from '../utils/validators';
+import { borders, colors, maxFontSizeMultiplier, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GuardianMain'>;
 
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
-/** Início do responsável: um card por aluno (com ou sem transporte), convites que pedem resposta e atalhos. */
+/** Atualização do estado das viagens enquanto o Início está aberto. */
+const INTERVALO_ATUALIZACAO_MS = 30000;
+
+/**
+ * Início do responsável: arte do logo sobre o trilho de paradas, convites que pedem resposta e um card
+ * por aluno com a luz de status e a próxima interação da viagem. Sem atalhos que repetem a barra inferior.
+ */
 export default function GuardianMainScreen({ navigation }: Props) {
-  const { currentUser, pendingSolicitations, updateSolicitations, unreadCount } = useAppContext();
+  const { currentUser, pendingSolicitations, updateSolicitations } = useAppContext();
   const [convitesResp, setConvitesResp] = useState<ConviteResponsavelDTO[]>([]);
-  const [monitor, setMonitor] = useState<Record<number, MonitoramentoDTO>>({});
+  const [viagens, setViagens] = useState<Record<number, ViagemDoAluno>>({});
   const guardian = currentUser as ResponsavelDTO;
   const dependentes = guardian?.dependentes ?? [];
 
+  const carregarViagens = useCallback(() => {
+    Promise.all(
+      (guardian?.dependentes ?? []).filter((d) => d.id).map((d) =>
+        acompanhamentoService.carregar(d.id!).then((v) => [d.id!, v] as const),
+      ),
+    ).then((res) => setViagens(Object.fromEntries(res)));
+  }, [guardian?.dependentes]);
+
   useFocusEffect(
     useCallback(() => {
-      if (!guardian?.id) return;
+      if (!guardian?.id) return undefined;
       responsavelService.listarSolicitacoes(guardian.id).then(updateSolicitations).catch(() => undefined);
       redeResponsaveisService.pendentes().then(setConvitesResp).catch(() => setConvitesResp([]));
-      // Estado da viagem de hoje de cada aluno (3.2.2–3.2.4).
-      Promise.all(
-        (guardian.dependentes ?? []).filter((d) => d.id).map((d) =>
-          responsavelService.monitorar(d.id!).then((m) => [d.id!, m] as const).catch(() => null),
-        ),
-      ).then((res) => setMonitor(Object.fromEntries(res.filter(Boolean) as (readonly [number, MonitoramentoDTO])[])));
+      carregarViagens();
+      const timer = setInterval(carregarViagens, INTERVALO_ATUALIZACAO_MS);
+      return () => clearInterval(timer);
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [guardian?.id]),
+    }, [guardian?.id, carregarViagens]),
   );
 
   const convites = pendingSolicitations.filter((s) => !s.respondido && s.origem !== 'RESPONSAVEL');
@@ -50,8 +66,7 @@ export default function GuardianMainScreen({ navigation }: Props) {
     <GuardianLayout>
       <View style={homeStyles.wrapper}>
         <HomeScroll>
-          <Greeting name={guardian?.nome} subtitle="Acompanhe o transporte dos seus alunos." />
-          <NotificacoesNovasCard total={unreadCount} onPress={() => navigation.navigate('NotificationList')} />
+          <HomeHeaderArt />
 
           {convites.length > 0 && (
             <HighlightCard
@@ -83,54 +98,99 @@ export default function GuardianMainScreen({ navigation }: Props) {
               <Button label="Cadastrar aluno" variant="secondary" onPress={() => navigation.navigate('GuardianDependentForm')} fullWidth />
             </HighlightCard>
           ) : (
-            dependentes.map((d) => {
-              const vinculo = ativos.find((s) => s.dependenteId === d.id);
-              const idade = ageLabel(isoToBrDate(d.dataNascimento));
-              const atual = d.id ? monitor[d.id]?.statusAtual : null;
-              const hoje = atual && (atual.data === todayIso() || atual.status === 'EMBARCADO') ? atual : null;
-              const presenca = hoje ? statusInfo('presenca', hoje.status) : null;
-              return (
-                <HighlightCard
-                  key={d.id}
-                  chip={presenca ? `Hoje: ${presenca.label.toLowerCase()}` : vinculo ? 'Com transporte' : 'Sem transporte'}
-                  chipTone={presenca ? presenca.tone : vinculo ? 'success' : 'neutral'}
-                  icon="user"
-                  title={d.nome}
-                  lines={[
-                    [idade, d.escola?.nome].filter(Boolean).join(' · '),
-                    vinculo ? `${vinculo.viagemNome || 'Viagem'} · ${periodoLabel(vinculo.viagemPeriodo)} · ${vinculo.motoristaNome || ''}` : 'Ainda sem motorista.',
-                    hoje?.horarioEmbarque ? `Embarcou às ${formatTime(hoje.horarioEmbarque)}` : null,
-                    hoje?.horarioDesembarque ? `Desembarcou às ${formatTime(hoje.horarioDesembarque)}` : null,
-                  ]}
-                  onPress={d.id ? () => navigation.navigate('GuardianDependentDetail', { dependenteId: d.id! }) : undefined}
-                >
-                  <Button
-                    label={vinculo ? 'Acompanhar viagem' : 'Encontrar motorista'}
-                    icon={vinculo ? 'navigation' : 'search'}
-                    variant={vinculo ? 'primary' : 'secondary'}
-                    onPress={() =>
-                      vinculo
-                        ? navigation.navigate('GuardianMonitoring', { dependenteId: d.id! })
-                        : navigation.navigate('GuardianSearchDriver')
-                    }
-                    fullWidth
-                  />
-                </HighlightCard>
-              );
-            })
+            dependentes.map((d) => (
+              <CardViagemAluno
+                key={d.id}
+                dependente={d}
+                vinculo={ativos.find((s) => s.dependenteId === d.id)}
+                viagem={d.id ? viagens[d.id] : undefined}
+                onAbrir={() => d.id && navigation.navigate('GuardianDependentDetail', { dependenteId: d.id })}
+                onAcompanhar={() => d.id && navigation.navigate('GuardianMonitoring', { dependenteId: d.id })}
+                onBuscarMotorista={() => navigation.navigate('GuardianSearchDriver')}
+              />
+            ))
           )}
 
+          {/* Só o que não está na barra inferior (Alunos, Motoristas, Vínculos e Perfil já estão; Notificações fica no sino). */}
           <SectionTitle>Atalhos</SectionTitle>
           <Grid>
-            <ShortcutCard label="Alunos" icon="users" caption={plural(dependentes.length, 'cadastrado', 'cadastrados')} onPress={() => navigation.navigate('GuardianDependents')} />
-            <ShortcutCard label="Motoristas" icon="search" caption="Buscar próximos" onPress={() => navigation.navigate('GuardianSearchDriver')} />
-            <ShortcutCard label="Vínculos" icon="link" caption={plural(ativos.length, 'ativo', 'ativos')} onPress={() => navigation.navigate('GuardianInvites')} />
             <ShortcutCard label="Histórico" icon="clock" caption="Ver viagens" onPress={() => navigation.navigate('GuardianHistory')} />
-            <ShortcutCard label="Avisos" icon="bell" caption={unreadCount ? plural(unreadCount, 'não lido', 'não lidos') : 'Notificações'} onPress={() => navigation.navigate('NotificationList')} />
-            <ShortcutCard label="Perfil" icon="settings" caption="Conta e configurações" onPress={() => navigation.navigate('GuardianProfile')} />
           </Grid>
         </HomeScroll>
       </View>
     </GuardianLayout>
   );
 }
+
+interface CardProps {
+  dependente: DependenteDTO;
+  vinculo?: SolicitacaoDTO;
+  viagem?: ViagemDoAluno;
+  onAbrir: () => void;
+  onAcompanhar: () => void;
+  onBuscarMotorista: () => void;
+}
+
+/** Card da viagem de um aluno: luz de status no canto, dados do transporte e a próxima interação. */
+function CardViagemAluno({ dependente: d, vinculo, viagem, onAbrir, onAcompanhar, onBuscarMotorista }: CardProps) {
+  const idade = ageLabel(isoToBrDate(d.dataNascimento));
+  const hoje = execucaoDeHoje(viagem?.monitor ?? null);
+  const execucao = viagem?.execucao ?? null;
+  // Rota do Google (com trânsito) da viagem em andamento; sem ela, vale a estimativa por paradas.
+  const rota = useRotaViagem(execucao?.id ?? null, execucao?.status === 'EM_ANDAMENTO');
+  const periodo = execucao?.periodo ?? execucao?.viagem?.periodo ?? hoje?.periodoViagem ?? vinculo?.viagemPeriodo ?? null;
+  const luz = vinculo || hoje ? luzStatus(execucao?.status ?? (hoje ? 'PLANEJADA' : null), hoje?.status ?? null, periodo) : null;
+  const horaLuz = maisRecente(execucao?.dataUltimaAlteracaoStatus, hoje?.ultimaAlteracao, hoje?.horarioEmbarque, hoje?.horarioDesembarque);
+  const progresso =
+    d.id && viagem?.paradas.length
+      ? calcularProgresso({
+          paradas: viagem.paradas,
+          dependenteId: d.id,
+          dependenteNome: d.nome,
+          periodo,
+          statusViagem: execucao?.status ?? null,
+          ultimosEventos: [execucao?.dataUltimaAlteracaoStatus, execucao?.ultimaAlteracao, hoje?.ultimaAlteracao],
+        })
+      : null;
+  const proxima = comPrevisaoDaRota(progresso?.proxima ?? null, rota, d.id);
+  const destaque = proxima?.paradasAntes === 0 && execucao?.status === 'EM_ANDAMENTO';
+
+  const linhas = [
+    [idade, d.escola?.nome].filter(Boolean).join(' · '),
+    vinculo ? [vinculo.viagemNome || 'Viagem', periodoLabel(vinculo.viagemPeriodo), vinculo.motoristaNome].filter(Boolean).join(' · ') : 'Ainda sem motorista.',
+    !proxima && hoje?.horarioEmbarque ? `Embarcou às ${formatTime(hoje.horarioEmbarque)}` : null,
+    !proxima && hoje?.horarioDesembarque ? `Desembarcou às ${formatTime(hoje.horarioDesembarque)}` : null,
+  ].filter(Boolean) as string[];
+
+  return (
+    <Card
+      onPress={onAbrir}
+      style={destaque ? styles.cardDestaque : undefined}
+      accessibilityLabel={[d.nome, luz?.texto, ...linhas, proxima?.titulo].filter(Boolean).join('. ')}
+    >
+      <View style={styles.topo}>
+        <Text style={styles.nome} numberOfLines={1} maxFontSizeMultiplier={maxFontSizeMultiplier}>{d.nome}</Text>
+        {luz ? <StatusLight luz={luz} hora={horaLuz} /> : <StatusLight luz={{ tone: 'neutral', texto: 'Sem transporte' }} />}
+      </View>
+      {linhas.map((l) => (
+        <Text key={l} style={styles.linha} maxFontSizeMultiplier={maxFontSizeMultiplier}>{l}</Text>
+      ))}
+      {proxima && <ProximaInteracaoBox proxima={proxima} />}
+      <Button
+        label={vinculo ? 'Acompanhar viagem' : 'Encontrar motorista'}
+        icon={vinculo ? 'navigation' : 'search'}
+        variant={vinculo && destaque ? 'primary' : 'secondary'}
+        size="md"
+        onPress={vinculo ? onAcompanhar : onBuscarMotorista}
+        fullWidth
+      />
+    </Card>
+  );
+}
+
+const styles = StyleSheet.create({
+  cardDestaque: { borderColor: colors.primary, borderWidth: borders.alert },
+  topo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  nome: { ...typography.heading, color: colors.ink, flexShrink: 1 },
+  linha: { ...typography.caption, color: colors.slate700 },
+});

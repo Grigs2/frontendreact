@@ -288,6 +288,10 @@ export interface ContraparteDTO {
   avaliacaoMedia?: number | null;
   totalAvaliacoes?: number | null;
   aluno?: { nome: string; idade?: number | null; escola?: string | null; periodo?: string | null; bairro?: string | null; cidade?: string | null } | null;
+  /** CPF completo: só vem para o motorista com quem o responsável tem vínculo ativo. */
+  cpf?: string | null;
+  /** Solicitação aceita e não encerrada (backends antigos não enviam). */
+  vinculoAtivo?: boolean;
 }
 
 export interface EnderecoDependenteDTO {

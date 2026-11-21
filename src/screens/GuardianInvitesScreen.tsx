@@ -11,6 +11,7 @@ import { categoriaLabel, redeResponsaveisService } from '../services/redeRespons
 import { authService } from '../services/authService';
 import { statusInfo } from '../utils/statusLabels';
 import CounterpartModal from '../components/CounterpartModal';
+import { Notice } from '../components/Feedback';
 import { Button, Card, Chip, ScreenHeader, SegmentedControl, StateView } from '../components/ui';
 import { getApiErrorMessage } from '../utils/apiError';
 import { colors, layout, maxFontSizeMultiplier, spacing, typography } from '../theme';
@@ -89,6 +90,17 @@ export default function GuardianInvitesScreen() {
   const alunoNome = (s: SolicitacaoDTO) =>
     s.dependenteNome || guardian?.dependentes?.find((d) => d.id === s.dependenteId)?.nome || `Aluno #${s.dependenteId}`;
 
+  /**
+   * Vínculo ativo do mesmo aluno em outra viagem do mesmo período (ex.: duas de manhã-ida).
+   * As viagens se repetem todos os dias, então aceitar criaria duas viagens na mesma data e período.
+   * O backend também recusa (409); aqui o aceite fica bloqueado antes.
+   */
+  const conflitoDePeriodo = (s: SolicitacaoDTO) => {
+    const periodo = s.viagemPeriodo || s.periodo;
+    if (!periodo) return null;
+    return ativos.find((a) => a.dependenteId === s.dependenteId && a.viagemId !== s.viagemId && (a.viagemPeriodo || a.periodo) === periodo) ?? null;
+  };
+
   const respond = async (item: SolicitacaoDTO, aceito: boolean, compartilhamentoAutorizado = false) => {
     if (!item.id) return;
     setBusyId(item.id);
@@ -144,19 +156,26 @@ export default function GuardianInvitesScreen() {
         {item.dataInicio ? ` · desde ${formatDate(item.dataInicio)}` : ''}
       </Text>
       {tab === 'CONVITES' ? (
-        <View style={styles.actions}>
-          <Button label="Recusar" variant="secondary" size="md" onPress={() => respond(item, false)} disabled={busyId !== null} style={styles.flex} />
-          <Button
-            label="Ver e aceitar"
-            icon="user-check"
-            size="md"
-            onPress={() => setPendingAccept(item)}
-            loading={busyId === item.id}
-            disabled={busyId !== null}
-            style={styles.flex}
-            accessibilityLabel={`Ver dados do motorista ${item.motoristaNome || ''} e aceitar o convite`}
-          />
-        </View>
+        <>
+          {conflitoDePeriodo(item) && (
+            <Notice tone="warning" title="Período já ocupado">
+              {`${alunoNome(item).split(' ')[0]} já está na ${conflitoDePeriodo(item)!.viagemNome || 'viagem'} de ${periodoLabel(item.viagemPeriodo || item.periodo)}. Encerre esse transporte em "Ativos" antes de aceitar outra viagem do mesmo período.`}
+            </Notice>
+          )}
+          <View style={styles.actions}>
+            <Button label="Recusar" variant="secondary" size="md" onPress={() => respond(item, false)} disabled={busyId !== null} style={styles.flex} />
+            <Button
+              label="Ver e aceitar"
+              icon="user-check"
+              size="md"
+              onPress={() => setPendingAccept(item)}
+              loading={busyId === item.id}
+              disabled={busyId !== null || !!conflitoDePeriodo(item)}
+              style={styles.flex}
+              accessibilityLabel={`Ver dados do motorista ${item.motoristaNome || ''} e aceitar o convite`}
+            />
+          </View>
+        </>
       ) : (
         <Button
           label="Ver dados do motorista"

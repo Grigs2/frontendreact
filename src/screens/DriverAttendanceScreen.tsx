@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Linking, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useAreaToque } from '../hooks/useNivelMapa';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -299,12 +300,21 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
   const irPara = (novo: number | undefined) => {
     if (novo !== undefined) setIndiceManual(novo);
   };
-  const deslize = PanResponder.create({
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 24 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
-    onPanResponderRelease: (_, g) => {
-      if (g.dx < -50) irPara(indiceProximo);
-      else if (g.dx > 50) irPara(indiceAnterior);
-    },
+  // Mapa dinâmico: tocar no mapa amplia (pequeno → tela cheia); tocar fora do mapa, onde não há botão,
+  // reduz um nível (tela cheia → pequeno → oculto). Os botões Ocultar/Ver linha/Tela cheia continuam.
+  const ampliarMapa = () => {
+    if (mapaOculto) setMapaOculto(false);
+    else setTelaCheia(true);
+  };
+  const reduzirMapa = () => {
+    if (telaCheia) setTelaCheia(false);
+    else if (!mapaOculto) setMapaOculto(true);
+  };
+  // Fora do mapa: deslizar troca de aluno; tocar num ponto sem botão reduz o mapa.
+  const deslize = useAreaToque({
+    onToque: reduzirMapa,
+    onDeslizarEsquerda: () => irPara(indiceProximo),
+    onDeslizarDireita: () => irPara(indiceAnterior),
   });
 
   const mensagemAoResponsavel = (dependente: DependenteParadaDTO) =>
@@ -401,6 +411,7 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
                 rota={linhaRota}
                 paradas={pontosMapa}
                 modo="seguir"
+                onPress={ampliarMapa}
               />
             )}
             <View style={styles.mapaVoltar} pointerEvents="box-none">

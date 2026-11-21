@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Modal, View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Button, SegmentedControl, TextField } from './ui';
+import ChoiceChips from './ChoiceChips';
 import { responsavelService } from '../services/responsavelService';
 import { AusenciaDTO, TrechoAusencia } from '../types';
 import { useAppContext } from '../context/AppContext';
@@ -14,6 +15,8 @@ interface Props {
   dependenteNome: string;
   onClose: () => void;
   onChanged?: () => void;
+  /** Com mais de um, o responsável escolhe para qual aluno avisa a falta (começa em `dependenteId`). */
+  dependentes?: { id: number; nome: string }[];
 }
 
 /** Quantos dias aparecem para escolha (o backend aceita até 60). */
@@ -40,8 +43,11 @@ const TRECHO_LABEL: Record<TrechoAusencia, string> = { TODOS: 'Ida e volta', IDA
  * "Avisar falta": o responsável informa que o aluno não vai em um dia (ida, volta ou as duas).
  * O motorista e os outros responsáveis recebem um aviso, e o aluno entra como "faltou" na viagem desse dia.
  */
-export default function AbsenceModal({ visible, dependenteId, dependenteNome, onClose, onChanged }: Props) {
+export default function AbsenceModal({ visible, dependenteId: idInicial, dependenteNome: nomeInicial, onClose, onChanged, dependentes }: Props) {
   const { showToast } = useAppContext();
+  const [dependenteId, setDependenteId] = useState(idInicial);
+  const escolhaAluno = (dependentes?.length ?? 0) > 1;
+  const dependenteNome = dependentes?.find((d) => d.id === dependenteId)?.nome ?? nomeInicial;
   const dias = Array.from({ length: DIAS_VISIVEIS }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() + i);
@@ -62,6 +68,11 @@ export default function AbsenceModal({ visible, dependenteId, dependenteNome, on
       setAusencias([]);
     }
   }, [dependenteId]);
+
+  // Ao abrir, começa pelo aluno indicado pela tela.
+  useEffect(() => {
+    if (visible) setDependenteId(idInicial);
+  }, [visible, idInicial]);
 
   useEffect(() => {
     if (visible) {
@@ -107,7 +118,7 @@ export default function AbsenceModal({ visible, dependenteId, dependenteNome, on
         <View style={styles.content} accessibilityViewIsModal>
           <View style={styles.header}>
             <Text style={styles.title} maxFontSizeMultiplier={maxFontSizeMultiplier} accessibilityRole="header">
-              Avisar falta de {primeiroNome}
+              {escolhaAluno ? 'Avisar falta' : `Avisar falta de ${primeiroNome}`}
             </Text>
             <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Fechar" style={styles.fechar}>
               <Feather name="x" size={22} color={colors.ink} />
@@ -115,6 +126,19 @@ export default function AbsenceModal({ visible, dependenteId, dependenteNome, on
           </View>
 
           <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+            {escolhaAluno && (
+              <>
+                <Text style={styles.label}>Qual aluno?</Text>
+                <ChoiceChips
+                  scroll
+                  options={dependentes!.map((d) => ({ value: String(d.id), label: d.nome.split(' ')[0] }))}
+                  value={String(dependenteId)}
+                  onChange={(v) => setDependenteId(Number(v))}
+                  accessibilityLabel="Aluno"
+                />
+              </>
+            )}
+
             <Text style={styles.label}>Qual dia?</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dias}>
               {dias.map((d) => {
@@ -153,10 +177,10 @@ export default function AbsenceModal({ visible, dependenteId, dependenteNome, on
               O motorista e os outros responsáveis de {primeiroNome} recebem um aviso.
             </Text>
 
-            <Button label="Avisar falta" icon="send" onPress={enviar} loading={salvando} fullWidth />
+            <Button label={escolhaAluno ? `Avisar falta de ${primeiroNome}` : 'Avisar falta'} icon="send" onPress={enviar} loading={salvando} fullWidth />
 
             <View style={styles.lista}>
-              <Text style={styles.label}>Ausências avisadas</Text>
+              <Text style={styles.label}>{escolhaAluno ? `Ausências avisadas de ${primeiroNome}` : 'Ausências avisadas'}</Text>
               {ausencias === null ? (
                 <ActivityIndicator color={colors.ink} />
               ) : ausencias.length === 0 ? (

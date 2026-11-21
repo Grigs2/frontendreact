@@ -978,3 +978,16 @@ Fases F0 a F10 implementadas seguindo o `guia_1111_otavio_padrao_visual_front.md
 - `GuardianMonitoringScreen` deixou de registrar a resposta da API no console (dados do aluno), conforme 12.2.5.
 - `DriverAttendanceDetailScreen` permanece registrada, mas não é mais usada pelo fluxo de execução.
 - A validação de nascimento do dependente no formulário existente continua exigindo 1 ano ou mais; o backend não impõe mínimo (decisão 4).
+
+---
+
+## 12. Registro de execução (18/11/2026) — redesenho do Responsável
+
+Ver `docs/IMPLEMENTACAO_REDESENHO_RESPONSAVEL.md` (app) e `BackEnd/BackEndJava/Docs/IMPLEMENTACAO_REDESENHO_RESPONSAVEL_BACK.md` (API). Resumo do que muda neste guia:
+
+- **3.2 Início do responsável:** sem saudação (arte do logo sobre trilho de paradas) e sem atalhos que repetem a barra inferior; card do aluno com luz de status e próxima interação estimada. A estimativa de horário é local (5 min por parada), já que a decisão D8 (sem provedor de rota) continua valendo.
+- **3.6.2 / 3.6.8:** com vínculo ativo, o responsável vê o CPF completo do motorista (`ContraparteDTO.cpf`).
+- **3.7 / 7.2:** "Acompanhar" com tela cheia do mapa, próxima interação destacada e mapa alternativo em linha de metrô quando não há localização (7.2.6).
+- **3.7.8 / D16:** "Avisar falta" do Histórico permite escolher o aluno.
+- **5.1.8 / 12.3.3:** o aluno não pode ter duas viagens ativas do mesmo período; o backend responde 409 ao aceitar e o app bloqueia o aceite antes.
+- **9.1:** o sino abre um popout com as não lidas e "Marcar todas como lidas"; a central continua acessível por "Ver todas as notificações".

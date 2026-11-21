@@ -12,6 +12,7 @@ import { useAppContext } from '../context/AppContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { viagemService } from '../services/viagemService';
 import { HistoricoOrdemParadaDTO, ParadaViagemDTO } from '../types';
+import { idaDasParadas, rotuloParada } from '../utils/paradas';
 import { formatDateTime } from '../utils/format';
 import { getApiErrorMessage } from '../utils/apiError';
 import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
@@ -91,9 +92,9 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
     }
   };
 
-  const nomeParada = (id: number) => {
+  const nomeDaParada = (id: number) => {
     const p = original.find((x) => x.id === id);
-    return p ? p.nomeLocal || p.endereco : `Parada ${id}`;
+    return p ? rotuloParada(p, idaDasParadas(original)) : `Parada ${id}`;
   };
 
   return (
@@ -128,7 +129,7 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
                       <Text style={styles.orderText} maxFontSizeMultiplier={maxFontSizeMultiplier}>{i + 1}</Text>
                     </View>
                     <View style={styles.flex}>
-                      <Text style={styles.title} maxFontSizeMultiplier={maxFontSizeMultiplier}>{p.nomeLocal || p.endereco}</Text>
+                      <Text style={styles.title} maxFontSizeMultiplier={maxFontSizeMultiplier}>{rotuloParada(p, idaDasParadas(original))}</Text>
                       <Text style={styles.caption} numberOfLines={2} maxFontSizeMultiplier={maxFontSizeMultiplier}>
                         {p.listaDependentes.length ? p.listaDependentes.map((d) => d.nomeDependente).join(', ') : p.endereco}
                       </Text>
@@ -141,7 +142,7 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
                           size="icon"
                           variant="tertiary"
                           icon="arrow-up"
-                          accessibilityLabel={`Subir ${p.nomeLocal || 'parada'}`}
+                          accessibilityLabel={`Subir ${rotuloParada(p, idaDasParadas(original))}`}
                           onPress={() => mover(i, -1)}
                           disabled={i === 0 || travada(ordem[i - 1], i - 1)}
                         />
@@ -149,7 +150,7 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
                           size="icon"
                           variant="tertiary"
                           icon="arrow-down"
-                          accessibilityLabel={`Descer ${p.nomeLocal || 'parada'}`}
+                          accessibilityLabel={`Descer ${rotuloParada(p, idaDasParadas(original))}`}
                           onPress={() => mover(i, 1)}
                           disabled={i === ordem.length - 1 || travada(ordem[i + 1], i + 1)}
                         />
@@ -173,7 +174,7 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
                   <Timeline
                     items={historico.map((h) => ({
                       key: h.id,
-                      title: `${nomeParada(h.idParada)}: posição ${h.ordemAnterior} → ${h.ordemNova}`,
+                      title: `${nomeDaParada(h.idParada)}: posição ${h.ordemAnterior} → ${h.ordemNova}`,
                       caption: formatDateTime(h.ocorridoEm),
                     }))}
                   />

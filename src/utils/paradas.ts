@@ -36,3 +36,17 @@ export const rotuloParada = (parada: ParadaViagemDTO, ida: boolean, alunos: Depe
   if (parada.tipoParada === 'ESCOLA') return `${acao} na ${nomeEscola(parada)}`;
   return alunos.length ? `${acao} de ${nomesDosAlunos(alunos)}` : acao;
 };
+
+/**
+ * Ida ou volta, para telas que só têm as paradas (sem o período da viagem).
+ * O backend nomeia a parada do aluno como "Embarque de ..." na ida e "Desembarque de ..." na volta;
+ * sem esse nome, vale a ordem: na ida a casa do aluno vem antes da escola.
+ */
+export const idaDasParadas = (paradas: ParadaViagemDTO[]) => {
+  const doAluno = paradas.find((p) => p.tipoParada === 'RESPONSAVEL' && p.nomeLocal);
+  if (doAluno && /^desembarque/i.test(doAluno.nomeLocal.trim())) return false;
+  if (doAluno && /^embarque/i.test(doAluno.nomeLocal.trim())) return true;
+  const casa = paradas.findIndex((p) => p.tipoParada === 'RESPONSAVEL');
+  const escola = paradas.findIndex((p) => p.tipoParada === 'ESCOLA');
+  return casa < 0 || escola < 0 || casa < escola;
+};

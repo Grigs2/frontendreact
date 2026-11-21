@@ -7,7 +7,8 @@ import GuardianLayout from '../components/GuardianLayout';
 import AbsenceModal from '../components/AbsenceModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { InfoLine, Notice } from '../components/Feedback';
-import { SectionTitle } from '../components/HomeBlocks';
+import { CardHeader } from '../components/HomeBlocks';
+import CounterpartModal from '../components/CounterpartModal';
 import { Button, Card, Chip, ListRow, ScreenHeader, StateView } from '../components/ui';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
@@ -46,6 +47,7 @@ export default function GuardianDependentDetailScreen({ navigation, route }: Pro
   const [historico, setHistorico] = useState<HistoricoAlunoDTO[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [ausencia, setAusencia] = useState(false);
+  const [verMotorista, setVerMotorista] = useState<SolicitacaoDTO | null>(null);
 
   // Consentimento de localização (decisão 10): basta um responsável ativo autorizar.
   const [gpsAutorizado, setGpsAutorizado] = useState<boolean | null>(null);
@@ -155,8 +157,8 @@ export default function GuardianDependentDetailScreen({ navigation, route }: Pro
         </View>
 
         {/* Endereços (3.4) */}
-        <SectionTitle>Endereços</SectionTitle>
         <Card style={styles.card}>
+          <CardHeader icon="map" title="Endereços" />
           {enderecos === null ? (
             <StateView kind="loading" />
           ) : ativos.length ? (
@@ -184,8 +186,8 @@ export default function GuardianDependentDetailScreen({ navigation, route }: Pro
         </Card>
 
         {/* Responsáveis (3.5) */}
-        <SectionTitle>Responsáveis</SectionTitle>
         <Card style={styles.card}>
+          <CardHeader icon="users" title="Responsáveis" />
           {responsaveis === null ? (
             <StateView kind="loading" />
           ) : (
@@ -211,18 +213,19 @@ export default function GuardianDependentDetailScreen({ navigation, route }: Pro
         </Card>
 
         {/* Motoristas vinculados (3.6.8) */}
-        <SectionTitle>Motoristas</SectionTitle>
         <Card style={styles.card}>
+          <CardHeader icon="truck" title="Motoristas" />
           {motoristas.length ? (
             motoristas.map((s, i) => (
               <ListRow
                 key={s.id}
                 icon="truck"
                 title={s.motoristaNome || 'Motorista'}
-                caption={[s.viagemNome || viagemNome({ nome: null, escolas: null, periodo: s.viagemPeriodo || s.periodo || '' }), s.motoristaTelefone]
+                caption={[s.viagemNome || viagemNome({ nome: null, escolas: null, periodo: s.viagemPeriodo || s.periodo || '' }), 'Toque para ver telefone e CPF']
                   .filter(Boolean)
                   .join(' · ')}
                 divider={i > 0}
+                onPress={() => setVerMotorista(s)}
                 right={<Chip label="Ativo" tone="success" size="sm" />}
               />
             ))
@@ -235,7 +238,6 @@ export default function GuardianDependentDetailScreen({ navigation, route }: Pro
         </Card>
 
         {/* Localização */}
-        <SectionTitle>Localização do transporte</SectionTitle>
         <Card style={styles.card}>
           <View style={styles.consentRow}>
             <View style={styles.iconSlot}>
@@ -268,9 +270,9 @@ export default function GuardianDependentDetailScreen({ navigation, route }: Pro
           )}
         </Card>
 
-        {/* Histórico (3.3.10) */}
-        <SectionTitle>Últimas viagens</SectionTitle>
+        {/* Histórico (3.3.10): relógio no slot amarelo, como nos cards acima */}
         <Card style={styles.card}>
+          <CardHeader icon="clock" title="Últimas viagens" />
           {historico === null ? (
             <StateView kind="loading" />
           ) : historico.length ? (
@@ -305,6 +307,9 @@ export default function GuardianDependentDetailScreen({ navigation, route }: Pro
         dependenteNome={dependente.nome}
         onClose={() => setAusencia(false)}
       />
+
+      {/* Motorista com vínculo ativo: telefone e CPF completos. */}
+      <CounterpartModal solicitacao={verMotorista} viewer="RESPONSAVEL" onClose={() => setVerMotorista(null)} />
 
       <ConfirmDialog
         visible={gpsConfirm !== null}

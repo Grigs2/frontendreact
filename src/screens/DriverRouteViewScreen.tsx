@@ -6,6 +6,7 @@ import { useAppContext } from '../context/AppContext';
 import DriverLayout from '../components/DriverLayout';
 import { viagemService } from '../services/viagemService';
 import { ViagemDTO, MotoristaDTO, ViagemDiaDTO, ParadaViagemDTO } from '../types';
+import { idaDasParadas, rotuloParada } from '../utils/paradas';
 import { colors, fonts } from '../theme';
 
 const PERIODS = ['MANHA_IDA', 'MANHA_VOLTA', 'TARDE_IDA', 'TARDE_VOLTA', 'NOITE_IDA', 'NOITE_VOLTA'];
@@ -153,7 +154,7 @@ export default function DriverRouteViewScreen() {
 
               <View style={styles.details}>
                 <View style={styles.detailsContent}>
-                  <Text style={styles.stopLocal}>{stop.nomeLocal}</Text>
+                  <Text style={styles.stopLocal}>{rotuloParada(stop, idaDasParadas(currentStops))}</Text>
                   <Text style={styles.stopAddr}>{stop.endereco}</Text>
                   
                   {stop.listaDependentes.length > 0 && (
@@ -179,7 +180,7 @@ export default function DriverRouteViewScreen() {
                       tripId: activeViagemDia.id,
                       stopId: stop.ordem,
                       students: stop.listaDependentes,
-                      description: stop.nomeLocal
+                      description: rotuloParada(stop, idaDasParadas(currentStops))
                     })}
                   >
                     <Feather name="clipboard" size={16} color={colors.onPrimary} />
