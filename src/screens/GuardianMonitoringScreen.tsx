@@ -7,6 +7,10 @@ import GuardianLayout from '../components/GuardianLayout';
 import TripMap from '../components/TripMap';
 import LinhaResponsavel from '../components/LinhaResponsavel';
 import AbsenceModal from '../components/AbsenceModal';
+import MensagensRapidasModal from '../components/MensagensRapidasModal';
+import { notificacaoService } from '../services/notificacaoService';
+import { authSession } from '../services/authSession';
+import { MensagemRapida, sugestoesDoResponsavel } from '../utils/mensagensRapidas';
 import ChoiceChips from '../components/ChoiceChips';
 import { InfoLine, Notice } from '../components/Feedback';
 import { SectionTitle } from '../components/HomeBlocks';
@@ -43,7 +47,10 @@ export default function GuardianMonitoringScreen() {
   const isFocused = useIsFocused();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { currentUser } = useAppContext();
+  const { currentUser, showToast } = useAppContext();
+  // Mensagens rápidas ao motorista ("Já estamos descendo", "Vamos atrasar"...).
+  const [mensagemAberta, setMensagemAberta] = useState(false);
+  const [enviandoMensagem, setEnviandoMensagem] = useState<MensagemRapida | null>(null);
   const guardian = currentUser as ResponsavelDTO;
   const dependentes = guardian?.dependentes ?? [];
 
@@ -479,6 +486,16 @@ export default function GuardianMonitoringScreen() {
                 <InfoLine label="Veículo" value={[motorista.modeloVeiculo, motorista.corVeiculo].filter(Boolean).join(' · ')} />
                 <InfoLine label="Placa" value={motorista.placaVeiculo ? maskPlate(motorista.placaVeiculo) : null} />
                 <InfoLine label="Telefone" value={motorista.telefone ? maskPhone(motorista.telefone) : null} />
+                {!!motorista.motoristaUsuarioId && (
+                  <Button
+                    label="Mensagem ao motorista"
+                    icon="message-square"
+                    variant="secondary"
+                    size="md"
+                    onPress={() => setMensagemAberta(true)}
+                    fullWidth
+                  />
+                )}
               </Card>
             )}
 
@@ -518,6 +535,41 @@ export default function GuardianMonitoringScreen() {
           </>
         )}
       </ScrollView>
+
+      <MensagensRapidasModal
+        visible={mensagemAberta}
+        titulo={`Mensagem para ${motorista?.nomeMotorista?.split(' ')[0] || 'o motorista'}`}
+        sugestoes={sugestoesDoResponsavel()}
+        enviando={enviandoMensagem}
+        onEnviar={async (m) => {
+          const remetenteId = authSession.getPerfil()?.usuarioId;
+          if (!remetenteId || !motorista?.motoristaUsuarioId) return;
+          setEnviandoMensagem(m);
+          try {
+            await notificacaoService.enviar({
+              titulo: m.titulo,
+              mensagem: m.texto,
+              visto: false,
+              remetenteId,
+              destinatarioId: motorista.motoristaUsuarioId,
+            });
+            showToast('Mensagem enviada ao motorista.', 'success');
+            setMensagemAberta(false);
+          } catch (e) {
+            showToast(getApiErrorMessage(e, 'Não foi possível enviar a mensagem.'), 'error');
+          } finally {
+            setEnviandoMensagem(null);
+          }
+        }}
+        onEscrever={() => {
+          setMensagemAberta(false);
+          navigation.navigate('NotificationCreate', {
+            destinatarioId: motorista?.motoristaUsuarioId ?? undefined,
+            nomeDestinatario: motorista?.nomeMotorista,
+          });
+        }}
+        onClose={() => setMensagemAberta(false)}
+      />
 
       {aluno?.id && (
         <AbsenceModal visible={ausencia} dependenteId={aluno.id} dependenteNome={aluno.nome} onClose={() => setAusencia(false)} />

@@ -19,6 +19,8 @@ import {
   validateExpiryDate,
   validatePastDate,
   validateRenavam,
+  cnhDigitosConferem,
+  renavamDigitoConfere,
   validateRequired,
 } from '../utils/validators';
 import { TIPO_DOCUMENTO_LABEL, statusInfo } from '../utils/statusLabels';
@@ -155,7 +157,14 @@ export default function DriverDocumentsScreen({ navigation }: Props) {
           onChangeText={(t) => setField('numero', tipo === 'VISTORIA' ? t : onlyDigits(t).slice(0, 11))}
           keyboardType={tipo === 'VISTORIA' ? 'default' : 'number-pad'}
           maxLength={tipo === 'VISTORIA' ? 40 : 11}
-          hint={tipo === 'VISTORIA' ? undefined : '11 dígitos'}
+          hint={
+            tipo === 'VISTORIA'
+              ? undefined
+              : onlyDigits(form.numero).length === 11 &&
+                  !(tipo === 'CNH' ? cnhDigitosConferem(form.numero) : renavamDigitoConfere(form.numero))
+                ? 'Os dígitos finais não conferem: confira o número no documento.'
+                : '11 dígitos'
+          }
           error={errors.numero || undefined}
           editable={!saving}
         />

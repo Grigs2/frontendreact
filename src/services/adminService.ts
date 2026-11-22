@@ -7,6 +7,7 @@ import {
   AdminVinculoResponsavelDTO,
   DependenteResponsavelCriadorPendenteDTO,
   DocumentoMotoristaDTO,
+  DocumentoRevisaoDTO,
   Page,
   StatusDocumento,
   StatusVinculoEscola,
@@ -29,6 +30,10 @@ const pagina = <T,>(data: Page<T> | undefined): Page<T> => ({
 export const adminService = {
   documentosPendentes: async (): Promise<DocumentoMotoristaDTO[]> =>
     (await api.get(API_ENDPOINTS.adminDocumentosPendentes)).data ?? [],
+
+  /** Fila de revisão com motorista, veículo e conferências automáticas. */
+  documentosParaRevisao: async (): Promise<DocumentoRevisaoDTO[]> =>
+    (await api.get(API_ENDPOINTS.adminDocumentosRevisao)).data ?? [],
 
   revisarDocumento: async (
     id: number,
