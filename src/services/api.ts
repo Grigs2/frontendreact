@@ -213,6 +213,7 @@ export const API_ENDPOINTS = {
 
   // Administração
   adminDocumentosPendentes: '/Admin/Documentos/Pendentes',
+  adminDocumentosRevisao: '/Admin/Documentos/Revisao',
   adminRevisarDocumento: (id: number) => `/Admin/Documentos/${id}/Revisar`,
   adminCriadorPendentes: '/Admin/Dependentes/ResponsavelCriadorPendentes',
   adminAtribuirCriador: (idDependente: number) => `/Admin/Dependentes/${idDependente}/ResponsavelCriador`,

@@ -50,3 +50,53 @@ export const idaDasParadas = (paradas: ParadaViagemDTO[]) => {
   const escola = paradas.findIndex((p) => p.tipoParada === 'ESCOLA');
   return casa < 0 || escola < 0 || casa < escola;
 };
+
+/** Resultado da conferência de uma nova ordem de paradas, antes de salvar. */
+export interface AnaliseOrdem {
+  /** Impedem salvar. */
+  erros: string[];
+  /** Mudanças que o servidor fará ao salvar (ex.: desembarque extra na escola). */
+  avisos: string[];
+}
+
+const vaiDesembarcar = (d: DependenteParadaDTO) => d.statusEmbarque !== 'FALTOU' && d.statusEmbarque !== 'DESEMBARCADO';
+
+/**
+ * Cada aluno precisa embarcar antes de desembarcar (mesma regra do servidor).
+ * - Desembarque na escola antes do embarque de parte dos alunos: eles vão para um desembarque extra nessa escola,
+ *   depois do último embarque deles (ou para um desembarque dessa escola que já esteja depois).
+ * - Desembarque na escola antes de todos os embarques, ou entrega em casa antes do embarque na escola: erro.
+ */
+export function analisarOrdem(paradas: ParadaViagemDTO[], ida: boolean): AnaliseOrdem {
+  const erros: string[] = [];
+  const avisos: string[] = [];
+  const embarque = new Map<number, number>();
+  paradas.forEach((p, i) => {
+    if (p.tipoParada !== 'MOTORISTA' && ehEmbarque(p, ida)) p.listaDependentes.forEach((d) => embarque.set(d.id, i));
+  });
+  paradas.forEach((p, i) => {
+    if (p.tipoParada === 'MOTORISTA' || ehEmbarque(p, ida)) return;
+    const ativos = p.listaDependentes.filter(vaiDesembarcar);
+    const antecipados = ativos.filter((d) => (embarque.get(d.id) ?? -1) > i);
+    if (!antecipados.length) return;
+    const nomes = nomesDosAlunos(antecipados);
+    if (p.tipoParada !== 'ESCOLA') {
+      erros.push(`A entrega de ${nomes} não pode vir antes do embarque na escola.`);
+      return;
+    }
+    if (antecipados.length === ativos.length) {
+      erros.push(`O desembarque na ${nomeEscola(p)} precisa vir depois do embarque de pelo menos um aluno dessa escola.`);
+      return;
+    }
+    const ultimo = Math.max(...antecipados.map((d) => embarque.get(d.id) ?? i));
+    const existente = paradas.findIndex(
+      (q, k) => k > ultimo && q !== p && q.tipoParada === 'ESCOLA' && !ehEmbarque(q, ida) && q.endereco === p.endereco,
+    );
+    avisos.push(
+      existente >= 0
+        ? `${nomes} ${antecipados.length > 1 ? 'passam' : 'passa'} para o desembarque seguinte na ${nomeEscola(p)} (parada ${existente + 1}).`
+        : `${nomes} ainda não ${antecipados.length > 1 ? 'embarcaram' : 'embarcou'} quando a perua passa na ${nomeEscola(p)}. Ao salvar, será criado um novo desembarque nessa escola no fim da rota, antes da casa do motorista.`,
+    );
+  });
+  return { erros, avisos };
+}

@@ -318,6 +318,8 @@ export interface MotoristaViagemDTO {
   modeloVeiculo: string;
   placaVeiculo: string;
   corVeiculo: string;
+  /** Usuário do motorista, para mandar mensagem. */
+  motoristaUsuarioId?: number | null;
 }
 
 export interface ViagemDiaDTO {
@@ -412,6 +414,25 @@ export interface Page<T> {
 // Documentos do motorista (CNH, vistoria, licenciamento) — só metadados, sem upload.
 export type TipoDocumento = 'CNH' | 'VISTORIA' | 'LICENCIAMENTO';
 export type StatusDocumento = 'PENDENTE' | 'APROVADO' | 'RECUSADO' | 'VENCIDO';
+
+/** Conferência automática de um documento (GET /Admin/Documentos/Revisao). */
+export interface ConferenciaDocumentoDTO {
+  item: string;
+  /** OK, ATENCAO (conferir no documento) ou ERRO (impede aprovar). */
+  situacao: 'OK' | 'ATENCAO' | 'ERRO';
+  detalhe: string;
+}
+
+export interface DocumentoRevisaoDTO {
+  documento: DocumentoMotoristaDTO;
+  motoristaId?: number | null;
+  motoristaNome?: string | null;
+  motoristaIdade?: number | null;
+  veiculoPlaca?: string | null;
+  veiculoModelo?: string | null;
+  conferencias: ConferenciaDocumentoDTO[];
+  podeAprovar: boolean;
+}
 
 export interface DocumentoMotoristaDTO {
   id: number;

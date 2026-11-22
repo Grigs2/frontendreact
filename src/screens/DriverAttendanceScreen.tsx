@@ -14,6 +14,9 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import ReasonDialog from '../components/ReasonDialog';
 import AvisoAtrasoModal from '../components/AvisoAtrasoModal';
 import ParadaDetalhesModal from '../components/ParadaDetalhesModal';
+import MensagensRapidasModal from '../components/MensagensRapidasModal';
+import { notificacaoService } from '../services/notificacaoService';
+import { MensagemRapida, sugestoesDoMotorista } from '../utils/mensagensRapidas';
 import RotaEstacoes from '../components/RotaEstacoes';
 import { Notice, ProgressBar } from '../components/Feedback';
 import { Button, Card } from '../components/ui';
@@ -317,13 +320,41 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
     onDeslizarDireita: () => irPara(indiceAnterior),
   });
 
-  const mensagemAoResponsavel = (dependente: DependenteParadaDTO) =>
+  // Mensagens rápidas ao responsável do aluno ("Estou na porta", "Vou atrasar"...); "Escrever outra" abre o formulário.
+  const [mensagemPara, setMensagemPara] = useState<DependenteParadaDTO | null>(null);
+  const [enviandoMensagem, setEnviandoMensagem] = useState<MensagemRapida | null>(null);
+  const escreverMensagem = (dependente: DependenteParadaDTO) =>
     navigation.navigate('NotificationCreate', {
       destinatarioId: dependente.responsavelUsuarioId ?? undefined,
       nomeDestinatario: dependente.nomeResponsavel,
       dependenteId: dependente.id,
       viagemDiaId,
     });
+  const mensagemAoResponsavel = (dependente: DependenteParadaDTO) => {
+    if (!dependente.responsavelUsuarioId || !usuarioId) escreverMensagem(dependente);
+    else setMensagemPara(dependente);
+  };
+  const enviarMensagemRapida = async (m: MensagemRapida) => {
+    if (!mensagemPara?.responsavelUsuarioId || !usuarioId) return;
+    setEnviandoMensagem(m);
+    try {
+      await notificacaoService.enviar({
+        titulo: m.titulo,
+        mensagem: m.texto,
+        visto: false,
+        remetenteId: usuarioId,
+        destinatarioId: mensagemPara.responsavelUsuarioId,
+        dependenteId: mensagemPara.id,
+        viagemDiaId: viagemDiaId ?? null,
+      });
+      showToast(`Mensagem enviada para ${mensagemPara.nomeResponsavel?.split(' ')[0] || 'o responsável'}.`, 'success');
+      setMensagemPara(null);
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Não foi possível enviar a mensagem.'), 'error');
+    } finally {
+      setEnviandoMensagem(null);
+    }
+  };
 
   const voltarInicio = () => navigation.navigate('DriverMain');
   const mapaVisivel = emAndamento && !mapaOculto;
@@ -659,6 +690,27 @@ export default function DriverAttendanceScreen({ route, navigation }: Props) {
         loading={updatingTrip}
         onConfirm={(motivo) => alterarViagem('INTERROMPIDA', motivo)}
         onCancel={() => setInterromperAberto(false)}
+      />
+
+      <MensagensRapidasModal
+        visible={!!mensagemPara}
+        titulo={`Mensagem para ${mensagemPara?.nomeResponsavel?.split(' ')[0] || 'o responsável'}`}
+        sugestoes={sugestoesDoMotorista(
+          mensagemPara?.nomeDependente,
+          // Na ida a casa é a busca; na volta é a entrega.
+          ida,
+          previsaoDestino && destino?.listaDependentes.some((d) => d.id === mensagemPara?.id)
+            ? Math.max(1, Math.round(previsaoDestino.segundos / 60))
+            : null,
+        )}
+        enviando={enviandoMensagem}
+        onEnviar={enviarMensagemRapida}
+        onEscrever={() => {
+          const d = mensagemPara;
+          setMensagemPara(null);
+          if (d) escreverMensagem(d);
+        }}
+        onClose={() => setMensagemPara(null)}
       />
 
       <ParadaDetalhesModal

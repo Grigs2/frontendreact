@@ -12,7 +12,7 @@ import { useAppContext } from '../context/AppContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { viagemService } from '../services/viagemService';
 import { HistoricoOrdemParadaDTO, ParadaViagemDTO } from '../types';
-import { idaDasParadas, rotuloParada } from '../utils/paradas';
+import { analisarOrdem, idaDasParadas, rotuloParada } from '../utils/paradas';
 import { formatDateTime } from '../utils/format';
 import { getApiErrorMessage } from '../utils/apiError';
 import { colors, layout, maxFontSizeMultiplier, radius, spacing, typography } from '../theme';
@@ -72,6 +72,8 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
   };
 
   const semId = ordem.some((p) => p.id === undefined || p.id === null);
+  // Confere a nova ordem antes de salvar: cada aluno embarca antes de desembarcar.
+  const analise = analisarOrdem(ordem, idaDasParadas(original));
   const alteradas = ordem.filter((p, i) => p.id !== original[i]?.id).length;
 
   const salvar = async () => {
@@ -166,6 +168,19 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
                 {alteradas} parada(s) mudam de posição.
               </Text>
             )}
+            {alteradas > 0 &&
+              analise.erros.map((e) => (
+                <Notice key={e} tone="danger">
+                  {e}
+                </Notice>
+              ))}
+            {alteradas > 0 &&
+              !analise.erros.length &&
+              analise.avisos.map((a) => (
+                <Notice key={a} tone="warning">
+                  {a}
+                </Notice>
+              ))}
 
             {historico.length > 0 && (
               <>
@@ -174,7 +189,10 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
                   <Timeline
                     items={historico.map((h) => ({
                       key: h.id,
-                      title: `${nomeDaParada(h.idParada)}: posição ${h.ordemAnterior} → ${h.ordemNova}`,
+                      title:
+                        h.ordemAnterior === 0
+                          ? `${nomeDaParada(h.idParada)}: novo desembarque criado na posição ${h.ordemNova}`
+                          : `${nomeDaParada(h.idParada)}: posição ${h.ordemAnterior} → ${h.ordemNova}`,
                       caption: formatDateTime(h.ocorridoEm),
                     }))}
                   />
@@ -192,7 +210,7 @@ export default function DriverRouteOrderScreen({ navigation, route }: Props) {
             icon="check"
             onPress={salvar}
             loading={salvando}
-            disabled={!alteradas || semId || !online}
+            disabled={!alteradas || semId || !online || analise.erros.length > 0}
             fullWidth
           />
           {alteradas > 0 && (

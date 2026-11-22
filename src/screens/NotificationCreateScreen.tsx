@@ -19,13 +19,15 @@ import { notificacaoService } from '../services/notificacaoService';
 import { UsuarioResumoDTO } from '../types';
 import { Button, Chip, ScreenHeader, StateView, TextField } from '../components/ui';
 import { borders, colors, layout, radius, spacing, typography } from '../theme';
+import { sugestoesDoFormulario } from '../utils/mensagensRapidas';
 
 export default function NotificationCreateScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'NotificationCreate'>>();
   const params = route.params;
   const vinculadaAoAluno = !!params?.dependenteId && !!params?.viagemDiaId;
-  const { currentUser, showToast } = useAppContext();
+  const { currentUser, userRole, showToast } = useAppContext();
+  const sugestoes = sugestoesDoFormulario(userRole);
 
   const [titulo, setTitulo] = useState('');
   const [mensagem, setMensagem] = useState('');
@@ -135,6 +137,29 @@ export default function NotificationCreateScreen() {
             </TouchableOpacity>
           </View>
 
+          {sugestoes.length > 0 && (
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Sugestões</Text>
+              <View style={styles.sugestoes}>
+                {sugestoes.map((s) => (
+                  <TouchableOpacity
+                    key={s.texto}
+                    style={[styles.sugestao, mensagem === s.texto && styles.sugestaoAtiva]}
+                    onPress={() => {
+                      setTitulo(s.titulo);
+                      setMensagem(s.texto);
+                    }}
+                    disabled={loading}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Usar a sugestão: ${s.texto}`}
+                  >
+                    <Text style={styles.sugestaoTexto}>{s.titulo}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
           <TextField
             label="Título"
             value={titulo}
@@ -207,6 +232,18 @@ export default function NotificationCreateScreen() {
 }
 
 const styles = StyleSheet.create({
+  sugestoes: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  sugestao: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.ink,
+    backgroundColor: colors.surface,
+  },
+  sugestaoAtiva: { backgroundColor: colors.primary },
+  sugestaoTexto: { ...typography.captionBold, color: colors.ink },
   screen: { flex: 1, backgroundColor: colors.background },
   container: { padding: layout.screenMargin, paddingTop: 48, paddingBottom: spacing.xxl, width: '100%', maxWidth: 600, alignSelf: 'center' },
   form: { gap: spacing.lg },

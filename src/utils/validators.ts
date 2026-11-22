@@ -231,6 +231,38 @@ export const validatePasswordConfirmation = (password: string, confirmation: str
 // ---------------------------------------------------------------------------------------------
 
 /** RENAVAM: 11 dígitos. */
+/** Dígitos verificadores do número de registro da CNH (mesma conta do servidor). */
+export const cnhDigitosConferem = (value: string) => {
+  const n = onlyDigits(value);
+  if (n.length !== 11 || allSameDigits(n)) return false;
+  let soma = 0;
+  for (let i = 0, peso = 9; i < 9; i++, peso--) soma += Number(n[i]) * peso;
+  let dv1 = soma % 11;
+  let desconto = 0;
+  if (dv1 >= 10) {
+    dv1 = 0;
+    desconto = 2;
+  }
+  soma = 0;
+  for (let i = 0, peso = 1; i < 9; i++, peso++) soma += Number(n[i]) * peso;
+  const resto = soma % 11;
+  const dv2 = resto >= 10 ? 0 : resto - desconto;
+  return dv1 === Number(n[9]) && dv2 === Number(n[10]);
+};
+
+/** Dígito verificador do RENAVAM (mesma conta do servidor). */
+export const renavamDigitoConfere = (value: string) => {
+  let n = onlyDigits(value);
+  if (n.length === 9) n = `00${n}`;
+  if (n.length !== 11 || allSameDigits(n)) return false;
+  const pesos = [2, 3, 4, 5, 6, 7, 8, 9, 2, 3];
+  let soma = 0;
+  for (let i = 0; i < 10; i++) soma += Number(n[9 - i]) * pesos[i];
+  let dv = (soma * 10) % 11;
+  if (dv === 10) dv = 0;
+  return dv === Number(n[10]);
+};
+
 export const validateRenavam = (value: string) => {
   const renavam = onlyDigits(value);
   if (!renavam) return 'Informe o RENAVAM.';
