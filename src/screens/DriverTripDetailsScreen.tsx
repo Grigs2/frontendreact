@@ -5,13 +5,12 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { escolasNomes, viagemNome, viagemService } from '../services/viagemService';
-import { AgendaViagemDTO, HistoricoViagemDiaDTO, HistoricoViagemPresencaDTO, MotoristaDTO, ParadaViagemDTO, ViagemDTO, ViagemDiaResumoDTO } from '../types';
+import { AgendaViagemDTO, EscolaResumoDTO, HistoricoViagemDiaDTO, HistoricoViagemPresencaDTO, MotoristaDTO, ParadaViagemDTO, ViagemDTO, ViagemDiaResumoDTO } from '../types';
 import { getApiErrorMessage } from '../utils/apiError';
 import { formatDayShort, formatTime, todayIso } from '../utils/format';
 import DriverLayout from '../components/DriverLayout';
 import AvisoAtrasoModal from '../components/AvisoAtrasoModal';
-import EditarNomeViagemModal from '../components/EditarNomeViagemModal';
-import EditarHorarioPartidaModal from '../components/EditarHorarioPartidaModal';
+import ConfigurarViagemModal from '../components/ConfigurarViagemModal';
 import ParadaDetalhesModal from '../components/ParadaDetalhesModal';
 import { rotuloParada } from '../utils/paradas';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -44,8 +43,8 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
   const [preparando, setPreparando] = useState(false);
   const [showCancelar, setShowCancelar] = useState(false);
   const [cancelando, setCancelando] = useState(false);
-  const [showEditarNome, setShowEditarNome] = useState(false);
-  const [savingNome, setSavingNome] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [escolasDisponiveis, setEscolasDisponiveis] = useState<EscolaResumoDTO[] | null>(null);
   const [diaViagem, setDiaViagem] = useState<AgendaViagemDTO | null>(null);
   const [detalhesParada, setDetalhesParada] = useState<ParadaViagemDTO | null>(null);
   const [paradas, setParadas] = useState<ParadaViagemDTO[]>([]);
@@ -55,8 +54,6 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
   const [eventosPresenca, setEventosPresenca] = useState<HistoricoViagemPresencaDTO[]>([]);
   const [showAviso, setShowAviso] = useState(false);
   const [horarioAjustado, setHorarioAjustado] = useState(false);
-  const [editandoHorario, setEditandoHorario] = useState(false);
-  const [savingHorario, setSavingHorario] = useState(false);
   const motoristaId = (currentUser as MotoristaDTO)?.id;
   // Mesma regra da presença: na ida o embarque é no aluno e o desembarque na escola.
   const ida = viagem?.periodo?.endsWith('IDA') ?? false;
@@ -110,34 +107,61 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
     }
   }, [viagemId, dataViagem, showToast, motoristaId]);
 
-  // Altera só a data aberta (null volta ao horário padrão da viagem).
-  const handleSalvarHorario = async (horario: string | null) => {
-    setSavingHorario(true);
+  // Altera só a data aberta (null volta ao horário padrão da viagem). Retorna se salvou.
+  const handleSalvarHorario = async (horario: string | null): Promise<boolean> => {
     try {
       await viagemService.alterarHorarioPartidaDia(viagemId, dataViagem, horario);
       showToast(horario ? 'Horário de partida deste dia atualizado.' : 'Dia voltou ao horário padrão da viagem.', 'success');
-      setEditandoHorario(false);
       loadViagem();
+      return true;
     } catch (error) {
       console.error('Error changing departure time:', error);
       showToast(getApiErrorMessage(error, 'Não foi possível alterar o horário de partida.'), 'error');
-    } finally {
-      setSavingHorario(false);
+      return false;
     }
   };
 
-  const handleSalvarNome = async (nome: string) => {
-    setSavingNome(true);
+  const handleSalvarNome = async (nome: string): Promise<boolean> => {
     try {
       const atualizada = await viagemService.atualizarNome(viagemId, nome);
       setViagem((atual) => (atual ? { ...atual, nome: atualizada.nome } : atualizada));
-      setShowEditarNome(false);
       showToast('Nome da viagem atualizado.', 'success');
+      return true;
     } catch (error) {
       console.error('Error renaming trip:', error);
-      showToast('Não foi possível alterar o nome da viagem.', 'error');
-    } finally {
-      setSavingNome(false);
+      showToast(getApiErrorMessage(error, 'Não foi possível alterar o nome da viagem.'), 'error');
+      return false;
+    }
+  };
+
+  const carregarEscolasDisponiveis = async () => {
+    setEscolasDisponiveis(null);
+    try {
+      setEscolasDisponiveis(await viagemService.listarEscolasDisponiveis(viagemId));
+    } catch (error) {
+      console.error('Error loading available schools:', error);
+      setEscolasDisponiveis([]);
+      showToast('Não foi possível carregar as escolas disponíveis.', 'error');
+    }
+  };
+
+  const handleAbrirConfig = () => {
+    setShowConfig(true);
+    carregarEscolasDisponiveis();
+  };
+
+  // Não insere alunos nem paradas: a viagem só passa a atender a escola após o aceite de solicitações.
+  const handleAdicionarEscolas = async (escolaIds: number[]): Promise<boolean> => {
+    try {
+      await viagemService.adicionarEscolas(viagemId, escolaIds);
+      showToast('Escolas adicionadas à viagem.', 'success');
+      loadViagem();
+      carregarEscolasDisponiveis();
+      return true;
+    } catch (error) {
+      console.error('Error adding schools to trip:', error);
+      showToast(getApiErrorMessage(error, 'Não foi possível adicionar as escolas.'), 'error');
+      return false;
     }
   };
 
@@ -285,17 +309,16 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
           title={viagemNome(viagem)}
           subtitle={[formatDayShort(dataViagem), horarioDoDia ? `saída ${horarioDoDia}` : null, escolasNomes(viagem)].filter(Boolean).join(' - ')}
           onBack={() => navigation.goBack()}
-          onTitlePress={encerrada ? undefined : () => setShowEditarNome(true)}
           titleAccessory={
-            !encerrada && planejada ? (
+            !encerrada ? (
               <Pressable
-                onPress={() => setEditandoHorario(true)}
-                disabled={loading || savingHorario}
+                onPress={handleAbrirConfig}
+                disabled={loading}
                 accessibilityRole="button"
-                accessibilityLabel="Alterar horário de partida deste dia"
+                accessibilityLabel="Configurar viagem"
                 hitSlop={12}
               >
-                <Feather name="clock" size={layout.icon} color={colors.slate500} />
+                <Feather name="settings" size={layout.icon} color={colors.slate500} />
               </Pressable>
             ) : undefined
           }
@@ -374,16 +397,6 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
           </View>
         )}
 
-        <EditarHorarioPartidaModal
-          visible={editandoHorario}
-          title="Horário de partida deste dia"
-          description="Vale somente para esta data. Os demais dias continuam com o horário da viagem."
-          horarioAtual={horarioDoDia ?? '07:00'}
-          saving={savingHorario}
-          onSave={(horario) => handleSalvarHorario(horario)}
-          onRestaurarPadrao={horarioAjustado ? () => handleSalvarHorario(null) : undefined}
-          onClose={() => setEditandoHorario(false)}
-        />
 
         <ParadaDetalhesModal parada={detalhesParada} ida={ida} onClose={() => setDetalhesParada(null)} />
 
@@ -393,13 +406,19 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
           onClose={() => setShowAviso(false)}
         />
 
-        <EditarNomeViagemModal
-          visible={showEditarNome}
+        <ConfigurarViagemModal
+          visible={showConfig}
           nomeAtual={viagem.nome ?? ''}
           nomePadrao={viagemNome({ ...viagem, nome: null })}
-          saving={savingNome}
-          onSave={handleSalvarNome}
-          onClose={() => setShowEditarNome(false)}
+          horarioAtual={horarioDoDia ?? '07:00'}
+          horarioAjustado={horarioAjustado}
+          podeEditarHorario={planejada}
+          podeAdicionarEscolas={viagem.ativo !== false && !(hoje && emAndamento)}
+          escolasDisponiveis={escolasDisponiveis}
+          onSalvarNome={handleSalvarNome}
+          onSalvarHorario={handleSalvarHorario}
+          onAdicionarEscolas={handleAdicionarEscolas}
+          onClose={() => setShowConfig(false)}
         />
 
         <ConfirmDialog

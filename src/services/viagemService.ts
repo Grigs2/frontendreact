@@ -2,6 +2,7 @@ import { api, API_ENDPOINTS } from './api';
 import {
   AgendaViagemDTO,
   DependenteAnonimoDTO,
+  EscolaResumoDTO,
   HistoricoOrdemParadaDTO,
   HistoricoViagemDiaDTO,
   HistoricoViagemPresencaDTO,
@@ -86,6 +87,18 @@ export const viagemService = {
   /** Horário próprio de um dia (de hoje até 6 dias). `null` volta ao padrão da viagem. */
   alterarHorarioPartidaDia: async (idViagem: number, data: string, horarioPartida: string | null): Promise<ViagemDiaDTO> => {
     const response = await api.put(API_ENDPOINTS.alterarHorarioPartidaDia(idViagem), { data, horarioPartida });
+    return response.data;
+  },
+
+  /** Escolas com vínculo ATIVO do motorista que ainda não são atendidas pela viagem. */
+  listarEscolasDisponiveis: async (idViagem: number): Promise<EscolaResumoDTO[]> => {
+    const response = await api.get(API_ENDPOINTS.escolasDisponiveisViagem(idViagem));
+    return response.data ?? [];
+  },
+
+  /** Não insere paradas nem presenças: os alunos entram após aceitar a solicitação. */
+  adicionarEscolas: async (idViagem: number, escolaIds: number[]): Promise<ViagemDTO> => {
+    const response = await api.post(API_ENDPOINTS.adicionarEscolasViagem(idViagem), { escolaIds });
     return response.data;
   },
 

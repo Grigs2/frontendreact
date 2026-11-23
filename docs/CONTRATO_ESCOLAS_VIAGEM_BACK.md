@@ -27,10 +27,10 @@ Corpo:
 | Código | Situação |
 |---|---|
 | 200 | `ViagemDTO` atualizado. Escolas já presentes são ignoradas. |
-| 400 | `escolaIds` vazio ou com ids repetidos no corpo |
+| 400 | `escolaIds` vazio ou com ids repetidos no corpo, ou escola sem vínculo `ATIVO` |
 | 403 | motorista não é dono da viagem |
 | 404 | viagem ou escola não encontrada |
-| 409 | viagem desativada ou iniciada, ou escola sem vínculo `ATIVO` |
+| 409 | viagem desativada ou iniciada |
 
 ### Reaproveitados
 
@@ -72,7 +72,7 @@ Os endpoints abaixo já existem e recebem a nova regra de bloqueio (R6):
 ## Trabalho no back
 
 1. Endpoints `GET /Viagem/EscolasDisponiveis/{idViagem}` e `POST /Viagem/AdicionarEscolas/{idViagem}`, com service.
-2. Validação de vínculo `ATIVO` na adição (R3, erro 409).
+2. Validação de vínculo `ATIVO` na adição (R3, erro 400).
 3. Inserção de paradas e presenças ao adicionar escola (R3).
 4. Extensão de `suspender` e `encerrar` conforme R4.
 5. Checagem de viagem iniciada em renomear, horário e adicionar escolas (R6).
