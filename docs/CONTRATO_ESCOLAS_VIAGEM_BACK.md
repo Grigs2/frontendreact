@@ -47,21 +47,27 @@ Os endpoints abaixo já existem e recebem a nova regra de bloqueio (R6):
 
 **R3. Adicionar escola.**
 - Altera apenas `viagem_escola_destino`. O `ViagemDependente` não muda.
-- Em dias `PLANEJADA` a partir de hoje, insere as paradas e presenças dos alunos da escola com vínculo ativo, no fim da ordem.
+- Não insere alunos nas execuções. Eles entram só quando o responsável aceita uma nova solicitação.
 - Não recalcula paradas existentes, então a ordem manual é preservada.
 - Dias iniciados não mudam.
 
 **R4. Suspensão ou encerramento do vínculo com a escola** (`suspender` e `encerrar` em `VinculoEscolaService`). Além da desativação de `ViagemDependente` que já existe:
 - Remove a escola de `viagem_escola_destino` em todas as viagens do motorista.
 - Remove as `ViagemParada` e presenças desses alunos em dias `PLANEJADA` a partir de hoje.
-- Cancela as solicitações pendentes desses alunos com a escola.
+- Recusa as solicitações abertas desses alunos com a escola (`RECUSADA`) e notifica o responsável.
 - Dias iniciados não mudam.
 
 **R5. Reativação do vínculo** (`reativar`). Não restaura escolas nem alunos. O motorista adiciona a escola de novo, e os alunos precisam de nova solicitação.
 
-**R6. Viagem iniciada.** Considera-se iniciada se o dia de hoje não estiver `PLANEJADA`. Nesse caso, renomear, alterar horário e adicionar escolas retornam `409`.
+**R6. Viagem iniciada.** Considera-se iniciada se o dia de hoje estiver `EM_ANDAMENTO`, `FINALIZADA` ou `INTERROMPIDA`. `CANCELADA` não bloqueia. Nesse caso, renomear, alterar horário e adicionar escolas retornam `409`.
 
 **R7. Ordem manual.** Preservada em todos os fluxos. Não há recálculo de paradas existentes.
+
+**R8. Última escola removida.** A viagem é desativada (`ativo = false`). Acordos e solicitações abertas da viagem são encerrados.
+
+**R9. Paradas ocultas.** Paradas de escola removida com histórico ficam ocultas e não são retornadas ao front.
+
+**R10. Aceite de solicitação.** Aceitar solicitação de aluno de escola não atendida retorna `409`. Recusar continua permitido.
 
 ## Trabalho no back
 
