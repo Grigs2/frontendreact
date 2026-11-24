@@ -1,17 +1,29 @@
 import React, { useCallback, useState } from 'react';
-import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import DriverLayout from '../components/DriverLayout';
 import ChoiceChips from '../components/ChoiceChips';
 import Timeline from '../components/Timeline';
+import ImagemDocumentoModal, { FonteImagem } from '../components/ImagemDocumentoModal';
 import { Notice } from '../components/Feedback';
 import { Button, Card, Chip, ScreenHeader, StateView, TextField } from '../components/ui';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
-import { TIPOS_DOCUMENTO, documentoService, documentosVigentes } from '../services/documentoService';
-import { DocumentoMotoristaDTO, MotoristaDTO, TipoDocumento } from '../types';
+import {
+  LADOS_DOCUMENTO,
+  LADO_LABEL,
+  LIMITE_IMAGEM_BYTES,
+  TIPOS_DOCUMENTO,
+  TIPOS_IMAGEM_ACEITOS,
+  documentoService,
+  documentosVigentes,
+  podeEnviarImagens,
+} from '../services/documentoService';
+import { DocumentoMotoristaDTO, ImagemDocumentoDTO, LadoDocumento, MotoristaDTO, TipoDocumento } from '../types';
+
 import { brToIsoDate, isoToBrDate, maskCNH, maskDate, onlyDigits } from '../utils/masks';
 import {
   isExpired,
@@ -53,6 +65,53 @@ interface FormState {
 
 const EMPTY_FORM: FormState = { numero: '', categoria: 'D', dataRealizacao: '', dataValidade: '' };
 
+/** Imagens enviadas por documento vigente (uma chamada por documento). */
+const buscarImagensVigentes = async (idMotorista: number, lista: DocumentoMotoristaDTO[]) => {
+  const vigentes = Object.values(documentosVigentes(lista)).filter((d): d is DocumentoMotoristaDTO => !!d);
+  const pares = await Promise.all(
+    vigentes.map(async (d) => [d.id, await documentoService.listarImagens(idMotorista, d.id).catch(() => [])] as const),
+  );
+  return Object.fromEntries(pares) as Record<number, ImagemDocumentoDTO[]>;
+};
+
+type OrigemImagem = 'camera' | 'galeria';
+
+const escolherOrigem = () =>
+  new Promise<OrigemImagem | null>((resolve) =>
+    Alert.alert(
+      'Enviar imagem',
+      'De onde deseja pegar a foto?',
+      [
+        { text: 'Tirar foto', onPress: () => resolve('camera') },
+        { text: 'Galeria', onPress: () => resolve('galeria') },
+        { text: 'Cancelar', style: 'cancel', onPress: () => resolve(null) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(null) },
+    ),
+  );
+
+/** Abre câmera ou galeria. Retorna null se o usuário cancelar; lança erro se a permissão for negada. */
+const capturarImagem = async (origem: OrigemImagem): Promise<ImagePicker.ImagePickerAsset | null> => {
+  const permissao =
+    origem === 'camera'
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permissao.granted) {
+    throw new Error(
+      origem === 'camera' ? 'Permita o acesso à câmera para tirar a foto.' : 'Permita o acesso às fotos para escolher a imagem.',
+    );
+  }
+  const opcoes: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.7 };
+  const resultado =
+    origem === 'camera' ? await ImagePicker.launchCameraAsync(opcoes) : await ImagePicker.launchImageLibraryAsync(opcoes);
+  return resultado.canceled ? null : resultado.assets[0];
+};
+
+const tipoImagem = (asset: ImagePicker.ImagePickerAsset) => {
+  if (asset.mimeType) return asset.mimeType;
+  return asset.uri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+};
+
 /** 2.2 e 2.3.7/2.3.9 — documentos do motorista: situação, envio, correção e histórico. */
 export default function DriverDocumentsScreen({ navigation }: Props) {
   const { currentUser, showToast } = useAppContext();
@@ -68,12 +127,17 @@ export default function DriverDocumentsScreen({ navigation }: Props) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string | null>>>({});
   const [saving, setSaving] = useState(false);
+  const [imagens, setImagens] = useState<Record<number, ImagemDocumentoDTO[]>>({});
+  const [enviandoLado, setEnviandoLado] = useState<string | null>(null);
+  const [visualizacao, setVisualizacao] = useState<{ titulo: string; fonte: FonteImagem } | null>(null);
 
   const load = useCallback(async () => {
     if (!driver?.id) return;
     try {
       setError(null);
-      setDocumentos(await documentoService.listar(driver.id));
+      const lista = await documentoService.listar(driver.id);
+      setDocumentos(lista);
+      setImagens(await buscarImagensVigentes(driver.id, lista));
     } catch (e) {
       setError(getApiErrorMessage(e, 'Não foi possível carregar seus documentos.'));
     } finally {
@@ -137,13 +201,62 @@ export default function DriverDocumentsScreen({ navigation }: Props) {
         dataRealizacao: editing === 'VISTORIA' ? brToIsoDate(form.dataRealizacao) : null,
         dataValidade: brToIsoDate(form.dataValidade),
       });
-      showToast('Documento enviado. Ele ficará em análise até a revisão.', 'success');
+      showToast('Documento enviado. Agora envie as imagens dele para a revisão poder aprovar.', 'success');
       setEditing(null);
       await load();
     } catch (e) {
       showToast(getApiErrorMessage(e, 'Não foi possível enviar o documento.'), 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const enviarImagemLado = async (doc: DocumentoMotoristaDTO, lado: LadoDocumento) => {
+    if (!driver?.id) return;
+    let asset: ImagePicker.ImagePickerAsset | null;
+    try {
+      const origem = await escolherOrigem();
+      if (!origem) return;
+      asset = await capturarImagem(origem);
+    } catch (e) {
+      showToast(getApiErrorMessage(e, 'Não foi possível abrir a câmera ou a galeria.'), 'error');
+      return;
+    }
+    if (!asset) return;
+
+    const type = tipoImagem(asset);
+    if (!TIPOS_IMAGEM_ACEITOS.includes(type)) {
+      showToast('Envie uma imagem JPEG ou PNG.', 'error');
+      return;
+    }
+    if (asset.fileSize && asset.fileSize > LIMITE_IMAGEM_BYTES) {
+      showToast('A imagem passa de 1 MB. Escolha outra foto.', 'error');
+      return;
+    }
+
+    setEnviandoLado(`${doc.id}-${lado}`);
+    try {
+      await documentoService.enviarImagem(driver.id, doc.id, lado, {
+        uri: asset.uri,
+        name: asset.fileName ?? `${lado.toLowerCase()}.${type === 'image/png' ? 'png' : 'jpg'}`,
+        type,
+      });
+      showToast(`${LADO_LABEL[lado]} enviada.`, 'success');
+      setImagens(await buscarImagensVigentes(driver.id, documentos));
+    } catch (e) {
+      showToast(getApiErrorMessage(e, 'Não foi possível enviar a imagem.'), 'error');
+    } finally {
+      setEnviandoLado(null);
+    }
+  };
+
+  const abrirImagem = async (doc: DocumentoMotoristaDTO, lado: LadoDocumento) => {
+    if (!driver?.id) return;
+    try {
+      const fonte = await documentoService.fonteImagem(driver.id, doc.id, lado);
+      setVisualizacao({ titulo: `${TIPO_DOCUMENTO_LABEL[doc.tipo]} · ${LADO_LABEL[lado]}`, fonte });
+    } catch (e) {
+      showToast(getApiErrorMessage(e, 'Não foi possível abrir a imagem.'), 'error');
     }
   };
 
@@ -270,6 +383,43 @@ export default function DriverDocumentsScreen({ navigation }: Props) {
         {doc?.status === 'VENCIDO' && <Notice tone="danger">Documento vencido. Atualize para poder iniciar viagens.</Notice>}
         {precisaVeiculo && <Notice tone="info">Cadastre o veículo antes de enviar este documento.</Notice>}
 
+        {doc && (
+          <View style={styles.details}>
+            <Text style={styles.fieldLabel} maxFontSizeMultiplier={maxFontSizeMultiplier}>Imagens do documento</Text>
+            {LADOS_DOCUMENTO[tipo].map((lado) => {
+              const enviada = (imagens[doc.id] ?? []).some((i) => i.lado === lado);
+              const chave = `${doc.id}-${lado}`;
+              return (
+                <View key={lado} style={styles.ladoRow}>
+                  <View style={styles.flex}>
+                    <Text style={styles.body} maxFontSizeMultiplier={maxFontSizeMultiplier}>{LADO_LABEL[lado]}</Text>
+                    <Chip label={enviada ? 'Enviada' : 'Não enviada'} tone={enviada ? 'success' : 'warning'} size="sm" />
+                  </View>
+                  {enviada && (
+                    <Button label="Ver" variant="tertiary" size="md" onPress={() => abrirImagem(doc, lado)} disabled={!!enviandoLado} />
+                  )}
+                  {podeEnviarImagens(doc) && (
+                    <Button
+                      label={enviada ? 'Trocar' : 'Enviar'}
+                      icon="camera"
+                      variant={enviada ? 'secondary' : 'primary'}
+                      size="md"
+                      loading={enviandoLado === chave}
+                      disabled={!!enviandoLado}
+                      onPress={() => enviarImagemLado(doc, lado)}
+                    />
+                  )}
+                </View>
+              );
+            })}
+            {podeEnviarImagens(doc) && (
+              <Notice tone="info">
+                Envie {LADOS_DOCUMENTO[tipo].map((l) => LADO_LABEL[l].toLowerCase()).join(' e ')}. Formatos JPEG ou PNG, até 1 MB cada.
+              </Notice>
+            )}
+          </View>
+        )}
+
         {editing === tipo ? (
           renderForm(tipo)
         ) : (
@@ -343,6 +493,12 @@ export default function DriverDocumentsScreen({ navigation }: Props) {
           {body}
         </ScrollView>
       </KeyboardAvoidingView>
+      <ImagemDocumentoModal
+        visible={!!visualizacao}
+        title={visualizacao?.titulo ?? ''}
+        fonte={visualizacao?.fonte ?? null}
+        onClose={() => setVisualizacao(null)}
+      />
     </DriverLayout>
   );
 }
@@ -362,4 +518,5 @@ const styles = StyleSheet.create({
   fieldLabel: { ...typography.label, color: colors.ink },
   hint: { ...typography.caption, color: colors.slate700 },
   actions: { gap: layout.buttonGap },
+  ladoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
 });

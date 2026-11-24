@@ -84,6 +84,23 @@ api.interceptors.response.use(
   },
 );
 
+/**
+ * Fonte para <Image> de uma rota protegida: a imagem não pode ser carregada sem o header Authorization.
+ * Renova a sessão antes, se o access token já estiver perto de expirar.
+ */
+export const fonteAutenticada = async (path: string) => {
+  if (authSession.isAccessTokenExpiring()) {
+    try {
+      await authSession.refresh();
+    } catch {
+      // segue com o token atual; a imagem falhará com 401 se a sessão tiver expirado
+    }
+  }
+  const token = authSession.getAccessToken();
+  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+  return { uri: api.getUri({ url: path }), headers };
+};
+
 // API Endpoint Map (Legacy or utility)
 export const API_ENDPOINTS = {
   entrar: '/Autenticacao/Entrar',
@@ -170,6 +187,10 @@ export const API_ENDPOINTS = {
 
   // Documentos do motorista (CNH, vistoria, licenciamento)
   documentosMotorista: (idMotorista: number) => `/Motorista/${idMotorista}/Documentos`,
+  imagensDocumentoMotorista: (idMotorista: number, idDocumento: number) =>
+    `/Motorista/${idMotorista}/Documentos/${idDocumento}/Imagens`,
+  imagemDocumentoMotorista: (idMotorista: number, idDocumento: number, lado: string) =>
+    `/Motorista/${idMotorista}/Documentos/${idDocumento}/Imagens/${lado}`,
 
   // Vínculo motorista–escola
   solicitarVinculoEscola: '/Motorista/Escolas/Vinculos',
@@ -217,6 +238,7 @@ export const API_ENDPOINTS = {
   adminDocumentosPendentes: '/Admin/Documentos/Pendentes',
   adminDocumentosRevisao: '/Admin/Documentos/Revisao',
   adminRevisarDocumento: (id: number) => `/Admin/Documentos/${id}/Revisar`,
+  adminImagemDocumento: (idDocumento: number, lado: string) => `/Admin/Documentos/${idDocumento}/Imagens/${lado}`,
   adminCriadorPendentes: '/Admin/Dependentes/ResponsavelCriadorPendentes',
   adminAtribuirCriador: (idDependente: number) => `/Admin/Dependentes/${idDependente}/ResponsavelCriador`,
   adminUsuarios: '/Admin/Usuarios',

@@ -1,4 +1,4 @@
-import { api, API_ENDPOINTS } from './api';
+import { api, API_ENDPOINTS, fonteAutenticada } from './api';
 import {
   AdminAuditoriaDTO,
   AdminEscolaResumoDTO,
@@ -8,6 +8,7 @@ import {
   DependenteResponsavelCriadorPendenteDTO,
   DocumentoMotoristaDTO,
   DocumentoRevisaoDTO,
+  LadoDocumento,
   Page,
   StatusDocumento,
   StatusVinculoEscola,
@@ -41,6 +42,10 @@ export const adminService = {
     motivoRecusa?: string,
   ): Promise<DocumentoMotoristaDTO> =>
     (await api.put(API_ENDPOINTS.adminRevisarDocumento(id), { status, motivoRecusa: motivoRecusa?.trim() || null })).data,
+
+  /** Fonte autenticada da imagem de um lado (o back registra cada visualização na auditoria). */
+  fonteImagemDocumento: (idDocumento: number, lado: LadoDocumento) =>
+    fonteAutenticada(API_ENDPOINTS.adminImagemDocumento(idDocumento, lado)),
 
   criadorPendentes: async (): Promise<DependenteResponsavelCriadorPendenteDTO[]> =>
     (await api.get(API_ENDPOINTS.adminCriadorPendentes)).data ?? [],

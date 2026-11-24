@@ -6,12 +6,15 @@ import { Feather } from '@expo/vector-icons';
 import AdminLayout from '../components/AdminLayout';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ReasonDialog from '../components/ReasonDialog';
+import ImagemDocumentoModal, { FonteImagem } from '../components/ImagemDocumentoModal';
 import { InfoLine, Notice } from '../components/Feedback';
 import { Button, Card, Chip, ScreenHeader, StateView } from '../components/ui';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import { adminService } from '../services/adminService';
-import { ConferenciaDocumentoDTO, DocumentoMotoristaDTO, DocumentoRevisaoDTO } from '../types';
+import { LADOS_DOCUMENTO, LADO_LABEL } from '../services/documentoService';
+import { ConferenciaDocumentoDTO, DocumentoMotoristaDTO, DocumentoRevisaoDTO, LadoDocumento } from '../types';
+
 import { TIPO_DOCUMENTO_LABEL } from '../utils/statusLabels';
 import { formatDate, formatDateTime } from '../utils/format';
 import { getApiErrorMessage } from '../utils/apiError';
@@ -50,6 +53,7 @@ export default function AdminDocumentsScreen({ navigation }: Props) {
   const [aprovar, setAprovar] = useState<DocumentoRevisaoDTO[] | null>(null);
   const [recusar, setRecusar] = useState<DocumentoMotoristaDTO | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [visualizacao, setVisualizacao] = useState<{ titulo: string; fonte: FonteImagem } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -128,6 +132,18 @@ export default function AdminDocumentsScreen({ navigation }: Props) {
     return `${nomes}.${totalAvisos ? ` Atenção: ${totalAvisos} ponto(s) para conferir no documento antes de aprovar.` : ' Todas as conferências automáticas estão ok.'}`;
   };
 
+  const abrirImagem = async (item: DocumentoRevisaoDTO, lado: LadoDocumento) => {
+    try {
+      const fonte = await adminService.fonteImagemDocumento(item.documento.id, lado);
+      setVisualizacao({
+        titulo: `${item.motoristaNome ?? 'Motorista'} · ${TIPO_DOCUMENTO_LABEL[item.documento.tipo]} · ${LADO_LABEL[lado]}`,
+        fonte,
+      });
+    } catch (e) {
+      showToast(getApiErrorMessage(e, 'Não foi possível abrir a imagem.'), 'error');
+    }
+  };
+
   const renderDocumento = (item: DocumentoRevisaoDTO) => {
     const doc = item.documento;
     const pendencias = avisos(item);
@@ -156,6 +172,27 @@ export default function AdminDocumentsScreen({ navigation }: Props) {
               </Text>
             </View>
           ))}
+        </View>
+
+        <View style={styles.imagens}>
+          <Text style={styles.docTitle} maxFontSizeMultiplier={maxFontSizeMultiplier}>Imagens</Text>
+          {LADOS_DOCUMENTO[doc.tipo].map((lado) => {
+            const enviada = (item.imagens ?? []).some((i) => i.lado === lado);
+            return (
+              <View key={lado} style={styles.ladoRow}>
+                <Text style={styles.conferenciaTexto} maxFontSizeMultiplier={maxFontSizeMultiplier}>{LADO_LABEL[lado]}</Text>
+                <Chip label={enviada ? 'Enviada' : 'Faltando'} tone={enviada ? 'success' : 'danger'} size="sm" />
+                {enviada && (
+                  <Button label="Ver" variant="tertiary" size="md" onPress={() => abrirImagem(item, lado)} />
+                )}
+              </View>
+            );
+          })}
+          {LADOS_DOCUMENTO[doc.tipo].some((l) => !(item.imagens ?? []).some((i) => i.lado === l)) && (
+            <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
+              A aprovação exige todas as imagens deste documento.
+            </Text>
+          )}
         </View>
 
         <Text style={styles.caption} maxFontSizeMultiplier={maxFontSizeMultiplier}>
@@ -251,6 +288,12 @@ export default function AdminDocumentsScreen({ navigation }: Props) {
         onConfirm={(motivo) => recusar && recusarDocumento(recusar, motivo)}
         onCancel={() => setRecusar(null)}
       />
+      <ImagemDocumentoModal
+        visible={!!visualizacao}
+        title={visualizacao?.titulo ?? ''}
+        fonte={visualizacao?.fonte ?? null}
+        onClose={() => setVisualizacao(null)}
+      />
     </AdminLayout>
   );
 }
@@ -280,4 +323,6 @@ const styles = StyleSheet.create({
   conferenciaItem: { ...typography.captionBold, color: colors.ink },
   caption: { ...typography.caption, color: colors.slate500 },
   actions: { flexDirection: 'row', gap: layout.buttonGap },
+  imagens: { gap: spacing.xs },
+  ladoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
 });

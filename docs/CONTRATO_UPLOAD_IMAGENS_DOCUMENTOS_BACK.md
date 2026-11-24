@@ -1,6 +1,6 @@
 # Contrato: upload e leitura das imagens dos documentos do motorista (front e back)
 
-Status: rascunho para validação do back. Campos e rotas marcados como **proposta** ainda não existem.
+Status: **implementado no back** (guia em `Docs/IMAGENS_DOCUMENTOS_MOTORISTA_FRONT.md`, branch `feat/docs-images` do BackEndJava) e **integrado no front** (APK de teste gerado). Pendências em aberto estão na seção [Pendências](#pendências).
 
 ## Fluxo
 
@@ -20,7 +20,7 @@ Recomendação: **uma rota parametrizada por `documentoId`**, não uma rota por 
 
 ## Endpoints
 
-### 1. Enviar imagem (proposta)
+### 1. Enviar imagem
 
 `POST /Motorista/{idMotorista}/Documentos/{documentoId}/Imagens/{lado}`
 
@@ -34,7 +34,7 @@ Corpo: `multipart/form-data`, campo `arquivo` (binário).
 | `VERSO` | CNH e licenciamento |
 | `UNICA` | Vistoria |
 
-Resposta `200`:
+Resposta `201` (implementado; o rascunho previa `200`):
 
 ```json
 {
@@ -50,16 +50,16 @@ Enviar o mesmo `lado` de novo substitui a imagem, enquanto o documento não esti
 
 | Código | Situação |
 |---|---|
-| 200 | Imagem salva |
+| 201 | Imagem salva |
 | 400 | `lado` não combina com o tipo do documento, ou arquivo ausente |
 | 401 | sem token |
 | 403 | documento de outro motorista |
 | 404 | documento não encontrado |
-| 409 | documento `APROVADO` (não aceita substituição; é preciso enviar nova versão) |
+| 409 | documento `APROVADO` ou `VENCIDO` (não aceita envio; para `APROVADO` é preciso enviar nova versão) |
 | 413 | arquivo acima do limite |
 | 415 | formato não permitido |
 
-### 2. Listar imagens de um documento (proposta)
+### 2. Listar imagens de um documento
 
 `GET /Motorista/{idMotorista}/Documentos/{documentoId}/Imagens`
 
@@ -67,7 +67,9 @@ Autorização: motorista dono do documento ou ADMIN.
 
 Retorna a lista de imagens enviadas (`lado`, `mimeType`, `tamanhoBytes`, `enviadoEm`). Não traz o conteúdo.
 
-### 3. Baixar imagem (proposta)
+Observação: a lista de documentos do motorista (`GET /Motorista/{id}/Documentos`) não traz imagens. O front busca a lista por documento vigente. Na fila de revisão do admin (`GET /Admin/Documentos/Revisao`), cada item traz `imagens[]`, que pode vir vazio.
+
+### 3. Baixar imagem
 
 `GET /Motorista/{idMotorista}/Documentos/{documentoId}/Imagens/{lado}`
 
@@ -110,9 +112,10 @@ Resposta: o binário da imagem, com `Content-Type` do arquivo e `Cache-Control: 
 
 ## Front (impacto)
 
-- `documentoService`: `enviarImagem(idMotorista, documentoId, lado, arquivo)`, `listarImagens(...)`, `urlImagem(...)`.
-- `DriverDocumentsScreen`: após o envio do documento, mostrar as etapas de imagem (CNH e licenciamento: frente e verso; vistoria: uma foto). Mostrar a imagem enviada com um toque.
-- Para exibir a imagem com token, usar `Image` com `source={{ uri, headers: { Authorization } }}`. Isso funciona no Android, no iOS e no web.
+- `documentoService`: `enviarImagem(idMotorista, documentoId, lado, arquivo)`, `listarImagens(...)`, `fonteImagem(...)` (retorna `uri` e `headers` autenticados).
+- `DriverDocumentsScreen`: seção "Imagens do documento" em cada documento vigente (CNH e licenciamento: frente e verso; vistoria: uma foto), com "Enviar"/"Trocar" e "Ver". Envio só em `PENDENTE` ou `RECUSADO`.
+- `AdminDocumentsScreen`: status de cada lado, botão "Ver" e aviso de imagem faltando.
+- Para exibir a imagem com token, usar `Image` com `source={{ uri, headers: { Authorization } }}` (componente `ImagemDocumentoModal`). Isso funciona no Android, no iOS e no web.
 
 ## Onde mostrar para o ADMIN (sugestão)
 
@@ -134,3 +137,26 @@ Outras opções, não recomendadas agora: uma tela separada de "Motoristas" no A
 
 1. PDF não é aceito. Somente JPEG e PNG.
 2. Vistoria tem uma imagem (`UNICA`).
+
+## Pendências
+
+Para retomar depois. Itens marcados como "back" ou "infra" não são do front.
+
+### Back
+
+- [ ] **R9 Retenção:** job diário que apaga arquivos e metadados de motoristas encerrados há mais de 30 dias. Não implementado.
+- [ ] **R7 Criptografia:** fase posterior. Os arquivos já gravados vão precisar de migração quando existir. Depende da camada única de armazenamento, que já existe no back.
+- [ ] **Teste de integração:** validar o fluxo completo (envio, troca, bloqueio em `APROVADO`/`VENCIDO`, 413, 415) com arquivos reais.
+
+### Infra
+
+- [ ] **nginx:** `client_max_body_size 2m;` no proxy reverso. Sem isso, arquivos perto de 1 MB podem ser rejeitados antes de chegar ao Spring.
+- [ ] **Volume Docker:** confirmar o volume persistente do diretório de imagens, senão as imagens somem ao recriar o container.
+
+### Front
+
+- [ ] **Teste ponta a ponta no APK:** envio, troca, visualização e bloqueio por status, contra o back em execução. Já foi gerado um APK de teste, mas o fluxo com o back ainda precisa ser validado.
+- [ ] **Tela do admin:** validar o botão "Ver" e o aviso de imagem faltando com documentos reais.
+- [ ] **Web:** `Alert` não mostra o menu "Tirar foto / Galeria" no navegador, então o envio só funciona em Android e iOS.
+- [ ] **Tamanho do arquivo:** a checagem de 1 MB usa `fileSize` do picker quando disponível. Se vier vazio, o back é quem rejeita com 413.
+- [ ] **Commit:** as alterações ainda não foram commitadas.
