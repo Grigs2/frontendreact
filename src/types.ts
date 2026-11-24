@@ -414,6 +414,17 @@ export interface Page<T> {
 // Documentos do motorista (CNH, vistoria, licenciamento) — só metadados, sem upload.
 export type TipoDocumento = 'CNH' | 'VISTORIA' | 'LICENCIAMENTO';
 export type StatusDocumento = 'PENDENTE' | 'APROVADO' | 'RECUSADO' | 'VENCIDO';
+/** Lado da imagem: CNH e licenciamento usam FRENTE/VERSO; vistoria usa UNICA (contrato de imagens). */
+export type LadoDocumento = 'FRENTE' | 'VERSO' | 'UNICA';
+
+/** Metadados de uma imagem enviada (o conteúdo é baixado pelo endpoint autenticado). */
+export interface ImagemDocumentoDTO {
+  documentoId: number;
+  lado: LadoDocumento;
+  mimeType: string;
+  tamanhoBytes: number;
+  enviadoEm: string;
+}
 
 /** Conferência automática de um documento (GET /Admin/Documentos/Revisao). */
 export interface ConferenciaDocumentoDTO {
@@ -432,6 +443,8 @@ export interface DocumentoRevisaoDTO {
   veiculoModelo?: string | null;
   conferencias: ConferenciaDocumentoDTO[];
   podeAprovar: boolean;
+  /** Imagens enviadas do documento; pode vir vazio. */
+  imagens?: ImagemDocumentoDTO[];
 }
 
 export interface DocumentoMotoristaDTO {

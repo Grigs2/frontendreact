@@ -44,6 +44,12 @@
         }
       ],
       [
+        "expo-image-picker",
+        {
+          "cameraPermission": "O Tio da Perua usa a câmera para você fotografar os documentos (CNH, vistoria e licenciamento) enviados para análise."
+        }
+      ],
+      [
         "expo-notifications",
         {
           "color": "#FFC400"
