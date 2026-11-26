@@ -245,6 +245,7 @@ export default function GuardianInvitesScreen() {
                 ]}
                 value={tab}
                 onChange={(v) => setTab(v as Tab)}
+                grade
               />
             </View>
           }

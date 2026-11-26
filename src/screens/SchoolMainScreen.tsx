@@ -5,6 +5,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useAppContext } from '../context/AppContext';
 import SchoolLayout from '../components/SchoolLayout';
+import AjudaModal from '../components/AjudaModal';
 import { Greeting, Grid, HighlightCard, HomeScroll, SectionTitle, homeStyles, NotificacoesNovasCard } from '../components/HomeBlocks';
 import { Card, ListRow, ShortcutCard } from '../components/ui';
 import { vinculoEscolaService } from '../services/vinculoEscolaService';
@@ -21,6 +22,7 @@ export default function SchoolMainScreen({ navigation }: Props) {
   const school = currentUser as EscolaDTO;
   const endereco = school?.enderecoOperacionalDTO;
   const [vinculos, setVinculos] = useState<VinculoEscolaDTO[] | null>(null);
+  const [ajuda, setAjuda] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -102,9 +104,11 @@ export default function SchoolMainScreen({ navigation }: Props) {
               divider
             />
             <ListRow icon="settings" title="Configurações" caption="Privacidade e ajuda" divider onPress={() => navigation.navigate('Settings')} />
+            <ListRow icon="help-circle" title="Ajuda" caption="Perguntas e respostas sobre o aplicativo" divider onPress={() => setAjuda(true)} />
           </Card>
         </HomeScroll>
       </View>
+      <AjudaModal visible={ajuda} role="ESCOLA" onClose={() => setAjuda(false)} />
     </SchoolLayout>
   );
 }

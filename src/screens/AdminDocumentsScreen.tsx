@@ -229,8 +229,8 @@ export default function AdminDocumentsScreen({ navigation }: Props) {
               />
               <Notice tone="info">
                 As conferências automáticas checam os dígitos da CNH e do RENAVAM, a categoria, a idade, a vistoria
-                semestral e a validade. Elas não comprovam a autenticidade: confira com o documento. Documento vencido não
-                pode ser aprovado.
+                semestral e a validade. Elas não comprovam a autenticidade: confira com o documento e as fotos. Documento
+                vencido ou sem as fotos obrigatórias não pode ser aprovado.
               </Notice>
             </View>
           }

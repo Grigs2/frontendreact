@@ -35,6 +35,12 @@ export const motoristaService = {
     return response.data;
   },
 
+  /** Todos os vínculos das viagens do motorista: pendentes, ativos e encerrados (recusados, expirados e encerrados). */
+  listarVinculos: async (idMotorista: number): Promise<SolicitacaoDTO[]> => {
+    const response = await api.get(API_ENDPOINTS.solicitacoesMotorista(idMotorista), { params: { todas: true } });
+    return response.data ?? [];
+  },
+
   /** Responsável e aluno de um pedido de vaga (pop-up antes de aceitar). CPF e e-mail vêm mascarados. */
   contraparte: async (idSolicitacao: number): Promise<ContraparteDTO> => {
     const response = await api.get(API_ENDPOINTS.contraparteMotorista(idSolicitacao));
