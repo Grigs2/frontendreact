@@ -414,7 +414,7 @@ export default function DriverDocumentsScreen({ navigation }: Props) {
             })}
             {podeEnviarImagens(doc) && (
               <Notice tone="info">
-                Envie {LADOS_DOCUMENTO[tipo].map((l) => LADO_LABEL[l].toLowerCase()).join(' e ')}. Formatos JPEG ou PNG, até 1 MB cada.
+                {`Envie ${LADOS_DOCUMENTO[tipo].map((l) => LADO_LABEL[l].toLowerCase()).join(' e ')}. Formatos JPEG ou PNG, até 1 MB cada.`}
               </Notice>
             )}
           </View>

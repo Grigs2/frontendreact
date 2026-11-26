@@ -310,17 +310,16 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
           subtitle={[formatDayShort(dataViagem), horarioDoDia ? `saída ${horarioDoDia}` : null, escolasNomes(viagem)].filter(Boolean).join(' - ')}
           onBack={() => navigation.goBack()}
           titleAccessory={
-            !encerrada ? (
-              <Pressable
-                onPress={handleAbrirConfig}
-                disabled={loading}
-                accessibilityRole="button"
-                accessibilityLabel="Configurar viagem"
-                hitSlop={12}
-              >
-                <Feather name="settings" size={layout.icon} color={colors.slate500} />
-              </Pressable>
-            ) : undefined
+            // Sempre disponível: o nome pode ser trocado mesmo depois da viagem do dia; horário e escolas mostram as próprias restrições.
+            <Pressable
+              onPress={handleAbrirConfig}
+              disabled={loading}
+              accessibilityRole="button"
+              accessibilityLabel="Configurar viagem"
+              hitSlop={12}
+            >
+              <Feather name="settings" size={layout.icon} color={colors.slate500} />
+            </Pressable>
           }
           right={<Chip label={statusChip.label} tone={statusChip.tone} size="sm" />}
         />
@@ -413,7 +412,7 @@ export default function DriverTripDetailsScreen({ route, navigation }: Props) {
           horarioAtual={horarioDoDia ?? '07:00'}
           horarioAjustado={horarioAjustado}
           podeEditarHorario={planejada}
-          podeAdicionarEscolas={viagem.ativo !== false && !(hoje && emAndamento)}
+          podeAdicionarEscolas={viagem.ativo !== false && !(hoje && (emAndamento || (encerrada && diaViagem?.status !== 'CANCELADA')))}
           escolasDisponiveis={escolasDisponiveis}
           onSalvarNome={handleSalvarNome}
           onSalvarHorario={handleSalvarHorario}

@@ -12,12 +12,15 @@ interface SegmentedControlProps<T extends string> {
   value: T;
   onChange: (value: T) => void;
   style?: StyleProp<ViewStyle>;
+  /** Duas colunas (grade 2×2 com quatro opções). */
+  grade?: boolean;
 }
 
 // Abas/segmentos: a opção ativa recebe a pill Primary (mesmo padrão da aba ativa do design).
-export default function SegmentedControl<T extends string>({ options, value, onChange, style }: SegmentedControlProps<T>) {
+// Com `grade`, os segmentos ficam em duas colunas, para os rótulos não serem cortados em telas estreitas.
+export default function SegmentedControl<T extends string>({ options, value, onChange, style, grade = false }: SegmentedControlProps<T>) {
   return (
-    <View style={[styles.container, style]} accessibilityRole="tablist">
+    <View style={[styles.container, grade && styles.containerGrade, style]} accessibilityRole="tablist">
       {options.map((option) => {
         const active = option.value === value;
         return (
@@ -27,7 +30,12 @@ export default function SegmentedControl<T extends string>({ options, value, onC
             accessibilityLabel={option.label}
             accessibilityState={{ selected: active }}
             onPress={() => onChange(option.value)}
-            style={({ pressed }) => [styles.segment, active && styles.segmentActive, pressed && !active && styles.segmentPressed]}
+            style={({ pressed }) => [
+              styles.segment,
+              grade && styles.segmentGrade,
+              active && styles.segmentActive,
+              pressed && !active && styles.segmentPressed,
+            ]}
           >
             <Text
               style={[styles.text, active && styles.textActive]}
@@ -50,6 +58,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     padding: spacing.xs,
     gap: spacing.xs,
+  },
+  containerGrade: {
+    flexWrap: 'wrap',
+  },
+  segmentGrade: {
+    flexGrow: 1,
+    flexBasis: '45%',
   },
   segment: {
     flex: 1,

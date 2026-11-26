@@ -14,6 +14,7 @@ import GuardianLayout from '../components/GuardianLayout';
 import SchoolLayout from '../components/SchoolLayout';
 import AdminLayout from '../components/AdminLayout';
 import ConfirmDialog from '../components/ConfirmDialog';
+import AjudaModal from '../components/AjudaModal';
 import { offlineQueue } from '../services/offlineQueue';
 import { authSession } from '../services/authSession';
 import { RootStackParamList } from '../navigation';
@@ -93,6 +94,7 @@ export default function ProfileScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(true);
   const [editing, setEditing] = useState<Section | null>(null);
   const [termsVisible, setTermsVisible] = useState(false);
+  const [ajudaVisible, setAjudaVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [documentos, setDocumentos] = useState<DocumentoMotoristaDTO[] | null>(null);
@@ -580,6 +582,13 @@ export default function ProfileScreen({ navigation }: Props) {
             />
           ))}
           <ListRow
+            icon="help-circle"
+            title="Ajuda"
+            caption="Perguntas e respostas sobre o aplicativo"
+            divider
+            onPress={() => setAjudaVisible(true)}
+          />
+          <ListRow
             icon="file-text"
             title="Termos e privacidade"
             caption="Termos de Uso, Política de Privacidade e PDF"
@@ -591,6 +600,7 @@ export default function ProfileScreen({ navigation }: Props) {
       </ScrollView>
 
       <TermsModal visible={termsVisible} onClose={() => setTermsVisible(false)} />
+      <AjudaModal visible={ajudaVisible} role={userRole} onClose={() => setAjudaVisible(false)} />
 
       <ConfirmDialog
         visible={sairComPendentes > 0}

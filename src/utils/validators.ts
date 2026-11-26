@@ -91,12 +91,12 @@ export const validateCNPJ = (value: string) => {
   return isValidCNPJ(value) ? null : 'CNPJ inválido. Confira os números.';
 };
 
-/** CNH: 11 dígitos (regra do backend para documentos). */
+/** CNH: 11 dígitos com dígitos verificadores corretos (o servidor recusa o mesmo caso). */
 export const validateCNH = (value: string) => {
   const cnh = onlyDigits(value);
   if (!cnh) return 'Informe o número da CNH.';
   if (cnh.length !== 11) return 'A CNH deve ter 11 dígitos.';
-  if (allSameDigits(cnh)) return 'Número de CNH inválido.';
+  if (!cnhDigitosConferem(cnh)) return 'CNH inválida. Confira os números no documento.';
   return null;
 };
 
@@ -230,9 +230,8 @@ export const validatePasswordConfirmation = (password: string, confirmation: str
 // Documentos do motorista, datas de validade e motivos
 // ---------------------------------------------------------------------------------------------
 
-/** RENAVAM: 11 dígitos. */
 /** Dígitos verificadores do número de registro da CNH (mesma conta do servidor). */
-export const cnhDigitosConferem = (value: string) => {
+export function cnhDigitosConferem(value: string) {
   const n = onlyDigits(value);
   if (n.length !== 11 || allSameDigits(n)) return false;
   let soma = 0;
@@ -248,10 +247,10 @@ export const cnhDigitosConferem = (value: string) => {
   const resto = soma % 11;
   const dv2 = resto >= 10 ? 0 : resto - desconto;
   return dv1 === Number(n[9]) && dv2 === Number(n[10]);
-};
+}
 
 /** Dígito verificador do RENAVAM (mesma conta do servidor). */
-export const renavamDigitoConfere = (value: string) => {
+export function renavamDigitoConfere(value: string) {
   let n = onlyDigits(value);
   if (n.length === 9) n = `00${n}`;
   if (n.length !== 11 || allSameDigits(n)) return false;
@@ -261,13 +260,14 @@ export const renavamDigitoConfere = (value: string) => {
   let dv = (soma * 10) % 11;
   if (dv === 10) dv = 0;
   return dv === Number(n[10]);
-};
+}
 
+/** RENAVAM: 11 dígitos com dígito verificador correto (o servidor recusa o mesmo caso). */
 export const validateRenavam = (value: string) => {
   const renavam = onlyDigits(value);
   if (!renavam) return 'Informe o RENAVAM.';
   if (renavam.length !== 11) return 'O RENAVAM deve ter 11 dígitos.';
-  if (allSameDigits(renavam)) return 'RENAVAM inválido.';
+  if (!renavamDigitoConfere(renavam)) return 'RENAVAM inválido. Confira os números no documento.';
   return null;
 };
 

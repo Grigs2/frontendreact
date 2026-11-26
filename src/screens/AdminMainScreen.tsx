@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import AdminLayout from '../components/AdminLayout';
+import AjudaModal from '../components/AjudaModal';
 import { Greeting, Grid, HighlightCard, HomeScroll, SectionTitle, homeStyles } from '../components/HomeBlocks';
 import { Card, ListRow, ShortcutCard } from '../components/ui';
 import { Notice } from '../components/Feedback';
@@ -20,6 +21,7 @@ const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um :
 export default function AdminMainScreen({ navigation }: Props) {
   const { currentUser, setCurrentUser } = useAppContext();
   const [docs, setDocs] = useState<number | null>(null);
+  const [ajuda, setAjuda] = useState(false);
   const [criadores, setCriadores] = useState<number | null>(null);
 
   useFocusEffect(
@@ -83,10 +85,12 @@ export default function AdminMainScreen({ navigation }: Props) {
           <Card>
             <Text style={styles.title} maxFontSizeMultiplier={maxFontSizeMultiplier}>Conta</Text>
             <ListRow icon="settings" title="Configurações" caption="Privacidade e ajuda" onPress={() => navigation.navigate('Settings')} />
+            <ListRow icon="help-circle" title="Ajuda" caption="Perguntas e respostas sobre o aplicativo" divider onPress={() => setAjuda(true)} />
             <ListRow icon="log-out" title="Sair da conta" tone="danger" divider onPress={sair} />
           </Card>
         </HomeScroll>
       </View>
+      <AjudaModal visible={ajuda} role="ADMIN" onClose={() => setAjuda(false)} />
     </AdminLayout>
   );
 }
