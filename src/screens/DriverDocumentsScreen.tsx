@@ -65,11 +65,11 @@ interface FormState {
 
 const EMPTY_FORM: FormState = { numero: '', categoria: 'D', dataRealizacao: '', dataValidade: '' };
 
-/** Imagens enviadas por documento vigente (uma chamada por documento). */
+/** Imagens enviadas por documento vigente (uma chamada por documento). Erros são propagados: lista vazia só vem do 200. */
 const buscarImagensVigentes = async (idMotorista: number, lista: DocumentoMotoristaDTO[]) => {
   const vigentes = Object.values(documentosVigentes(lista)).filter((d): d is DocumentoMotoristaDTO => !!d);
   const pares = await Promise.all(
-    vigentes.map(async (d) => [d.id, await documentoService.listarImagens(idMotorista, d.id).catch(() => [])] as const),
+    vigentes.map(async (d) => [d.id, await documentoService.listarImagens(idMotorista, d.id)] as const),
   );
   return Object.fromEntries(pares) as Record<number, ImagemDocumentoDTO[]>;
 };
@@ -242,7 +242,7 @@ export default function DriverDocumentsScreen({ navigation }: Props) {
         type,
       });
       showToast(`${LADO_LABEL[lado]} enviada.`, 'success');
-      setImagens(await buscarImagensVigentes(driver.id, documentos));
+      await load();
     } catch (e) {
       showToast(getApiErrorMessage(e, 'Não foi possível enviar a imagem.'), 'error');
     } finally {
