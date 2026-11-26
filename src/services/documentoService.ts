@@ -19,7 +19,7 @@ export const LADOS_DOCUMENTO: Record<TipoDocumento, LadoDocumento[]> = {
 export const LADO_LABEL: Record<LadoDocumento, string> = {
   FRENTE: 'Frente',
   VERSO: 'Verso',
-  UNICA: 'Foto do veículo',
+  UNICA: 'Foto do laudo',
 };
 
 /** Limite por arquivo, validado no app antes do envio e também no back (413). */
