@@ -33,6 +33,9 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Firebase (enviado ao EAS como variável de arquivo, ver docs/BUILD_ANDROID_PREVIEW.md)
+google-services.json
+
 # typescript
 *.tsbuildinfo
 
