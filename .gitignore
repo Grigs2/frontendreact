@@ -33,6 +33,9 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Firebase (enviado ao EAS como variável de arquivo, ver docs/CONFIGS_PARA_NOTIFICACAO_PUSH.md)
+google-services.json
+
 # typescript
 *.tsbuildinfo
 
